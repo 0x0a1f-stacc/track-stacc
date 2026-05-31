@@ -1,0 +1,10 @@
+{
+  "extends": "@trackstacc/config/tsconfig/base",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

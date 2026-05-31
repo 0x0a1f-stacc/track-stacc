@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum NicknameClaimStatus {
+  active
+  locked
+  released
+}
+
+enum RoomVisibility {
+  private_link
+  public
+  password_protected
+}
+
+enum PlaylistMechanic {
+  fifo
+  voting
+  dj_rotation
+  host_curated
+  suggestions
+}
+
+enum DuplicatePolicy {
+  allow
+  block_queue
+  block_recent
+  block_session
+}
+
+enum SkipVoteThresholdType {
+  percentage
+  fixed_count
+}
+
+enum Role {
+  participant
+  moderator
+  host
+}
+
+enum TrackProvider {
+  youtube
+}
+
+enum MetadataStatus {
+  complete
+  partial
+  failed
+}
+
+enum QueueItemStatus {
+  suggested
+  queued
+  playing
+  played
+  skipped
+  removed
+  failed
+  rejected
+}
+
+enum ChatMessageType {
+  user
+  system
+  moderation
+  song
+}
+
+enum ModerationActionType {
+  mute
+  unmute
+  ban
+  unban
+  delete_message
+  remove_queue_item
+  force_skip
+}
+
+model NicknameClaim {
+  id                 String              @id @default(uuid()) @db.Uuid
+  normalizedNickname String              @map("normalized_nickname")
+  displayNickname    String              @map("display_nickname")
+  passwordHash       String              @map("password_hash")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  lastUsedAt         DateTime?           @map("last_used_at") @db.Timestamptz
+  status             NicknameClaimStatus @default(active)
+  roomSessions       RoomSession[]
+
+  @@unique([normalizedNickname, status])
+  @@map("nickname_claims")
+}
+
+model Room {
+  id                     String                @id @default(uuid()) @db.Uuid
+  slug                   String                @unique
+  name                   String
+  description            String?
+  visibility             RoomVisibility        @default(private_link)
+  roomPasswordHash       String?               @map("room_password_hash")
+  hostSecretHash         String                @map("host_secret_hash")
+  playlistMechanic       PlaylistMechanic      @default(fifo) @map("playlist_mechanic")
+  maxSongDurationSeconds Int                   @default(600) @map("max_song_duration_seconds")
+  duplicatePolicy        DuplicatePolicy       @default(block_queue) @map("duplicate_policy")
+  skipVoteThresholdType  SkipVoteThresholdType @default(percentage) @map("skip_vote_threshold_type")
+  skipVoteThresholdValue Int                   @default(50) @map("skip_vote_threshold_value")
+  queueLocked            Boolean               @default(false) @map("queue_locked")
+  chatLocked             Boolean               @default(false) @map("chat_locked")
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  expiresAt              DateTime?             @map("expires_at") @db.Timestamptz
+  lastActiveAt           DateTime              @default(now()) @map("last_active_at") @db.Timestamptz
+
+  sessions               RoomSession[]
+  queueItems             QueueItem[]
+  chatMessages           ChatMessage[]
+  moderationActions      RoomModerationAction[]
+  settingsHistory        RoomSettingsHistory[]
+
+  @@map("rooms")
+}
+
+model RoomSession {
+  id                 String         @id @default(uuid()) @db.Uuid
+  roomId             String         @map("room_id") @db.Uuid
+  nicknameClaimId    String?        @map("nickname_claim_id") @db.Uuid
+  normalizedNickname String         @map("normalized_nickname")
+  displayNickname    String         @map("display_nickname")
+  role               Role           @default(participant)
+  sessionTokenHash   String         @unique @map("session_token_hash")
+  isMuted            Boolean        @default(false) @map("is_muted")
+  isBanned           Boolean        @default(false) @map("is_banned")
+  joinedAt           DateTime       @default(now()) @map("joined_at") @db.Timestamptz
+  lastSeenAt         DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz
+  leftAt             DateTime?      @map("left_at") @db.Timestamptz
+
+  room               Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  nicknameClaim      NicknameClaim? @relation(fields: [nicknameClaimId], references: [id], onDelete: SetNull)
+  addedQueueItems    QueueItem[]
+  queueVotes         QueueVote[]
+  skipVotes          SkipVote[]
+  sentMessages       ChatMessage[]  @relation("sender")
+  deletedMessages    ChatMessage[]  @relation("deleter")
+  actionsAuthored    RoomModerationAction[] @relation("moderation_actor")
+  actionsTargeted    RoomModerationAction[] @relation("moderation_target")
+  settingsChanges    RoomSettingsHistory[]
+
+  @@unique([roomId, normalizedNickname, leftAt])
+  @@index([roomId, lastSeenAt])
+  @@map("room_sessions")
+}
+
+model Track {
+  id                String         @id @default(uuid()) @db.Uuid
+  provider          TrackProvider  @default(youtube)
+  providerVideoId   String         @map("provider_video_id")
+  title             String?
+  channelTitle      String?        @map("channel_title")
+  thumbnailUrl      String?        @map("thumbnail_url")
+  durationSeconds   Int?           @map("duration_seconds")
+  isEmbeddable      Boolean?       @map("is_embeddable")
+  metadataStatus    MetadataStatus @default(partial) @map("metadata_status")
+  metadataFetchedAt DateTime?      @map("metadata_fetched_at") @db.Timestamptz
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  queueItems        QueueItem[]
+
+  @@unique([provider, providerVideoId])
+  @@map("tracks")
+}
+
+model QueueItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  roomId           String          @map("room_id") @db.Uuid
+  trackId          String          @map("track_id") @db.Uuid
+  addedBySessionId String?         @map("added_by_session_id") @db.Uuid
+  status           QueueItemStatus @default(queued)
+  position         Int?
+  score            Int             @default(0)
+  mechanicContext  Json            @default("{}") @map("mechanic_context")
+  startedAt        DateTime?       @map("started_at") @db.Timestamptz
+  endedAt          DateTime?       @map("ended_at") @db.Timestamptz
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  room             Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  track            Track           @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  addedBySession   RoomSession?    @relation(fields: [addedBySessionId], references: [id], onDelete: SetNull)
+  queueVotes       QueueVote[]
+  skipVotes        SkipVote[]
+
+  @@index([roomId, status, position, createdAt])
+  @@index([addedBySessionId, createdAt])
+  @@map("queue_items")
+}
+
+model QueueVote {
+  id            String      @id @default(uuid()) @db.Uuid
+  queueItemId   String      @map("queue_item_id") @db.Uuid
+  roomSessionId String      @map("room_session_id") @db.Uuid
+  vote          Int         @db.SmallInt
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  queueItem     QueueItem   @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
+  roomSession   RoomSession @relation(fields: [roomSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([queueItemId, roomSessionId])
+  @@map("queue_votes")
+}
+
+model SkipVote {
+  id            String      @id @default(uuid()) @db.Uuid
+  queueItemId   String      @map("queue_item_id") @db.Uuid
+  roomSessionId String      @map("room_session_id") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  queueItem     QueueItem   @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
+  roomSession   RoomSession @relation(fields: [roomSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([queueItemId, roomSessionId])
+  @@map("skip_votes")
+}
+
+model ChatMessage {
+  id                 String          @id @default(uuid()) @db.Uuid
+  roomId             String          @map("room_id") @db.Uuid
+  senderSessionId    String?         @map("sender_session_id") @db.Uuid
+  messageType        ChatMessageType @map("message_type")
+  body               String
+  metadata           Json            @default("{}")
+  deletedAt          DateTime?       @map("deleted_at") @db.Timestamptz
+  deletedBySessionId String?         @map("deleted_by_session_id") @db.Uuid
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  room               Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender             RoomSession?    @relation("sender", fields: [senderSessionId], references: [id], onDelete: SetNull)
+  deletedBy          RoomSession?    @relation("deleter", fields: [deletedBySessionId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@map("chat_messages")
+}
+
+model RoomModerationAction {
+  id              String               @id @default(uuid()) @db.Uuid
+  roomId          String               @map("room_id") @db.Uuid
+  actorSessionId  String?              @map("actor_session_id") @db.Uuid
+  targetSessionId String?              @map("target_session_id") @db.Uuid
+  actionType      ModerationActionType @map("action_type")
+  reason          String?
+  metadata        Json                 @default("{}")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  room            Room                 @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  actor           RoomSession?         @relation("moderation_actor", fields: [actorSessionId], references: [id], onDelete: SetNull)
+  target          RoomSession?         @relation("moderation_target", fields: [targetSessionId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@map("room_moderation_actions")
+}
+
+model RoomSettingsHistory {
+  id             String       @id @default(uuid()) @db.Uuid
+  roomId         String       @map("room_id") @db.Uuid
+  actorSessionId String?      @map("actor_session_id") @db.Uuid
+  settingKey     String       @map("setting_key")
+  oldValue       Json         @map("old_value")
+  newValue       Json         @map("new_value")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  room           Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  actor          RoomSession? @relation(fields: [actorSessionId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, createdAt])
+  @@map("room_settings_history")
+}
