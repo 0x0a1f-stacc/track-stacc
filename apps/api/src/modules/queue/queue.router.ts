@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Server } from "socket.io";
 
 import { AppError } from "../../lib/errors.js";
 import {
@@ -7,8 +8,9 @@ import {
   voteSchema,
 } from "./queue.schema.js";
 import { addQueueItem, voteQueueItem } from "./queue.service.js";
+import { maybeAutoStart } from "../playback/playback.coordinator.js";
 
-export async function queueRouter(app: FastifyInstance) {
+export async function queueRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/queue/items", async (request) => {
     if (!request.session)
       throw new AppError(
@@ -24,7 +26,23 @@ export async function queueRouter(app: FastifyInstance) {
       request.session.id,
       body.youtubeUrl,
     );
+    if (queueItem.status === "queued") await maybeAutoStart(app, io, roomId);
     return { queueItem };
+  });
+  app.get("/api/rooms/:roomId/queue", async (request) => {
+    if (!request.session)
+      throw new AppError(
+        "UNAUTHENTICATED",
+        "Join the room before doing that.",
+        401,
+      );
+    const { roomId } = request.params as { roomId: string };
+    const items = await app.prisma.queueItem.findMany({
+      where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
+      orderBy: [{ score: "desc" }, { position: "asc" }],
+      include: { track: true },
+    });
+    return { queue: items };
   });
   app.delete("/api/rooms/:roomId/queue/items/:queueItemId", async (request) => {
     if (!request.session)

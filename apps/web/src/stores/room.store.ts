@@ -17,6 +17,7 @@ interface RoomState {
   participants: Participant[];
   playback: PlaybackState | null;
   websocketToken: string | null;
+  lastError: string | null;
   setToken: (token: string) => void;
   applyEvent: (event: ServerEvent) => void;
 }
@@ -28,6 +29,7 @@ export const useRoomStore = create<RoomState>((set) => ({
   participants: [],
   playback: null,
   websocketToken: null,
+  lastError: null,
   setToken: (token) => set({ websocketToken: token }),
   applyEvent: (event) =>
     set((state) => {
@@ -77,6 +79,7 @@ export const useRoomStore = create<RoomState>((set) => ({
         return { playback: event.state };
       if (event.type === "room.settings.changed" && state.room)
         return { room: { ...state.room, ...event.settings } };
+      if (event.type === "error") return { lastError: event.message };
       return {};
     }),
 }));

@@ -10,7 +10,12 @@ import { AppError } from "../lib/errors.js";
 import { chatSendSchema } from "../modules/chat/chat.schema.js";
 import { sendChatMessage } from "../modules/chat/chat.service.js";
 import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
-import { handleClientEnd } from "../modules/playback/playback.coordinator.js";
+import {
+  handleClientEnd,
+  handleClientBuffering,
+  maybeAutoStart,
+  clearClientBuffering,
+} from "../modules/playback/playback.coordinator.js";
 import {
   addQueueItemSchema,
   voteSchema,
@@ -94,6 +99,7 @@ export function registerRoomHandlers(
             updatedAt: item.updatedAt.toISOString(),
           },
         });
+        if (item.status === "queued") await maybeAutoStart(app, io, roomId);
       }
       if (event.type === "queue.vote") {
         const body = voteSchema.parse(event);
@@ -113,6 +119,9 @@ export function registerRoomHandlers(
         const body = clientPlaybackStateSchema.parse(event);
         if (body.status === "ended" && body.queueItemId)
           await handleClientEnd(app, io, roomId, body.queueItemId);
+        if (body.status === "buffering" && body.queueItemId)
+          await handleClientBuffering(app, io, roomId, body.queueItemId);
+        if (body.status === "playing") clearClientBuffering(roomId);
       }
     } catch (error) {
       const appError =

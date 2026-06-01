@@ -3,7 +3,10 @@ import type { FastifyInstance } from "fastify";
 import { Server } from "socket.io";
 
 import { verifyWsToken } from "../lib/tokens.js";
-import { getPlaybackState } from "../modules/playback/playback.coordinator.js";
+import {
+  destroyAllTimers,
+  getPlaybackState,
+} from "../modules/playback/playback.coordinator.js";
 import { roomChannel } from "./broadcast.js";
 import { getParticipants } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
@@ -85,6 +88,7 @@ export async function registerRealtime(app: FastifyInstance) {
     });
   });
   app.addHook("onClose", async () => {
+    destroyAllTimers();
     await pub.quit();
     await sub.quit();
     io.close();

@@ -12,6 +12,7 @@ declare global {
     interface PlayerOptions {
       videoId?: string;
       playerVars?: Record<string, number | string>;
+      origin?: string;
       events?: {
         onReady?: () => void;
         onStateChange?: (event: { data: number }) => void;
@@ -22,6 +23,7 @@ declare global {
       loadVideoById(options: { videoId: string; startSeconds?: number }): void;
       seekTo(seconds: number, allowSeekAhead: boolean): void;
       getCurrentTime(): number;
+      getPlayerState(): number;
       playVideo(): void;
       destroy(): void;
     }
