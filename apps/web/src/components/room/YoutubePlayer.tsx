@@ -19,7 +19,8 @@ export function YoutubePlayer({
   emit: (event: ClientEvent) => void;
 }) {
   const [player, setPlayer] = React.useState<YT.Player | null>(null);
-  const [blocked, setBlocked] = React.useState(false);
+  const [playerReady, setPlayerReady] = React.useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
   const emitRef = React.useRef(emit);
@@ -29,11 +30,13 @@ export function YoutubePlayer({
   const nextVideoRef = React.useRef(nextVideoId);
   nextVideoRef.current = nextVideoId;
   const loadedVideoRef = React.useRef<string | null>(null);
+  const playerRef = React.useRef<YT.Player | null>(null);
 
   React.useEffect(() => {
+    let destroyed = false;
     loadYouTubeApi().then((api) => {
-      if (!api) return;
-      const next = new api.Player("youtube-player", {
+      if (!api || destroyed) return;
+      const p = new api.Player("youtube-player", {
         playerVars: {
           autoplay: 0,
           rel: 0,
@@ -43,8 +46,13 @@ export function YoutubePlayer({
           origin: window.location.origin,
         },
         events: {
-          onReady: () => setLoading(false),
+          onReady: () => {
+            if (destroyed) return;
+            setPlayerReady(true);
+            setLoading(false);
+          },
           onStateChange: (event) => {
+            if (destroyed) return;
             const qid = queueItemRef.current;
             const idPayload = qid ? { queueItemId: qid } : {};
 
@@ -52,56 +60,69 @@ export function YoutubePlayer({
               emitRef.current({
                 type: "playback.clientState",
                 status: "ended",
-                positionSeconds: startSeconds,
+                positionSeconds: 0,
                 ...idPayload,
               });
               if (nextVideoRef.current) {
                 setLoading(true);
                 loadedVideoRef.current = nextVideoRef.current;
-                next.loadVideoById({ videoId: nextVideoRef.current });
+                p.loadVideoById({ videoId: nextVideoRef.current });
               }
             }
             if (event.data === api.PlayerState.BUFFERING)
               emitRef.current({
                 type: "playback.clientState",
                 status: "buffering",
-                positionSeconds: next.getCurrentTime(),
+                positionSeconds: p.getCurrentTime(),
                 ...idPayload,
               });
             if (event.data === api.PlayerState.PLAYING) {
               setLoading(false);
+              setAutoplayBlocked(false);
               emitRef.current({
                 type: "playback.clientState",
                 status: "playing",
-                positionSeconds: next.getCurrentTime(),
+                positionSeconds: p.getCurrentTime(),
                 ...idPayload,
               });
             }
+            if (event.data === api.PlayerState.PAUSED) {
+              setAutoplayBlocked(true);
+            }
+          },
+          onError: () => {
+            if (destroyed) return;
+            setLoading(false);
           },
         },
       });
-      setPlayer(next);
+      playerRef.current = p;
+      setPlayer(p);
     });
     return () => {
-      player?.destroy();
+      destroyed = true;
+      playerRef.current?.destroy();
+      playerRef.current = null;
+      setPlayer(null);
+      setPlayerReady(false);
+      setLoading(true);
+      setAutoplayBlocked(false);
+      loadedVideoRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
-    if (player && videoId) {
-      if (videoId === loadedVideoRef.current) return;
-      loadedVideoRef.current = videoId;
-      setLoading(true);
-      try {
-        player.loadVideoById({ videoId });
-        if (startSeconds > 1) player.seekTo(startSeconds, true);
-      } catch {
-        setBlocked(true);
-        setLoading(false);
-      }
-    }
-  }, [player, videoId]);
+    if (!playerReady || !player || !videoId) return;
+    if (videoId === loadedVideoRef.current) return;
+    loadedVideoRef.current = videoId;
+    setLoading(true);
+    player.cueVideoById({
+      videoId,
+      startSeconds: Math.max(0, startSeconds),
+    });
+    player.playVideo();
+  }, [playerReady, player, videoId, startSeconds]);
 
   React.useEffect(() => {
     if (!player || !queueItemId) return;
@@ -119,18 +140,27 @@ export function YoutubePlayer({
     return () => window.clearInterval(interval);
   }, [player, queueItemId, emit]);
 
-  const showOverlay = blocked || !videoId || loading;
+  const showOverlay = autoplayBlocked || !videoId || loading;
 
   return (
     <div className="relative aspect-video overflow-hidden rounded-2xl bg-black">
       <div id="youtube-player" className="h-full w-full" />
       {showOverlay ? (
         <div className="absolute inset-0 grid place-items-center bg-zinc-950/80">
-          {blocked || !videoId ? (
+          {autoplayBlocked || !videoId ? (
             <Button
               onClick={() => {
-                setBlocked(false);
-                player?.playVideo();
+                if (!player || !videoId) return;
+                setAutoplayBlocked(false);
+                setLoading(true);
+                if (loadedVideoRef.current !== videoId) {
+                  loadedVideoRef.current = videoId;
+                  player.cueVideoById({
+                    videoId,
+                    startSeconds: Math.max(0, startSeconds),
+                  });
+                }
+                player.playVideo();
               }}
             >
               Click to play

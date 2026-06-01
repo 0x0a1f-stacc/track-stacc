@@ -50,6 +50,18 @@ export async function registerRealtime(app: FastifyInstance) {
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
+    const [queueItems, messages] = await Promise.all([
+      app.prisma.queueItem.findMany({
+        where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
+        orderBy: [{ score: "desc" }, { position: "asc" }],
+        include: { track: true },
+      }),
+      app.prisma.chatMessage.findMany({
+        where: { roomId, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
     socket.emit("room.snapshot", {
       type: "room.snapshot",
       payload: {
@@ -71,9 +83,37 @@ export async function registerRealtime(app: FastifyInstance) {
           lastActiveAt: room.lastActiveAt.toISOString(),
         },
         currentPlayback: await getPlaybackState(app, roomId),
-        queue: [],
+        queue: queueItems.map((item) => ({
+          id: item.id,
+          roomId,
+          track: {
+            provider: "youtube" as const,
+            videoId: item.track.providerVideoId,
+            title: item.track.title,
+            channelTitle: item.track.channelTitle,
+            thumbnailUrl: item.track.thumbnailUrl,
+            durationSeconds: item.track.durationSeconds,
+          },
+          addedBySessionId: item.addedBySessionId,
+          status: item.status,
+          position: item.position,
+          score: item.score,
+          mechanicContext: item.mechanicContext as Record<string, unknown>,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+        })),
         participants: await getParticipants(app, roomId),
-        recentMessages: [],
+        recentMessages: messages.reverse().map((msg) => ({
+          id: msg.id,
+          roomId,
+          senderSessionId: msg.senderSessionId,
+          senderNickname: null,
+          type: msg.messageType,
+          body: msg.body,
+          metadata: msg.metadata as Record<string, unknown>,
+          deletedAt: null,
+          createdAt: msg.createdAt.toISOString(),
+        })),
       },
     });
     registerRoomHandlers(app, io, socket, roomId, sessionId);

@@ -4,7 +4,12 @@ declare global {
   interface Window {
     YT?: {
       Player: new (elementId: string, options: YT.PlayerOptions) => YT.Player;
-      PlayerState: { ENDED: number; BUFFERING: number; PLAYING: number };
+      PlayerState: {
+        ENDED: number;
+        BUFFERING: number;
+        PLAYING: number;
+        PAUSED: number;
+      };
     };
     onYouTubeIframeAPIReady?: () => void;
   }
@@ -16,11 +21,12 @@ declare global {
       events?: {
         onReady?: () => void;
         onStateChange?: (event: { data: number }) => void;
-        onError?: () => void;
+        onError?: (event: { data: number }) => void;
       };
     }
     interface Player {
       loadVideoById(options: { videoId: string; startSeconds?: number }): void;
+      cueVideoById(options: { videoId: string; startSeconds?: number }): void;
       seekTo(seconds: number, allowSeekAhead: boolean): void;
       getCurrentTime(): number;
       getPlayerState(): number;
