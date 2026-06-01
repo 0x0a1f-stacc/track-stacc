@@ -31,6 +31,7 @@ export function YoutubePlayer({
   nextVideoRef.current = nextVideoId;
   const loadedVideoRef = React.useRef<string | null>(null);
   const playerRef = React.useRef<YT.Player | null>(null);
+  const everPlayedRef = React.useRef(false);
 
   React.useEffect(() => {
     let destroyed = false;
@@ -78,6 +79,7 @@ export function YoutubePlayer({
               });
             if (event.data === api.PlayerState.PLAYING) {
               setLoading(false);
+              everPlayedRef.current = true;
               setAutoplayBlocked(false);
               emitRef.current({
                 type: "playback.clientState",
@@ -87,7 +89,7 @@ export function YoutubePlayer({
               });
             }
             if (event.data === api.PlayerState.PAUSED) {
-              setAutoplayBlocked(true);
+              if (!everPlayedRef.current) setAutoplayBlocked(true);
             }
           },
           onError: () => {
@@ -108,6 +110,7 @@ export function YoutubePlayer({
       setLoading(true);
       setAutoplayBlocked(false);
       loadedVideoRef.current = null;
+      everPlayedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -116,12 +119,13 @@ export function YoutubePlayer({
     if (!playerReady || !player || !videoId) return;
     if (videoId === loadedVideoRef.current) return;
     loadedVideoRef.current = videoId;
+    setAutoplayBlocked(false);
+    everPlayedRef.current = false;
     setLoading(true);
-    player.cueVideoById({
+    player.loadVideoById({
       videoId,
       startSeconds: Math.max(0, startSeconds),
     });
-    player.playVideo();
   }, [playerReady, player, videoId, startSeconds]);
 
   React.useEffect(() => {
@@ -155,12 +159,13 @@ export function YoutubePlayer({
                 setLoading(true);
                 if (loadedVideoRef.current !== videoId) {
                   loadedVideoRef.current = videoId;
-                  player.cueVideoById({
+                  player.loadVideoById({
                     videoId,
                     startSeconds: Math.max(0, startSeconds),
                   });
+                } else {
+                  player.playVideo();
                 }
-                player.playVideo();
               }}
             >
               Click to play
