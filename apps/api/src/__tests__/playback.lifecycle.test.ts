@@ -6,9 +6,12 @@ vi.mock("../realtime/broadcast.js", () => ({
   roomChannel: vi.fn().mockReturnValue("room:mocked"),
 }));
 
+import { broadcast } from "../realtime/broadcast.js";
+
 import {
   advanceQueue,
   destroyAllTimers,
+  emitResync,
   getPlaybackState,
   handleClientBuffering,
   handleClientEnd,
@@ -72,6 +75,9 @@ function mockApp(overrides?: Record<string, unknown>) {
         findUnique: vi.fn().mockResolvedValue(null),
         findFirst: vi.fn().mockResolvedValue(null),
       },
+      skipVote: {
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
       room: {
         findUnique: vi.fn().mockResolvedValue(null),
       },
@@ -93,6 +99,7 @@ function mockApp(overrides?: Record<string, unknown>) {
     redis: { ...base.redis, ...(ov?.redis ?? {}) },
     prisma: {
       queueItem: { ...base.prisma.queueItem, ...(ov?.prisma?.queueItem ?? {}) },
+      skipVote: { ...base.prisma.skipVote, ...(ov?.prisma?.skipVote ?? {}) },
       room: { ...base.prisma.room, ...(ov?.prisma?.room ?? {}) },
       roomSession: {
         ...base.prisma.roomSession,
@@ -451,6 +458,26 @@ describe("playback coordinator", () => {
       expect(vi.getTimerCount()).toBeGreaterThan(0);
       await advanceQueue(app, ioMock, roomId);
       expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  describe("emitResync", () => {
+    it("broadcasts playback.resync when state is playing", () => {
+      emitResync(ioMock, roomId, playingState);
+      expect(broadcast).toHaveBeenCalledWith(ioMock, roomId, {
+        type: "playback.resync",
+        state: expect.objectContaining({
+          roomId,
+          queueItemId,
+          status: PlaybackStatus.Playing,
+        }),
+      });
+    });
+
+    it("does not broadcast when state is not playing", () => {
+      vi.clearAllMocks();
+      emitResync(ioMock, roomId, stoppedState);
+      expect(broadcast).not.toHaveBeenCalled();
     });
   });
 });

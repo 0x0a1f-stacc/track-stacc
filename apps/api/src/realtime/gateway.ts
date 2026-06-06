@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import { verifyWsToken } from "../lib/tokens.js";
 import {
   destroyAllTimers,
+  emitResync,
   getPlaybackState,
 } from "../modules/playback/playback.coordinator.js";
 import { roomChannel } from "./broadcast.js";
@@ -50,7 +51,7 @@ export async function registerRealtime(app: FastifyInstance) {
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
-    const [queueItems, messages] = await Promise.all([
+    const [queueItems, messages, currentPlayback] = await Promise.all([
       app.prisma.queueItem.findMany({
         where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
         orderBy: [{ score: "desc" }, { position: "asc" }],
@@ -61,6 +62,7 @@ export async function registerRealtime(app: FastifyInstance) {
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
+      getPlaybackState(app, roomId),
     ]);
     socket.emit("room.snapshot", {
       type: "room.snapshot",
@@ -82,7 +84,7 @@ export async function registerRealtime(app: FastifyInstance) {
           updatedAt: room.updatedAt.toISOString(),
           lastActiveAt: room.lastActiveAt.toISOString(),
         },
-        currentPlayback: await getPlaybackState(app, roomId),
+        currentPlayback,
         queue: queueItems.map((item) => ({
           id: item.id,
           roomId,
@@ -116,6 +118,9 @@ export async function registerRealtime(app: FastifyInstance) {
         })),
       },
     });
+    if (currentPlayback.status === "playing") {
+      emitResync(io, roomId, currentPlayback);
+    }
     registerRoomHandlers(app, io, socket, roomId, sessionId);
     socket.on("disconnect", async () => {
       await app.prisma.roomSession

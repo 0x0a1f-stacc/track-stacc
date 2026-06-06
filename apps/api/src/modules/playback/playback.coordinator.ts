@@ -55,7 +55,7 @@ export async function getPlaybackState(
   };
 }
 
-function emitResync(io: Server, roomId: string, state: PlaybackState) {
+export function emitResync(io: Server, roomId: string, state: PlaybackState) {
   if (state.status !== PlaybackStatus.Playing || !state.startedAt) return;
   const serverPositionSeconds =
     (Date.now() - new Date(state.startedAt).getTime()) / 1000;
@@ -171,13 +171,19 @@ export async function advanceQueue(
     const room = await app.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found.", 404);
     const current = await getPlaybackState(app, roomId);
-    if (current.queueItemId)
-      await app.prisma.queueItem
-        .update({
-          where: { id: current.queueItemId },
-          data: { status: "played", endedAt: new Date() },
-        })
-        .catch(() => undefined);
+    if (current.queueItemId) {
+      await Promise.all([
+        app.prisma.queueItem
+          .update({
+            where: { id: current.queueItemId },
+            data: { status: "played", endedAt: new Date() },
+          })
+          .catch(() => undefined),
+        app.prisma.skipVote
+          .deleteMany({ where: { queueItemId: current.queueItemId } })
+          .catch(() => undefined),
+      ]);
+    }
     clearRoomTimers(roomId);
     const next = await selectNextTrack(
       app.prisma,
@@ -206,11 +212,19 @@ export async function skipTrack(
   });
   if (!actor || !["host", "moderator"].includes(actor.role))
     throw new AppError("FORBIDDEN", "Only hosts and moderators can skip.", 403);
+  return autoSkipTrack(app, io, roomId);
+}
+
+export async function autoSkipTrack(
+  app: FastifyInstance,
+  io: Server,
+  roomId: string,
+) {
   try {
     return advanceQueue(app, io, roomId);
   } catch (error) {
     if (error instanceof AppError) throw error;
-    app.log.error({ err: error, roomId }, "skipTrack failed");
+    app.log.error({ err: error, roomId }, "autoSkipTrack failed");
     throw new AppError("SKIP_FAILED", "Could not skip the current track.");
   }
 }
