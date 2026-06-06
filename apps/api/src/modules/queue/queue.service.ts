@@ -55,19 +55,49 @@ export async function addQueueItem(
       "VIDEO_UNAVAILABLE",
       "This video cannot be played here. Try another YouTube link.",
     );
-  if (room.duplicatePolicy === "block_queue") {
-    const duplicate = await app.prisma.queueItem.findFirst({
-      where: {
-        roomId,
-        trackId: track.id,
-        status: { in: ["queued", "playing"] },
-      },
-    });
-    if (duplicate)
-      throw new AppError(
-        "DUPLICATE_VIDEO",
-        "That song is already in the queue.",
-      );
+  if (room.duplicatePolicy !== "allow") {
+    if (room.duplicatePolicy === "block_queue") {
+      const duplicate = await app.prisma.queueItem.findFirst({
+        where: {
+          roomId,
+          trackId: track.id,
+          status: { in: ["queued", "playing"] },
+        },
+      });
+      if (duplicate)
+        throw new AppError(
+          "DUPLICATE_VIDEO",
+          "That song is already in the queue.",
+        );
+    } else if (room.duplicatePolicy === "block_recent") {
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const duplicate = await app.prisma.queueItem.findFirst({
+        where: {
+          roomId,
+          trackId: track.id,
+          status: { in: ["played", "skipped"] },
+          endedAt: { gt: threeHoursAgo },
+        },
+      });
+      if (duplicate)
+        throw new AppError(
+          "DUPLICATE_VIDEO",
+          "That song was played recently.",
+        );
+    } else if (room.duplicatePolicy === "block_session") {
+      const duplicate = await app.prisma.queueItem.findFirst({
+        where: {
+          roomId,
+          trackId: track.id,
+          addedBySessionId: sessionId,
+        },
+      });
+      if (duplicate)
+        throw new AppError(
+          "DUPLICATE_VIDEO",
+          "You have already added that song.",
+        );
+    }
   }
   const last = await app.prisma.queueItem.aggregate({
     where: { roomId },
