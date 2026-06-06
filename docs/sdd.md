@@ -2,19 +2,23 @@
 
 **Project name:** trackstacc.live
 **Document type:** Software Design Document (SDD)
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Draft for product and engineering review
-**Primary concept:** A no-registration collaborative music-room web application where users join with manually chosen nicknames, chat in real time, collaboratively manage a YouTube-powered playlist, and optionally password-protect nicknames to prevent impersonation.
+**Primary concept:** A no-registration collaborative music-room web application where users join with manually chosen nicknames, chat in real time, collaboratively manage a YouTube-powered playlist, optionally password-protect nicknames to prevent impersonation, and optionally expose rooms through read-only external embeds controlled by secure external chat command integrations.
+
+**Revision note:** Version 1.1 adds external site embeds, external chat command integrations, pre-play veto voting, staff chat commands, song request policy controls, and additional abuse-prevention requirements.
 
 ---
 
 ## 1. Executive Summary
 
-This web application allows users to create and join real-time music rooms. Each room has a shared YouTube playback experience, a collaborative queue, chat, and configurable playlist mechanics such as first-come-first-served, voting queue, DJ rotation, host-curated mode, and moderated suggestions.
+This web application allows users to create and join real-time music rooms. Each room has a shared YouTube playback experience, a collaborative queue, chat, and configurable playlist mechanics such as first-come-first-served, voting queue, DJ rotation, host-curated mode, and moderated suggestions. Version 1.1 extends this model so external websites can embed a Trackstacc room/player/queue and route music commands from their own chat systems while Trackstacc remains the authoritative music-room backend.
 
 The defining product constraint is **no traditional registration**. Users do not need email, OAuth, or account creation. However, users must enter a nickname before participating. The system never assigns generic anonymous names such as `guest_1234`. Nicknames can optionally be password-protected, enabling lightweight identity continuity without requiring full accounts.
 
 The room creator, called the **host**, can configure room behavior, including the playlist mechanic. The host may change the playlist mechanic later, subject to transparent guardrails: the current song is not interrupted, existing queue items are preserved by default, changes are announced in chat, and potentially disruptive changes require confirmation.
+
+External site integrations preserve the same authority model. The embedding website owns its chat UI and local user identity, but Trackstacc verifies every command, applies room policy, mutates queue/playback/settings only after validation, emits realtime updates, and optionally posts bot-style announcements back into the embedding site's chat.
 
 ---
 
@@ -31,6 +35,13 @@ The room creator, called the **host**, can configure room behavior, including th
 7. Allow the room creator to configure and later change playlist mechanics safely.
 8. Provide basic moderation tools suitable for no-registration public and private rooms.
 9. Design for MVP delivery while leaving room for future public discovery, profiles, persistent rooms, and richer moderation.
+10. Allow webmasters to embed a Trackstacc room/player/queue into their own websites.
+11. Allow external chat rooms to submit Trackstacc music commands through a secure server-to-server bridge.
+12. Preserve Trackstacc's server-side authority for all room mutations, playback decisions, moderation decisions, rate limits, and audit logs.
+13. Support pre-play veto voting through external chat commands.
+14. Support staff chat commands for queue moderation, force skip, and room setting changes.
+15. Provide configurable song request policies for public or semi-public communities.
+16. Prevent abuse through signing, idempotency, rate limits, duplicate controls, queue limits, and audit logs.
 
 ### 2.2 Non-Goals for MVP
 
@@ -42,6 +53,12 @@ The room creator, called the **host**, can configure room behavior, including th
 6. No global friend graph or private messaging in MVP.
 7. No guaranteed sample-accurate synchronized playback across clients.
 8. No full trust-and-safety admin console beyond basic moderation tools.
+9. Trackstacc does not become a generic chat hosting platform for third-party sites.
+10. The embed does not trust browser-provided identity for voting or queue mutations.
+11. The embed does not expose privileged write controls by default.
+12. Trackstacc does not scrape, proxy, download, cache, or re-stream YouTube audiovisual content.
+13. Trackstacc does not guarantee that external websites provide accurate identity, but it requires stable external user IDs for fair voting, rate limiting, moderation, and audit.
+14. Trackstacc does not moderate all content in the embedding site's chat; it only enforces Trackstacc room policy for music commands it receives.
 
 ---
 
@@ -53,6 +70,13 @@ A user creates a room, selects a playlist mechanic, shares the room link, and fr
 
 ### 3.2 High-Level Experience
 
+Trackstacc supports two room usage modes:
+
+1. **Native Trackstacc room experience.** Users visit Trackstacc directly, join with manually chosen nicknames, and use Trackstacc chat/queue/playback controls according to room permissions.
+2. **Embedded external-site experience.** A webmaster creates or configures a Trackstacc room, registers the embedding site origin, chat channel, outbound webhook, command prefix, and command permissions, then receives an iframe embed URL and a server-side integration secret. Users listen through the embed but control music through the embedding site's chat commands. Trackstacc processes those commands and posts bot announcements back into the embedding site's chat.
+
+#### 3.2.1 Native Trackstacc Room Experience
+
 1. Visitor opens a room URL.
 2. Visitor is prompted to enter a nickname.
 3. If the nickname is protected, the visitor must enter the nickname password.
@@ -60,6 +84,19 @@ A user creates a room, selects a playlist mechanic, shares the room link, and fr
 5. Participant can chat, view current playback, inspect the queue, and interact according to room permissions.
 6. Participant may protect their nickname by setting a password.
 7. Host and moderators can manage queue, chat, room settings, and playlist mechanic.
+
+#### 3.2.2 Embedded External-Site Experience
+
+1. A webmaster creates or configures a Trackstacc room.
+2. The webmaster registers their site origin, chat channel ID, outbound bot webhook, command prefix, enabled commands, trusted role mappings, and staff command permissions.
+3. Trackstacc provides a read-only iframe embed URL and an integration secret for the webmaster's backend.
+4. The embedding website renders the Trackstacc room/player/queue embed in its own page.
+5. Users listen through the embed.
+6. Users type commands such as `!sr <youtube-url>`, `!song`, `!queue`, `!yay`, and `!nay` in the embedding site's chat.
+7. The embedding site's backend forwards relevant music commands to Trackstacc through a signed server-to-server command bridge.
+8. Trackstacc validates the integration, actor, policy, rate limits, duplicate rules, veto state, and staff authorization before mutating any room state.
+9. Trackstacc emits realtime room events to connected Trackstacc clients and embeds.
+10. Trackstacc optionally posts a signed outbound bot webhook result back to the embedding site, and the embedding site posts the bot message into its own chat.
 
 ### 3.3 Core Differentiator
 
@@ -90,6 +127,22 @@ This reduces friction while still supporting identity continuity and room-level 
 | Suggestion mode      | A mechanic where users submit songs that require host/mod approval.                   |
 | Session              | Browser/device-level authenticated room participation token.                          |
 | Presence             | Real-time online/offline state of users in a room.                                    |
+| External Site Integration | A configured server-to-server relationship that lets an external website submit music commands for a Trackstacc room. |
+| Embedding Site | The third-party website that embeds a Trackstacc room/player/queue and owns its own chat UI and user identity. |
+| External Chat Command | A chat message entered on an embedding site, such as `!sr` or `!nay`, that the embedding site's backend forwards to Trackstacc. |
+| External Participant | A Trackstacc identity mapping for a user known by an embedding site, used for voting, rate limiting, moderation, and audit. |
+| External User ID | A stable, embedding-site-provided user identifier. It must come from the embedding site's backend, not browser input. |
+| Site Integration Secret | Server-side credential used to authenticate inbound commands or sign outbound webhooks for an external site integration. |
+| Outbound Bot Webhook | A webhook endpoint configured by the embedding site where Trackstacc can send signed bot-style command responses and announcements. |
+| Embeddable Room | A Trackstacc room view intended for iframe embedding on a registered external site. |
+| Read-Only Embed | Default embed mode that displays playback, queue, veto status, command hints, and policy state without accepting mutations. |
+| Pre-Play Veto | A short voting gate before a selected candidate starts playback, allowing eligible users to keep or veto the candidate. |
+| Veto Candidate | The queue item selected as next up while a pre-play veto window is open. |
+| Net Nays | The veto score calculated as `nayCount - yayCount`. |
+| Staff Command | An external chat command available only to authorized host/staff users, such as `!rm`, `!skip`, or `!music lock`. |
+| Song Request Policy | Room or integration setting that controls who may submit songs and how often. |
+| External Reference | A short room/integration/channel-scoped reference such as `[K7Q]` used to identify queue items or current candidates in chat commands and bot messages. |
+| Active Voter / Eligible Voter | An external or native participant allowed to vote in the current pre-play veto window according to room policy, moderation status, and rate limits. |
 
 ---
 
@@ -103,6 +156,10 @@ This reduces friction while still supporting identity continuity and room-level 
 6. Password-protected nicknames have no recovery path in MVP because there is no email or account system.
 7. Public rooms require stronger moderation and rate limiting than private link-only rooms.
 8. The host is not necessarily a registered account; host authority is established by a secure room host secret or by a protected nickname binding.
+9. External websites own their own chat UI and user identity; Trackstacc treats that identity as an integration input and still enforces Trackstacc room policy.
+10. External site integrations require stable external user IDs for fair voting, rate limiting, moderation, and audit.
+11. External embeds are read-only by default and must not store integration secrets or trust browser-provided role/session/user identity.
+12. Native in-app slash commands may remain Phase 2; external chat command integration is introduced in v1.1 as a server-to-server integration capability.
 
 ---
 
@@ -248,6 +305,73 @@ This reduces friction while still supporting identity continuity and room-level 
 | FR-105 | Host can toggle public/private visibility. | Phase 2  |
 | FR-106 | Host can set or rotate room password.      | Phase 2  |
 
+### 7.11 External Site Embeds and Chat Integrations
+
+| ID     | Requirement                                                                                                              | Priority    |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| FR-110 | Hosts can create an external site integration for a room.                                                                | MVP/Phase 2 |
+| FR-111 | An integration can define allowed site origins, channel ID, command prefix, outbound webhook URL, and enabled commands.  | MVP/Phase 2 |
+| FR-112 | Trackstacc provides a read-only embeddable room/player/queue view.                                                       | MVP/Phase 2 |
+| FR-113 | The read-only embed can display current track, queue, pre-play veto status, and command hints.                           | MVP/Phase 2 |
+| FR-114 | The read-only embed must not accept votes, song requests, or staff actions without authenticated server-side identity.    | MVP         |
+| FR-115 | External chat commands are submitted through a server-to-server endpoint.                                                 | MVP/Phase 2 |
+| FR-116 | Trackstacc verifies inbound integration authentication before processing commands.                                        | MVP         |
+| FR-117 | Trackstacc maps external users to external participant records for voting, rate limiting, moderation, and audit.          | MVP/Phase 2 |
+| FR-118 | Trackstacc can post signed outbound bot messages to the embedding site.                                                   | MVP/Phase 2 |
+| FR-119 | External command results include clear user-facing success/failure messages.                                             | MVP/Phase 2 |
+
+### 7.12 Pre-Play Veto
+
+| ID     | Requirement                                                                                         | Priority    |
+| ------ | --------------------------------------------------------------------------------------------------- | ----------- |
+| FR-130 | Rooms can enable pre-play veto for upcoming songs.                                                  | MVP/Phase 2 |
+| FR-131 | Pre-play veto opens only before playback starts for a selected candidate.                           | MVP/Phase 2 |
+| FR-132 | Pre-play veto opens only when at least one alternate queued candidate exists.                       | MVP/Phase 2 |
+| FR-133 | If no alternate candidate exists, voting is not opened and the song plays normally.                 | MVP/Phase 2 |
+| FR-134 | `!yay` votes to keep the candidate.                                                                | MVP/Phase 2 |
+| FR-135 | `!nay` votes to veto the candidate.                                                                | MVP/Phase 2 |
+| FR-136 | Each eligible user has one active vote per candidate.                                              | MVP/Phase 2 |
+| FR-137 | Users can change their vote during the window.                                                     | MVP/Phase 2 |
+| FR-138 | Net nays are calculated as `nayCount - yayCount`.                                                  | MVP/Phase 2 |
+| FR-139 | The candidate is vetoed if net nays reach the configured threshold.                                | MVP/Phase 2 |
+| FR-140 | Supported threshold modes are fixed, percentage, and hybrid.                                       | MVP/Phase 2 |
+| FR-141 | Veto results are announced as system/bot messages.                                                 | MVP/Phase 2 |
+| FR-142 | Vetoed items are marked distinctly from played, skipped, removed, and failed items.                 | MVP/Phase 2 |
+| FR-143 | If the window closes without veto, the candidate starts playback.                                  | MVP/Phase 2 |
+
+### 7.13 External Staff Commands and Song Request Policy
+
+| ID     | Requirement                                                                                                 | Priority    |
+| ------ | ----------------------------------------------------------------------------------------------------------- | ----------- |
+| FR-150 | External integrations can define staff users and/or trusted external roles.                                  | MVP/Phase 2 |
+| FR-151 | Staff commands are authorized server-side.                                                                  | MVP         |
+| FR-152 | Staff can remove queued items by reference.                                                                 | MVP/Phase 2 |
+| FR-153 | Staff can remove queued items by YouTube URL.                                                               | MVP/Phase 2 |
+| FR-154 | Staff can force skip the current song.                                                                      | MVP/Phase 2 |
+| FR-155 | Staff can change room music settings through chat commands when permitted.                                  | MVP/Phase 2 |
+| FR-156 | Staff actions are audit logged and announced.                                                               | MVP         |
+| FR-157 | Rooms support song request policy modes: open, per-user cooldown, after-user-song-finishes, staff-only, and closed. | MVP/Phase 2 |
+| FR-158 | Per-user cooldown is enforced by external user ID.                                                          | MVP/Phase 2 |
+| FR-159 | After-user-song-finishes mode prevents a user from stacking accepted songs.                                  | MVP/Phase 2 |
+| FR-160 | Staff-only mode restricts song additions to authorized staff.                                               | MVP/Phase 2 |
+| FR-161 | Closed mode rejects all song additions until reopened.                                                      | MVP/Phase 2 |
+| FR-162 | Room settings changed via external staff commands persist and broadcast.                                    | MVP/Phase 2 |
+
+### 7.14 External Abuse Prevention and Integration Security
+
+| ID     | Requirement                                                                                                       | Priority    |
+| ------ | ----------------------------------------------------------------------------------------------------------------- | ----------- |
+| FR-170 | Inbound command requests require authentication and replay protection.                                             | MVP         |
+| FR-171 | Duplicate external messages are idempotently handled.                                                            | MVP         |
+| FR-172 | Integration, room, user, and command-level rate limits are enforced.                                              | MVP/Phase 2 |
+| FR-173 | Song requests enforce queue size, pending-per-user, duration, duplicate, and blocked-content policies.            | MVP/Phase 2 |
+| FR-174 | Voting enforces one vote per eligible external user per candidate.                                                | MVP/Phase 2 |
+| FR-175 | External user display names and command text are sanitized.                                                       | MVP         |
+| FR-176 | Outbound webhooks are signed.                                                                                    | MVP/Phase 2 |
+| FR-177 | Privileged external commands are audit logged.                                                                    | MVP         |
+| FR-178 | Embed origins are restricted to configured/allowed domains.                                                       | MVP/Phase 2 |
+| FR-179 | Server-side integration secrets are never exposed to browser embeds.                                              | MVP         |
+
 ---
 
 ## 8. Non-Functional Requirements
@@ -308,6 +432,21 @@ This reduces friction while still supporting identity continuity and room-level 
 | NFR-052 | The app must include required YouTube/Google terms, privacy, and attribution disclosures where applicable. | required |
 | NFR-053 | YouTube API quota usage must be monitored and controlled.                                                  | required |
 
+### 8.7 External Integration Non-Functional Requirements
+
+| ID      | Requirement                                                                                                             | Target                                |
+| ------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| NFR-060 | External command processing should return user-facing command results quickly.                                           | p95 under 1s within same region       |
+| NFR-061 | Outbound bot webhook failure must not roll back successful queue, playback, vote, or settings changes.                  | required                              |
+| NFR-062 | Outbound bot webhooks should use bounded retries with backoff and duplicate-safe delivery identifiers.                  | required                              |
+| NFR-063 | Integration, room, user, command, staff-command, and webhook rate limits must be observable and configurable.           | required                              |
+| NFR-064 | Embed pages must use origin allowlists and CSP/frame-ancestors guidance for registered embed origins.                   | required                              |
+| NFR-065 | External user IDs must be treated as pseudonymous identifiers and stored only as needed for voting, moderation, audit, and rate limiting. | required |
+| NFR-066 | Public payloads must not expose integration secrets, raw IP addresses, session IDs, room password metadata, or host secret metadata. | required |
+| NFR-067 | Staff command actions must be auditable by room, integration, actor, command, result, and timestamp.                    | required                              |
+| NFR-068 | Observability must cover command volume, rejected commands, veto results, webhook failures, abuse limits, and policy changes. | required                         |
+| NFR-069 | Terms/privacy disclosures should explain external site integrations and YouTube embed/API usage.                       | required                              |
+
 ---
 
 ## 9. User Roles and Permissions
@@ -322,6 +461,9 @@ This reduces friction while still supporting identity continuity and room-level 
 | Host                    | Controls room settings, moderation, queue, and playlist mechanic.                      |
 | Moderator               | Delegated moderation role. Optional in MVP, stronger in Phase 2.                       |
 | System                  | Server-generated events and automated actions.                                         |
+| External Participant    | User represented by an embedding site's stable external user ID.                       |
+| External Staff          | External participant authorized for staff commands through allowlist or trusted role mapping. |
+| Integration Bot         | System actor that posts Trackstacc command results into the embedding site's chat.     |
 
 ### 9.2 Permission Matrix
 
@@ -340,6 +482,8 @@ This reduces friction while still supporting identity continuity and room-level 
 | Mute/ban participant     |      No |                          No |                          No |       Yes |  Yes |
 | Change playlist mechanic |      No |                          No |                          No |  Optional |  Yes |
 | Change room settings     |      No |                          No |                          No |  Optional |  Yes |
+
+External participants do not inherit native Trackstacc role authority from browser state. Staff authority for external integrations is derived only from configured external user ID allowlists, trusted external role mappings, or a future authenticated identity bridge.
 
 ---
 
@@ -433,6 +577,88 @@ This reduces friction while still supporting identity continuity and room-level 
 7. Server broadcasts `room.mechanic.changed`.
 8. Chat shows system message.
 9. Queue engine applies new mechanic to future queue operations.
+
+### 10.6 Webmaster Creates External Site Integration Flow
+
+1. Host opens room integration settings.
+2. Host creates an external site integration.
+3. Host enters site name, allowed origin, channel ID, command prefix, enabled commands, outbound bot webhook URL, bot display name, staff external user IDs, and trusted role mappings.
+4. Server stores secret hashes and returns one-time integration secret material.
+5. Server returns an iframe embed URL and public embed token scoped to the room and allowed origin.
+6. Webmaster installs the iframe embed and configures their backend to sign or authenticate command requests.
+7. Trackstacc verifies origin policy for embed access and server-to-server credentials for commands.
+
+### 10.7 External User Requests Song with `!sr`
+
+1. `cool.ws` user types `!sr https://www.youtube.com/watch?v=dQw4w9WgXcQ`.
+2. `cool.ws` backend forwards the command to Trackstacc with integration ID, room ID, channel ID, external message ID, external user ID, display name, roles, raw command text, timestamp, signature or bearer credential, and idempotency key.
+3. Trackstacc authenticates the integration.
+4. Trackstacc parses the command.
+5. Trackstacc maps the actor to an external participant.
+6. Trackstacc validates moderation status, role permissions, song request policy, duplicate policy, duration policy, queue limits, and rate limits.
+7. Trackstacc writes accepted queue changes.
+8. Trackstacc returns a command result.
+9. Trackstacc sends an outbound bot webhook if configured.
+10. `cool.ws` posts the bot response into its chat.
+
+### 10.8 Trackstacc Announces Pre-Play Veto Candidate
+
+1. Current track ends or playback advances.
+2. Server selects the next eligible candidate according to the active playlist mechanic.
+3. If no alternate candidate exists, the server starts playback without opening a veto window.
+4. If an alternate candidate exists and veto voting is enabled, the server opens a short pre-play veto window.
+5. Trackstacc announces the candidate in native chat and configured external bot webhooks.
+
+Example:
+
+```text
+Up next [K7Q]: "Song Title" requested by @alice. Vote now: !yay to keep, !nay to veto. Needs 3 net nays to skip. Voting closes in 20s.
+```
+
+### 10.9 External Users Vote `!yay` / `!nay`
+
+1. User types `!yay`, `!nay`, `!yay K7Q`, or `!nay K7Q` in the embedding site's chat.
+2. Embedding site backend forwards the command to Trackstacc.
+3. Trackstacc resolves the external reference or active pre-play veto candidate.
+4. Trackstacc validates the actor is an eligible voter and is not muted, banned, or rate-limited.
+5. Trackstacc records or replaces the actor's active vote for the candidate.
+6. Trackstacc broadcasts updated yay/nay/net-nay state.
+
+### 10.10 Candidate Is Vetoed and Trackstacc Advances
+
+1. Net nays reach the configured veto threshold before the voting window closes.
+2. Trackstacc marks the candidate `vetoed` or equivalent.
+3. Trackstacc announces the veto result.
+4. Trackstacc selects the next eligible candidate and does not reselect the vetoed song immediately in the same advance cycle.
+
+### 10.11 Candidate Passes Veto and Starts Playback
+
+1. Voting window closes without net nays reaching the configured veto threshold.
+2. Trackstacc announces the now-playing result.
+3. Trackstacc starts playback and broadcasts playback state.
+
+### 10.12 Staff Removes Queue Item by Reference
+
+1. External staff user types `!rm K7Q`.
+2. Trackstacc authenticates the integration and authorizes the actor server-side.
+3. Trackstacc resolves `[K7Q]`, removes the queue item, logs the staff action, broadcasts queue changes, and posts a bot announcement.
+
+### 10.13 Staff Changes Song Request Policy from Chat
+
+1. External staff user types `!music requests cooldown 90`.
+2. Trackstacc validates staff permission and command rate limits.
+3. Trackstacc persists the new song request policy, logs the change, broadcasts settings changes, and posts a bot announcement.
+
+### 10.14 Staff Force-Skips Current Song
+
+1. External staff user types `!skip bad audio`.
+2. Trackstacc validates staff permission.
+3. Trackstacc skips the current song, records the reason in audit metadata, broadcasts playback/queue changes, and announces the action.
+
+### 10.15 User Asks Current Song
+
+1. External user types `!song` or `!np`.
+2. Trackstacc returns the current song, requester when available, elapsed time where useful, and current external reference.
 
 ---
 
@@ -530,6 +756,110 @@ Mechanic changes must be treated as visible moderation/configuration actions.
 3. Host may choose **Clear Queue** with explicit confirmation.
 4. Public rooms may enforce mechanic-change cooldown.
 
+### 11.7 Pre-Play Veto Gate
+
+**Description:** Pre-play veto is a gate before playback starts for the next candidate. It is not the same as live skip voting for the current track. Live skip voting affects the current song during playback. Pre-play veto evaluates the selected next song before it starts, with a short window for eligible users to keep or veto it.
+
+**Best for:** Embedded public or semi-public rooms where the host website's chat provides stable user identity and a community wants a lightweight way to reject unsuitable upcoming songs before they play.
+
+**Rules:**
+
+1. When the current track ends or playback advances, the server selects the next candidate according to the active playlist mechanic.
+2. If pre-play veto is disabled, the candidate starts normally.
+3. If no alternate candidate exists, Trackstacc plays the candidate immediately and does not open voting.
+4. If an alternate candidate exists, Trackstacc opens a short pre-play veto window.
+5. `!yay` means keep this candidate.
+6. `!nay` means veto this candidate.
+7. Each eligible user gets one active vote per candidate.
+8. Users may change their vote during the voting window; the latest valid vote replaces the previous vote.
+9. `netNays = nayCount - yayCount`.
+10. A candidate is vetoed if net nays reaches the configured veto threshold before the window closes.
+11. If the candidate is vetoed, mark it as `vetoed` or equivalent, announce the result, and select the next eligible candidate.
+12. If the window closes without a veto, play the candidate.
+13. A vetoed song should not be selected again immediately in the same advance cycle.
+14. If repeated vetoes exhaust alternatives, the room should either play the last candidate without veto or stop gracefully according to a room setting. Recommended MVP behavior: play the last candidate without veto.
+15. The requester's own vote should be configurable or at least considered in eligibility rules. Recommended MVP default: allow requester votes unless abuse data suggests otherwise.
+
+**Voting disabled/no-effect cases:**
+
+`!yay` and `!nay` should return a polite no-op response when:
+
+1. No pre-play veto window is open.
+2. The candidate is the only available playable song.
+3. The voting window has expired.
+4. The actor is not an eligible voter.
+5. The actor is muted, banned, or rate-limited.
+6. The room has veto voting disabled.
+
+Example responses:
+
+```text
+No song is currently open for veto voting.
+There is no alternate song in the queue, so veto voting is closed.
+```
+
+### 11.8 Veto Threshold Model
+
+Use product-facing setting name `vetoThreshold` for pre-play veto configuration.
+
+| Mode       | Formula                                                               | Best For                                           |
+| ---------- | --------------------------------------------------------------------- | -------------------------------------------------- |
+| Fixed      | Skip if `netNays >= fixedNetNays`.                                    | Small/private rooms.                               |
+| Percentage | Skip if `netNays >= ceil(eligibleVoters * percentage)`.               | Large rooms where fixed thresholds are too easy to abuse. |
+| Hybrid     | `requiredNetNays = max(minimumNetNays, ceil(eligibleVoters * percentage))`. | General public-room default.                       |
+
+Recommended default:
+
+| Setting                         | Value  |
+| ------------------------------- | ------ |
+| `voteWindowSeconds`             | `20`   |
+| `vetoThreshold.mode`            | `hybrid` |
+| `percentageOfEligibleVoters`    | `25`   |
+| `minimumNetNays`                | `3`    |
+| `onlyWhenAlternateCandidateExists` | `true` |
+| `oneVotePerUser`                | `true` |
+| `allowVoteChange`               | `true` |
+
+Do not expose a separate webmaster-facing keep-vote behavior setting in v1.1. `!yay` is directly defined as a keep vote that reduces net nays.
+
+### 11.9 External References
+
+External references are short identifiers included in bot messages so chat users and staff can target queue items without copying UUIDs.
+
+Examples: `[K7Q]`, `[A14]`, `[NP]`.
+
+Rules:
+
+1. References are scoped by room, integration, and channel.
+2. `!rm K7Q` and `!yay K7Q` may resolve explicitly.
+3. `!yay` and `!nay` without a reference resolve to the active pre-play veto candidate.
+4. References should expire after the queue item leaves relevant recent history or after a bounded retention window.
+5. The bot should include references in queue, now-playing, veto, remove, and skip announcements.
+
+### 11.10 Song Request Policy
+
+Rooms and external integrations should support a `songRequestPolicy` setting or equivalent.
+
+| Mode                         | Behavior                                                                                          | Best For                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `open`                       | Anyone can request songs at any time, subject to global queue, rate, duplicate, and duration limits. | Trusted small rooms.                          |
+| `per_user_cooldown`          | A user can submit one accepted song every N seconds.                                               | Public embedded rooms.                        |
+| `after_user_song_finishes`   | A user can request again only after their previous accepted song has finished, been skipped, vetoed, removed, or failed. | Fairness and preventing queue stacking. |
+| `staff_only`                 | Only authorized staff may add tracks.                                                             | Events, streams, radio-style rooms, or high-abuse communities. |
+| `closed`                     | No one may add tracks until reopened. Staff should generally not add either unless the host changes the mode. | Temporary lockdowns.                          |
+
+Recommended default for public external integrations:
+
+| Setting                 | Default              |
+| ----------------------- | -------------------- |
+| `songRequestPolicy`     | `per_user_cooldown`  |
+| Cooldown                | 90 seconds           |
+| `maxPendingPerUser`     | 2                    |
+| `maxQueueSize`          | 50                   |
+| `maxDurationSeconds`    | 600                  |
+| `duplicatePolicy`       | `block_recent`       |
+| Pre-play veto           | Enabled with hybrid threshold |
+
 ---
 
 ## 12. System Architecture
@@ -575,7 +905,8 @@ Data Layer
   └─ Object/log storage for longer-term analytics/audit exports if needed
 
 External Services
-  └─ YouTube IFrame Player / YouTube Data API
+  ├─ YouTube IFrame Player / YouTube Data API
+  └─ Embedding site chat backends / outbound bot webhooks
 ```
 
 ### 12.2 Suggested Technology Stack
@@ -606,8 +937,65 @@ The server is authoritative for:
 7. Moderation actions.
 8. Rate limits.
 9. Nickname authentication.
+10. External integration authentication, command parsing, external participant mapping, pre-play veto state, staff command authorization, and outbound bot message creation.
 
 The client is authoritative only for local UI state and local YouTube player events. Client player events are treated as signals, not trusted facts.
+
+### 12.4 External Site Embeds and Chat Command Integrations
+
+External site integrations add an integration boundary without changing Trackstacc's authority over music-room state.
+
+**Architecture:**
+
+1. The embedding website owns its own chat UI and user identity.
+2. The embedding website backend parses or forwards relevant music commands to Trackstacc.
+3. Trackstacc verifies the integration secret, HMAC signature, bearer credential, timestamp freshness, and idempotency key before processing.
+4. Trackstacc maps the external user into an `ExternalParticipant` record or equivalent identity mapping.
+5. Trackstacc applies room permissions, song request policy, duplicate rules, duration rules, moderation status, rate limits, and staff authorization.
+6. Trackstacc mutates queue, playback, settings, and veto state only after validation.
+7. Trackstacc emits realtime room events to native clients and embeds.
+8. Trackstacc optionally sends a signed outbound bot webhook back to the embedding site.
+9. The embedding site posts the bot response into its own chat.
+
+**Server-to-server command payload guidance:**
+
+| Field                   | Purpose                                                        |
+| ----------------------- | -------------------------------------------------------------- |
+| `integrationId`         | Identifies the external site integration.                      |
+| `roomId`                | Trackstacc room UUID.                                          |
+| `channelId`             | Embedding-site chat channel or room identifier.                |
+| `externalMessageId`     | Stable source message ID for idempotency and audit.            |
+| `externalUserId`        | Stable external user ID from the embedding site's backend.     |
+| `displayName`           | User-facing display name from the embedding site.              |
+| `roles`                 | Optional role strings; trusted only when configured.           |
+| `rawText`               | Original command text.                                         |
+| `timestamp`             | Source timestamp used for freshness and replay protection.     |
+| `signature` or `bearer` | Integration authentication material.                           |
+| `idempotencyKey`        | Duplicate protection key, usually derived from message ID.     |
+
+**Command flow example:**
+
+1. `cool.ws` user types `!sr <youtube-url>`.
+2. `cool.ws` backend forwards the command payload to Trackstacc.
+3. Trackstacc authenticates the integration.
+4. Trackstacc parses the command.
+5. Trackstacc validates the actor.
+6. Trackstacc applies room policy.
+7. Trackstacc writes accepted changes.
+8. Trackstacc returns a command result.
+9. Trackstacc also sends an outbound bot webhook if configured.
+
+**Authority constraints:**
+
+1. The external website chat is a command surface, not the authority.
+2. Trackstacc remains authoritative for queue writes, playback state, veto logic, staff authorization, moderation, rate limits, duplicate policy, room settings, and audit logs.
+3. Do not trust browser-side role, identity, playback state, or vote state.
+4. Do not expose integration secrets in iframe URLs, browser JavaScript, localStorage, or public payloads.
+5. Do not let outbound webhook failure roll back successful queue, playback, vote, or settings changes.
+6. Do not require Trackstacc users to register an email/account to participate in external chat integrations.
+7. Preserve the no-registration native Trackstacc model.
+8. Preserve YouTube compliance boundaries: metadata-only server use plus client IFrame playback.
+9. Preserve current room mechanics such as FIFO, voting queue, DJ rotation, host curated, and suggestions; external pre-play veto is an additional gate, not a replacement for all mechanics.
 
 ---
 
@@ -700,6 +1088,7 @@ Queue item states:
 | `removed`   | Removed before playback.       |
 | `failed`    | Could not play or load.        |
 | `rejected`  | Suggestion rejected.           |
+| `vetoed`    | Rejected by pre-play veto before playback. |
 
 ### 13.5 Playback Coordinator
 
@@ -812,6 +1201,111 @@ Example limits:
 | Create room              | 5 rooms / hour per IP/session.                                   |
 | Mechanic change          | 1 change / 5 minutes in public rooms.                            |
 
+### 13.10 Embeddable Room Client
+
+Responsibilities:
+
+1. Render a read-only room/player/queue view for registered embedding origins.
+2. Display current track, YouTube iframe player, queue preview, pre-play veto candidate, voting countdown, yay/nay/net-nay state, command hints, queue locked/request policy state, and required YouTube attribution where applicable.
+3. Subscribe to realtime room events or snapshot polling appropriate for embeds.
+4. Avoid accepting song requests, votes, or staff actions directly by default.
+5. Avoid trusting browser-provided role, session, user identity, or integration state.
+6. Avoid storing integration secrets in browser JavaScript, iframe URLs, localStorage, sessionStorage, or public payloads.
+
+Default embed modes:
+
+| Mode                        | Behavior                                                              |
+| --------------------------- | --------------------------------------------------------------------- |
+| `player_and_queue_readonly` | Shows YouTube player, current song, queue preview, policy state, and command hints. |
+| `queue_readonly`            | Shows current song, queue preview, policy state, and command hints without player. |
+| `compact`                   | Optional future compact display for narrow layouts.                   |
+| `full_readonly`             | Optional future richer read-only room view.                           |
+
+Voting controls may be considered in a future authenticated embed identity bridge, but they are out of scope for v1.1/MVP unless user identity can be verified server-side.
+
+### 13.11 External Command Service
+
+Responsibilities:
+
+1. Authenticate inbound command requests.
+2. Enforce timestamp freshness, replay protection, idempotency, strict schema validation, and rate limits.
+3. Parse external chat commands using integration-specific command prefix and enabled command configuration.
+4. Map external user IDs to external participants.
+5. Route public commands, staff commands, and song request policy commands to domain services.
+6. Sanitize raw text, display names, titles, outbound bot messages, and references.
+7. Return clear command results for bot posting.
+8. Store accepted and rejected command audit records where appropriate.
+
+Public external chat commands:
+
+| Command              | Behavior                                                            |
+| -------------------- | ------------------------------------------------------------------- |
+| `!sr <youtube-url>`  | Submit song request.                                                |
+| `!song` or `!np`     | Show current song.                                                  |
+| `!queue`             | Show upcoming queue.                                                |
+| `!yay [ref]`         | Vote to keep active pre-play candidate.                             |
+| `!nay [ref]`         | Vote to veto active pre-play candidate.                             |
+| `!help music`        | List available music commands.                                      |
+
+`!yay` and `!nay` should not be used as queue popularity ranking in v1.1. Queue ranking commands, if ever needed, should use separate verbs such as `!up` and `!down` to avoid confusing keep/veto with queue priority.
+
+Staff-only external chat commands:
+
+| Command                                   | Behavior                                                              |
+| ----------------------------------------- | --------------------------------------------------------------------- |
+| `!rm <ref>`                               | Remove a queued item by short reference.                              |
+| `!rm <youtube-url>`                       | Remove queued item matching a YouTube video URL.                      |
+| `!skip`                                   | Force skip current song.                                              |
+| `!skip <reason>`                          | Force skip current song and include reason in announcement/audit log. |
+| `!music lock`                             | Disable public song requests.                                         |
+| `!music unlock`                           | Re-enable public song requests according to the prior/default policy. |
+| `!music requests open`                    | Allow requests from anyone.                                           |
+| `!music requests cooldown <seconds>`      | Allow one request every N seconds per user.                           |
+| `!music requests after-play`              | Allow request again after user's previous accepted song resolves.     |
+| `!music requests staff-only`              | Only authorized staff may add tracks.                                 |
+| `!music requests closed`                  | No one may add tracks.                                                |
+| `!music veto on`                          | Enable pre-play veto.                                                 |
+| `!music veto off`                         | Disable pre-play veto.                                                |
+| `!music veto window <seconds>`            | Set pre-play veto window length.                                      |
+| `!music veto fixed <count>`               | Set fixed net-nay threshold.                                          |
+| `!music veto hybrid <percent> min <count>` | Set hybrid veto threshold.                                            |
+| `!music max-duration <seconds>`           | Set max song duration.                                                |
+| `!music duplicate <policy>`               | Set duplicate policy.                                                 |
+
+Staff command rules:
+
+1. Staff commands must be authorized server-side using mapped external user IDs or trusted external roles configured by the webmaster/host.
+2. Staff actions must be audit logged.
+3. Staff actions should produce system/bot messages.
+4. Settings changes should broadcast to connected embeds and clients.
+5. Settings changes should be rate-limited.
+6. Destructive or broad actions should require explicit authorization and may require confirmation in future phases.
+7. The system must not trust a role string from the external site unless the integration is configured to trust that role or maps it to a Trackstacc staff permission.
+
+### 13.12 Outbound Bot Webhook Service
+
+Responsibilities:
+
+1. Sign outbound bot messages.
+2. Deliver command results and announcements to configured embedding-site webhook URLs.
+3. Use bounded retry policy with backoff and duplicate-safe delivery identifiers.
+4. Record webhook delivery success, failure, retries, and latency.
+5. Ensure webhook failure does not roll back successful domain changes.
+
+Example bot messages:
+
+| Event              | Message                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Song queued        | `Queued [K7Q] "Song Title" - requested by @alice. Position: 4.`                                             |
+| Up next            | `Up next [K7Q]: "Song Title" requested by @alice. Vote now: !yay to keep, !nay to veto. Needs 3 net nays to skip. Voting closes in 20s.` |
+| Veto passed        | `Veto passed for [K7Q]: 5 nays, 1 yay - skipping "Song Title".`                                             |
+| Song starts        | `Now playing [K7Q]: "Song Title" requested by @alice.`                                                     |
+| No vote open       | `No song is currently open for veto voting.`                                                               |
+| Only one song      | `There is no alternate song in the queue, so veto voting is closed.`                                       |
+| Staff remove       | `Removed [K7Q] "Song Title" from the queue.`                                                              |
+| Staff skip         | `@mod skipped "Song Title". Reason: bad audio.`                                                           |
+| Policy changed     | `Song requests are now limited to 1 request every 90 seconds per user.`                                    |
+
 ---
 
 ## 14. Data Model
@@ -827,6 +1321,12 @@ rooms 1---many room_moderation_actions
 rooms 1---many room_settings_history
 queue_items 1---many queue_votes
 queue_items 1---many skip_votes
+rooms 1---many site_integrations
+site_integrations 1---many external_participants
+site_integrations 1---many external_commands
+site_integrations 1---many external_references
+queue_items 1---many preplay_veto_votes
+queue_items 1---many preplay_veto_windows
 ```
 
 ### 14.2 Tables
@@ -870,6 +1370,7 @@ Stores room configuration.
 | `skip_vote_threshold_value` | INTEGER        | Example 50 or 3.                                         |
 | `queue_locked`              | BOOLEAN        | Whether normal users can add.                            |
 | `chat_locked`               | BOOLEAN        | Whether normal users can chat.                           |
+| `external_chat_music`       | JSONB          | External embed/chat configuration such as embed mode, command prefix, enabled commands, song request policy, pre-play veto config, staff permissions, duplicate policy, max queue size, max pending per user, max duration, webhook config, allowed origins, and abuse/rate-limit settings. |
 | `created_at`                | TIMESTAMP      | Creation time.                                           |
 | `updated_at`                | TIMESTAMP      | Last settings update.                                    |
 | `expires_at`                | TIMESTAMP NULL | For temporary rooms.                                     |
@@ -1016,6 +1517,111 @@ Stores room setting changes.
 | `new_value`        | JSONB     | New value.       |
 | `created_at`       | TIMESTAMP | Change time.     |
 
+#### `site_integrations`
+
+Logical entity for external website integrations. Exact Prisma naming may differ.
+
+| Column                    | Type           | Notes                                            |
+| ------------------------- | -------------- | ------------------------------------------------ |
+| `id`                      | UUID           | Primary key.                                     |
+| `room_id`                 | UUID           | FK to rooms.                                     |
+| `site_name`               | TEXT           | Webmaster-facing site name.                      |
+| `site_origin`             | TEXT           | Primary registered origin.                       |
+| `channel_id`              | TEXT           | Embedding-site chat channel identifier.          |
+| `command_prefix`          | TEXT           | Example `!`.                                     |
+| `inbound_secret_hash`     | TEXT           | Hash of inbound signing/bearer secret.           |
+| `outbound_webhook_url`    | TEXT NULL      | Optional bot webhook endpoint.                   |
+| `outbound_secret_hash`    | TEXT NULL      | Hash of outbound webhook signing secret.         |
+| `bot_display_name`        | TEXT NULL      | Suggested bot name for external chat.            |
+| `enabled`                 | BOOLEAN        | Whether integration is active.                   |
+| `allowed_origins`         | JSONB          | Origins allowed to frame or load embed.          |
+| `trusted_external_roles`  | JSONB          | External roles mapped to Trackstacc permissions. |
+| `staff_external_user_ids` | JSONB          | Explicit staff allowlist by external user ID.    |
+| `created_at`              | TIMESTAMP      | Creation time.                                   |
+| `updated_at`              | TIMESTAMP      | Last update.                                     |
+
+#### `external_participants`
+
+| Column                   | Type           | Notes                                          |
+| ------------------------ | -------------- | ---------------------------------------------- |
+| `id`                     | UUID           | Primary key.                                   |
+| `integration_id`         | UUID           | FK to site integrations.                       |
+| `room_id`                | UUID           | FK to rooms.                                   |
+| `external_user_id`       | TEXT           | Stable external user ID.                       |
+| `display_name`           | TEXT           | Latest display name.                           |
+| `normalized_name`        | TEXT           | Normalized display name for moderation/search. |
+| `mapped_room_session_id` | UUID NULL      | Optional native room session mapping.          |
+| `moderation_status`      | ENUM           | `active`, `muted`, `banned`, `limited`.        |
+| `last_seen_at`           | TIMESTAMP      | Last command or integration activity.          |
+
+Constraint:
+
+- Unique `(integration_id, room_id, external_user_id)`.
+
+#### `external_commands`
+
+| Column                   | Type      | Notes                                            |
+| ------------------------ | --------- | ------------------------------------------------ |
+| `id`                     | UUID      | Primary key.                                     |
+| `integration_id`         | UUID      | FK to site integrations.                         |
+| `room_id`                | UUID      | FK to rooms.                                     |
+| `channel_id`             | TEXT      | External chat channel.                           |
+| `external_message_id`    | TEXT      | Source message ID for idempotency.               |
+| `actor_external_user_id` | TEXT      | Actor from embedding site backend.               |
+| `raw_text`               | TEXT      | Sanitized or safely stored command text.         |
+| `parsed_command`         | TEXT      | Command verb/category.                           |
+| `status`                 | ENUM      | `received`, `accepted`, `rejected`, `duplicate`. |
+| `result_code`            | TEXT      | Stable result or error code.                     |
+| `created_at`             | TIMESTAMP | Command time.                                    |
+
+Constraint:
+
+- Unique `(integration_id, channel_id, external_message_id)`.
+
+#### `external_references`
+
+| Column           | Type           | Notes                                          |
+| ---------------- | -------------- | ---------------------------------------------- |
+| `id`             | UUID           | Primary key.                                   |
+| `integration_id` | UUID           | FK to site integrations.                       |
+| `room_id`        | UUID           | FK to rooms.                                   |
+| `channel_id`     | TEXT           | External chat channel.                         |
+| `ref`            | TEXT           | Short reference such as `K7Q`.                 |
+| `queue_item_id`  | UUID NULL      | FK to queue item when applicable.              |
+| `kind`           | ENUM           | `queue_item`, `now_playing`, `veto_candidate`. |
+| `expires_at`     | TIMESTAMP NULL | Expiration/lifecycle boundary.                 |
+
+#### `preplay_veto_votes`
+
+| Column             | Type      | Notes                     |
+| ------------------ | --------- | ------------------------- |
+| `id`               | UUID      | Primary key.              |
+| `room_id`          | UUID      | FK to rooms.              |
+| `queue_item_id`    | UUID      | FK to queue items.        |
+| `integration_id`   | UUID NULL | FK for external voters.   |
+| `external_user_id` | TEXT NULL | External voter ID.        |
+| `room_session_id`  | UUID NULL | Optional native voter ID. |
+| `vote`             | ENUM      | `yay`, `nay`.             |
+| `created_at`       | TIMESTAMP | Creation time.            |
+| `updated_at`       | TIMESTAMP | Last vote change.         |
+
+Constraint:
+
+- Unique active vote per candidate per eligible voter identity.
+
+#### `preplay_veto_windows`
+
+| Column               | Type      | Notes                                     |
+| -------------------- | --------- | ----------------------------------------- |
+| `id`                 | UUID      | Primary key.                              |
+| `room_id`            | UUID      | FK to rooms.                              |
+| `queue_item_id`      | UUID      | FK to queue items.                        |
+| `status`             | ENUM      | `open`, `vetoed`, `passed`, `expired`.    |
+| `opened_at`          | TIMESTAMP | Window open time.                         |
+| `closes_at`          | TIMESTAMP | Window close time.                        |
+| `threshold_snapshot` | JSONB     | Veto threshold evaluated for this window. |
+| `result`             | JSONB     | Final counts and outcome.                 |
+
 ---
 
 ## 15. API Design
@@ -1158,6 +1764,49 @@ POST /api/rooms/:roomId/moderation/assign-moderator
 POST /api/rooms/:roomId/moderation/revoke-moderator
 ```
 
+#### External Site Integration Endpoints
+
+These are conceptual API endpoints for v1.1 planning. Exact route names may vary, but the API must preserve the same authority boundaries.
+
+```http
+POST /api/rooms/:roomId/integrations/site
+PATCH /api/rooms/:roomId/integrations/site/:integrationId
+DELETE /api/rooms/:roomId/integrations/site/:integrationId
+POST /api/integrations/site-command
+GET /api/embed/rooms/:roomSlug
+GET /api/embed/rooms/:roomSlug/snapshot
+```
+
+`POST /api/integrations/site-command` request guidance:
+
+```json
+{
+  "integrationId": "uuid",
+  "roomId": "uuid",
+  "channelId": "cool-ws-main",
+  "externalMessageId": "msg-123",
+  "externalUserId": "user-456",
+  "displayName": "alice",
+  "roles": ["member"],
+  "rawText": "!sr https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "timestamp": "2026-06-06T12:00:00.000Z",
+  "idempotencyKey": "cool-ws-main:msg-123"
+}
+```
+
+Response guidance:
+
+```json
+{
+  "status": "accepted",
+  "resultCode": "SONG_QUEUED",
+  "message": "Queued [K7Q] \"Song Title\" - requested by @alice. Position: 4.",
+  "externalReference": "K7Q"
+}
+```
+
+Integration management endpoints must be host/staff authorized through native Trackstacc authority. Command ingestion must be authenticated with the integration's server-side credential, not a browser embed token.
+
 ---
 
 ## 16. WebSocket Event Design
@@ -1204,10 +1853,19 @@ Server validates:
 | `queue.item.added`      | Track added.                             |
 | `queue.item.removed`    | Track removed.                           |
 | `queue.vote.updated`    | Vote count changed.                      |
+| `queue.item.veto_window.opened` | Pre-play veto window opened for candidate. |
+| `queue.item.veto_window.updated` | Pre-play veto counts or window state changed. |
+| `queue.item.vetoed`     | Candidate was vetoed before playback.    |
+| `queue.item.veto_passed` | Candidate passed veto and will play.     |
 | `playback.state`        | Current playback state.                  |
 | `playback.resync`       | Client should seek/resync.               |
 | `room.settings.changed` | Settings changed.                        |
 | `room.mechanic.changed` | Playlist mechanic changed.               |
+| `room.external_settings.changed` | External integration/embed/music settings changed. |
+| `integration.command.received` | External command was received.       |
+| `integration.command.accepted` | External command was accepted.       |
+| `integration.command.rejected` | External command was rejected.       |
+| `external.bot_message.created` | Outbound bot message was created.    |
 | `moderation.applied`    | Mute/ban/delete/etc.                     |
 | `error`                 | Action rejected or failed.               |
 
@@ -1306,6 +1964,22 @@ Suggestions do not enter active queue until approved.
 Approved items then follow FIFO, voting, or host-curated ordering depending on room settings.
 ```
 
+### 17.6 Pre-Play Veto Advance Cycle
+
+```text
+1. Select next candidate using active playlist mechanic.
+2. If veto disabled, play candidate.
+3. If no alternate playable candidate exists, play candidate.
+4. Open veto window for candidate.
+5. Accept eligible !yay/!nay votes until threshold reached or window closes.
+6. If netNays reaches vetoThreshold, mark candidate vetoed and select next eligible candidate.
+7. Do not reselect a vetoed candidate in the same advance cycle.
+8. If alternatives are exhausted, play last candidate without veto or stop gracefully according to room setting.
+9. If window closes without veto, play candidate.
+```
+
+Pre-play veto is an additional gate after normal queue selection. It does not replace FIFO, voting queue, DJ rotation, host-curated, or suggestion approval mechanics.
+
 ---
 
 ## 18. Playback Synchronization Design
@@ -1370,6 +2044,11 @@ Key risks:
 8. WebSocket event forgery.
 9. Abuse via public rooms.
 10. API key exposure.
+11. Forged external chat commands.
+12. Replay or duplicate external message delivery.
+13. External role spoofing.
+14. Vote manipulation through unstable or browser-provided identity.
+15. Secret leakage through iframe URLs or browser JavaScript.
 
 ### 19.2 Mitigations
 
@@ -1385,6 +2064,11 @@ Key risks:
 | Unauthorized actions   | Server-side role checks for every write.                             |
 | Event forgery          | Signed WebSocket token and server-side validation.                   |
 | API key exposure       | YouTube API key only server-side for metadata/search where possible. |
+| Forged external commands | HMAC signature or bearer token verification, timestamp freshness, and replay protection. |
+| Duplicate external commands | Idempotency by integration/channel/message ID.                    |
+| External role spoofing | Trusted role mappings configured per integration; no client-side trust. |
+| Vote manipulation      | One vote per stable external user ID per candidate; no anonymous embed votes by default. |
+| Secret leakage         | Public embed token distinct from server-side integration secret; no secrets in browser payloads. |
 
 ### 19.3 Password Storage
 
@@ -1407,6 +2091,24 @@ Recommended:
 3. Rotate tokens on privilege escalation, such as becoming host/mod.
 4. Store token hashes server-side if revocation is required.
 
+### 19.5 External Integration Security
+
+External command ingestion and outbound bot delivery must use defense-in-depth:
+
+1. HMAC signature or bearer token verification for inbound commands.
+2. Timestamp freshness window.
+3. Idempotency by external message ID.
+4. Replay protection.
+5. Strict schema validation before parsing commands.
+6. Per-integration, per-room, per-user, and per-command rate limits.
+7. Sanitization of raw text, display names, titles, outbound bot messages, and references.
+8. Audit log for accepted and rejected privileged commands.
+9. Signed outbound bot webhooks.
+10. Public embed token distinct from server-side integration secret.
+11. Allowed origin/domain allowlist for embeds.
+12. CSP `frame-ancestors` guidance for registered embed origins.
+13. No privileged mutation endpoints callable from the embed without authenticated server-side identity.
+
 ---
 
 ## 20. Abuse Prevention and Moderation Policy
@@ -1421,6 +2123,12 @@ Recommended:
 6. User rapidly creates rooms.
 7. User repeatedly changes playlist mechanic if given permissions.
 8. User uses multiple sessions to manipulate votes.
+9. External site sends forged, replayed, or duplicate music commands.
+10. External user floods `!sr` commands or stacks the queue.
+11. External users coordinate veto abuse against every candidate.
+12. External staff role is spoofed or over-trusted.
+13. Embed origin is copied to an unregistered domain.
+14. Outbound bot webhook fails or is abused for message injection.
 
 ### 20.2 Controls
 
@@ -1435,6 +2143,65 @@ Recommended:
 9. Public-room cooldowns.
 10. Audit logs.
 11. Optional public-room report feature in Phase 2.
+
+### 20.3 External Integration Abuse Controls
+
+#### Command Bridge Controls
+
+1. HMAC signature or bearer token verification for inbound commands.
+2. Timestamp freshness window.
+3. Idempotency by external message ID.
+4. Replay protection.
+5. Per-integration rate limits.
+6. Per-room rate limits.
+7. Per-user rate limits.
+8. Per-command rate limits.
+9. Strict schema validation.
+10. Sanitization of raw text, display names, titles, outbound bot messages, and references.
+11. Audit log for accepted and rejected privileged commands.
+12. Webhook retry policy for outbound bot messages.
+13. Outbound bot webhooks must be signed.
+
+#### Queue Abuse Controls
+
+1. `maxQueueSize`.
+2. `maxPendingPerUser`.
+3. `maxAddsPerUserPerHour`.
+4. `maxAddsPerRoomPerMinute`.
+5. `maxDurationSeconds`.
+6. Duplicate policies.
+7. Blocked video IDs.
+8. Blocked channel IDs.
+9. Graceful handling of unavailable, private, deleted, age-restricted, or unembeddable videos.
+10. Optional quarantine/manual approval for suspicious submissions.
+
+#### Vote Abuse Controls
+
+1. One vote per external user per candidate.
+2. Vote changes replace previous vote.
+3. No anonymous embed votes by default.
+4. Minimum eligibility rules, such as active chatter, active listener, or recent user.
+5. Optional account-age/trust signal fields from the embedding site.
+6. Requester vote policy documented or configurable.
+7. Voter identity must come from the integration backend, not browser input.
+
+#### Staff Abuse Controls
+
+1. Staff allowlist by external user ID.
+2. Trusted role mapping configured per integration.
+3. Staff command rate limits.
+4. Audit log every staff command.
+5. Bot/system announcement for staff actions.
+6. No client-side trust in staff role.
+7. Settings changes should be reversible or clearly announced.
+
+#### Embed Abuse Controls
+
+1. Allowed origin/domain allowlist.
+2. CSP `frame-ancestors` guidance for registered embed origins.
+3. Public embed token distinct from server-side integration secret.
+4. No secrets in browser JavaScript.
+5. No privileged mutation endpoints callable from embed without authenticated server-side identity.
 
 ---
 
@@ -1452,6 +2219,7 @@ MVP may collect:
 6. Moderation actions.
 7. IP-derived rate-limit signals, stored minimally and preferably hashed.
 8. Basic logs for security, debugging, and abuse prevention.
+9. External user IDs, display names, command records, vote records, and staff command audit metadata needed for external integrations.
 
 ### 21.2 Data Not Collected in MVP
 
@@ -1461,6 +2229,10 @@ MVP may collect:
 4. Payment information.
 5. Uploaded audio files.
 6. YouTube account credentials.
+7. Integration secrets in public payloads, iframe URLs, browser JavaScript, or client storage.
+8. Raw external site session IDs unless explicitly needed, disclosed, and protected.
+
+External user IDs should be treated as pseudonymous identifiers. Trackstacc should store the minimum external identity data needed for voting, rate limiting, moderation, and audit. Public payloads must not expose integration secrets, raw IP addresses, session IDs, or password metadata.
 
 ### 21.3 Retention
 
@@ -1474,6 +2246,10 @@ Recommended defaults:
 | Rate-limit logs                  | 7-30 days.                                                  |
 | Audit logs                       | 30-180 days depending on moderation needs.                  |
 | Track metadata cache             | Refresh periodically according to policy and product needs. |
+| External command records         | 30-180 days depending on moderation and abuse needs.        |
+| External participant mappings    | Retain while integration/room remains active or according to inactivity policy. |
+
+Terms/privacy disclosures should explain external site integrations, pseudonymous external user IDs, bot webhooks, and YouTube embed/API usage.
 
 ---
 
@@ -1482,6 +2258,8 @@ Recommended defaults:
 ### 22.1 Playback
 
 Use YouTube embedded player functionality for playback. The application should not download, proxy, extract, or re-stream audio/video content.
+
+External embeds must preserve the same compliance boundary. YouTube playback remains through official embedded player behavior; Trackstacc does not download, proxy, extract, cache, or re-stream audiovisual content for embedding sites.
 
 Client responsibilities:
 
@@ -1545,6 +2323,11 @@ Before production launch:
 | Muted                             | “You are muted in this room.”                                 |
 | Rate limited                      | “You’re doing that too quickly. Try again shortly.”           |
 | Mechanic change cooldown          | “Playlist mode was changed recently. Try again later.”        |
+| No veto vote open                 | “No song is currently open for veto voting.”                  |
+| No alternate for veto             | “There is no alternate song in the queue, so veto voting is closed.” |
+| External command unauthorized     | “That music command is not available to you.”                 |
+| External command duplicate        | “That command was already processed.”                         |
+| Song request policy closed        | “Song requests are currently closed.”                         |
 
 ### 23.2 Server Error Principles
 
@@ -1588,6 +2371,13 @@ Track:
 11. Failed nickname password attempts.
 12. Moderation actions.
 13. Rate-limit triggers.
+14. External command volume.
+15. External command rejection rate by result code.
+16. Pre-play veto windows opened, passed, and vetoed.
+17. Vote volume and rejected vote attempts.
+18. Outbound bot webhook failures and retry counts.
+19. Integration abuse/rate-limit triggers.
+20. External staff command volume and settings changes.
 
 ### 24.2 Logs
 
@@ -1600,6 +2390,10 @@ Use structured logs with:
 5. Error code.
 6. Latency.
 7. User agent class where helpful.
+8. Integration ID for external command flows.
+9. External user ID hash where needed for abuse investigation.
+10. External message ID and idempotency result.
+11. Webhook delivery ID and result.
 
 Do not log:
 
@@ -1607,6 +2401,8 @@ Do not log:
 2. Full session tokens.
 3. Host secrets.
 4. Sensitive IP addresses unless required and protected.
+5. Integration secrets.
+6. Unsanitized external command text if it contains secrets or unsafe content.
 
 ### 24.3 Alerts
 
@@ -1620,6 +2416,10 @@ Alert on:
 6. High playback failure rate.
 7. Sudden room creation spam.
 8. High password brute-force signals.
+9. External command rejection spikes.
+10. Outbound webhook failure spikes.
+11. Veto abuse signals, such as repeated veto exhaustion in a public room.
+12. Staff command anomalies or excessive settings changes.
 
 ---
 
@@ -1669,6 +2469,11 @@ Test:
 7. Permission checks.
 8. Rate-limit calculations.
 9. Mechanic change transition rules.
+10. External command parsing.
+11. Integration signature verification and timestamp freshness.
+12. Pre-play veto threshold calculations.
+13. External reference resolution and expiration.
+14. Song request policy evaluation.
 
 ### 26.2 Integration Tests
 
@@ -1684,6 +2489,12 @@ Test:
 8. Moderator removes queue item.
 9. Muted participant cannot chat.
 10. Banned participant cannot reconnect.
+11. External command `!sr` creates a queue item when policy allows.
+12. Duplicate external message is handled idempotently.
+13. External staff command removes a queue item and writes audit log.
+14. Pre-play veto opens only when an alternate candidate exists.
+15. Vetoed candidate is not reselected in the same advance cycle.
+16. Outbound webhook failure does not roll back successful queue/playback changes.
 
 ### 26.3 WebSocket Tests
 
@@ -1696,6 +2507,8 @@ Test:
 5. Reconnect and receive snapshot.
 6. Presence heartbeat timeout.
 7. Cross-instance event propagation.
+8. Pre-play veto events propagate to native clients and embeds.
+9. External settings changes broadcast to connected embeds.
 
 ### 26.4 End-to-End Tests
 
@@ -1706,6 +2519,9 @@ Test with Playwright or Cypress:
 3. User A adds song; User B sees queue update.
 4. Host changes playlist mechanic; both users see system message.
 5. Protected nickname cannot be used by another user without password.
+6. Read-only embed displays current track, queue, veto status, and command hints.
+7. Embed does not expose mutation controls by default.
+8. External chat command flow posts a bot-style result back into a test embedding site harness.
 
 ### 26.5 Load Tests
 
@@ -1716,6 +2532,9 @@ Scenarios:
 3. Chat burst with rate limiting.
 4. Queue voting burst.
 5. WebSocket reconnect storm.
+6. External command burst with rate limiting.
+7. Outbound webhook failure/retry burst.
+8. Public-room veto voting burst.
 
 ---
 
@@ -1737,6 +2556,7 @@ Scenarios:
 12. Host can mute/ban users.
 13. Rate limits for chat, song adds, nickname password attempts.
 14. Basic terms/privacy pages.
+15. Server authority boundaries for external integrations documented and enforced if external integration MVP is included.
 
 ### 27.2 MVP Should-Haves
 
@@ -1748,6 +2568,12 @@ Scenarios:
 6. Basic room setting history.
 7. System chat messages.
 8. Reconnect and room snapshot.
+9. Read-only embeddable room/player/queue view.
+10. External chat command bridge for `!sr`, `!song`, `!queue`, `!yay`, and `!nay`.
+11. Pre-play veto for external chat integrations.
+12. Staff external chat commands for remove, skip, lock/unlock, request policy, and veto settings.
+13. Signed outbound bot webhook announcements.
+14. Song request policy controls for public embedded rooms.
 
 ### 27.3 Post-MVP Features
 
@@ -1765,6 +2591,9 @@ Scenarios:
 12. Advanced trust and safety dashboard.
 13. Host secret rotation.
 14. Nickname release/delete flow.
+15. Authenticated embed identity bridge with direct embed voting controls.
+16. Rich webmaster integration dashboard and analytics.
+17. Advanced staff-command confirmation workflows.
 
 ---
 
@@ -1780,6 +2609,14 @@ Scenarios:
 8. How strict should nickname content moderation be?
 9. What minimum password length should protected nicknames require?
 10. What is the acceptable YouTube playback sync tolerance?
+11. Should external site integration be included in MVP delivery or treated as MVP/Phase 2 depending on current native-room completion?
+12. Should external participant records be retained per room, per integration, or globally per embedding site?
+13. Should requester's own `!yay`/`!nay` count in pre-play veto by default long term?
+14. When repeated vetoes exhaust alternatives, should rooms always play the last candidate, stop gracefully, or let hosts choose?
+15. What account-age or trust signals should embedding sites optionally send for voter eligibility?
+16. Should staff command changes require chat confirmation for destructive or broad actions in Phase 2?
+17. What webhook retry limits and dead-letter behavior should be exposed to webmasters?
+18. Should external command prefixes be unique per room/channel, or can multiple integrations share the same prefix?
 
 ---
 
@@ -1795,6 +2632,11 @@ Scenarios:
 8. **Announce mechanic changes in chat.** Transparency prevents confusion.
 9. **Start with URL paste, not in-app search.** It reduces API quota pressure and implementation complexity.
 10. **Make public discovery a Phase 2 feature.** MVP should focus on room experience and moderation foundations.
+11. **Keep embeds read-only by default.** Voting and queue mutations should flow through a trusted server-side identity bridge, not browser-provided identity.
+12. **Use hybrid pre-play veto threshold for public external rooms.** Fixed thresholds are simple but easier to abuse at scale.
+13. **Make per-user cooldown the default external song request policy.** It is a practical default for public embedded rooms.
+14. **Treat outbound bot webhooks as side effects.** Failed bot delivery should be observable and retried, but should not roll back successful room state changes.
+15. **Keep native slash commands separate from external chat commands.** Native in-app slash commands may remain Phase 2 while external chat command integration is a v1.1 integration capability.
 
 ---
 
@@ -1853,6 +2695,18 @@ Scenarios:
 6. Observability.
 7. Terms/privacy/compliance review.
 
+### Milestone 7: External Embeds and Chat Integrations
+
+1. Site integration configuration and secret management.
+2. Read-only room/player/queue embed with origin allowlist.
+3. Server-to-server external command ingestion.
+4. External participant mapping and command audit records.
+5. Public commands: `!sr`, `!song`, `!np`, `!queue`, `!yay`, `!nay`, `!help music`.
+6. Pre-play veto windows, votes, thresholds, and result announcements.
+7. Staff commands for remove, force skip, request policy, veto settings, duration, and duplicate policy.
+8. Signed outbound bot webhook delivery with retry policy.
+9. Abuse controls for command bridge, queue, votes, staff actions, and embeds.
+
 ---
 
 ## 31. Acceptance Criteria
@@ -1901,6 +2755,37 @@ Scenarios:
 - A system message announces the change.
 - Change is recorded in settings history/audit log.
 
+### 31.7 External Site Integration
+
+- Host can create an external site integration with allowed origin, channel ID, command prefix, webhook URL, enabled commands, and staff mappings.
+- Trackstacc returns an iframe embed URL and one-time server-side integration secret material.
+- Read-only embed displays current track, YouTube player where configured, queue preview, pre-play veto state, command hints, and request policy state.
+- Read-only embed does not accept song requests, votes, or staff actions directly by default.
+- Inbound external commands require authentication, timestamp freshness, idempotency, replay protection, and schema validation.
+- `!sr <youtube-url>` queues an allowed song and returns a bot message such as `Queued [K7Q] "Song Title" - requested by @alice. Position: 4.`
+- `!song` or `!np` returns the current song.
+- `!queue` returns upcoming queue entries with references.
+
+### 31.8 Pre-Play Veto
+
+- Pre-play veto opens only before playback starts and only when an alternate candidate exists.
+- `!yay` keeps the active candidate; `!nay` vetoes the active candidate.
+- One active vote per eligible user is enforced and vote changes replace prior votes.
+- Net nays are calculated as `nayCount - yayCount`.
+- Candidate is vetoed when net nays reaches the configured threshold.
+- Candidate starts playback when the window closes without veto.
+- No-op vote cases return clear messages such as `No song is currently open for veto voting.` or `There is no alternate song in the queue, so veto voting is closed.`
+
+### 31.9 External Staff Commands and Abuse Controls
+
+- Staff commands are authorized server-side through external user ID allowlist or trusted role mapping.
+- `!rm <ref>` removes a queue item and announces the result.
+- `!skip <reason>` force-skips current song and records the reason in audit metadata.
+- Staff can change song request policy and veto settings when permitted.
+- Staff actions are audit logged and announced.
+- Outbound bot webhooks are signed and webhook failure does not roll back successful room state changes.
+- Embed origins are restricted and integration secrets are never exposed to browser embeds.
+
 ---
 
 ## 32. Risks and Mitigations
@@ -1915,6 +2800,12 @@ Scenarios:
 | Public room moderation          | Toxic behavior                | Delay public directory until moderation tools mature.             |
 | Playback sync drift             | Poor listening experience     | Periodic resync and server-authoritative state.                   |
 | XSS via chat/nicknames/metadata | Security incident             | Escape output, sanitize input, CSP.                               |
+| External command forgery        | Unauthorized room mutation    | Signed commands, timestamp freshness, replay protection, and idempotency. |
+| External identity instability   | Unfair voting/rate limiting   | Require stable external user IDs and treat browser identity as untrusted. |
+| Veto abuse                      | Queue starvation              | Hybrid thresholds, eligibility rules, rate limits, and no veto when no alternate exists. |
+| Staff role spoofing             | Privileged abuse              | Staff allowlists and trusted role mappings configured per integration. |
+| Webhook failure                 | Missing chat announcements    | Retry with backoff, log failures, and avoid rolling back successful state changes. |
+| Embed secret leakage            | Integration compromise        | Public embed token separate from server-side secret; no secrets in browser payloads. |
 
 ---
 
@@ -1933,6 +2824,16 @@ Scenarios:
 | Skip vote threshold                 | 50% of active non-muted participants, minimum 2.    |
 | Mechanic change cooldown            | None for private rooms; 5 minutes for public rooms. |
 | Temporary room expiration           | 14 days after inactivity.                           |
+| External embed mode                 | `player_and_queue_readonly`.                        |
+| External command prefix             | `!`.                                                |
+| External song request policy        | `per_user_cooldown`, 90 seconds.                    |
+| External max pending per user       | 2.                                                  |
+| External max queue size             | 50.                                                 |
+| External duplicate policy           | `block_recent`.                                     |
+| Pre-play veto window                | 20 seconds.                                         |
+| Pre-play veto threshold             | Hybrid: 25% eligible voters, minimum 3 net nays.    |
+| Pre-play veto only with alternate   | Enabled.                                            |
+| External vote changes               | Allowed during active veto window.                  |
 
 ---
 
@@ -1948,6 +2849,15 @@ Scenarios:
 | Queue unlocked     | `The host unlocked song additions.`                                          |
 | User muted         | `Fredo was muted by a moderator.`                                            |
 | Nickname protected | `Fredo protected their nickname.`                                            |
+| External song queued | `Queued [K7Q] "Song Title" - requested by @alice. Position: 4.`             |
+| External up next   | `Up next [K7Q]: "Song Title" requested by @alice. Vote now: !yay to keep, !nay to veto. Needs 3 net nays to skip. Voting closes in 20s.` |
+| Veto passed        | `Veto passed for [K7Q]: 5 nays, 1 yay - skipping "Song Title".`              |
+| Veto failed/song starts | `Now playing [K7Q]: "Song Title" requested by @alice.`                 |
+| No vote open       | `No song is currently open for veto voting.`                                 |
+| Only one song      | `There is no alternate song in the queue, so veto voting is closed.`         |
+| Staff remove       | `Removed [K7Q] "Song Title" from the queue.`                                |
+| Staff skip         | `@mod skipped "Song Title". Reason: bad audio.`                             |
+| Policy changed     | `Song requests are now limited to 1 request every 90 seconds per user.`      |
 
 ---
 
@@ -1962,7 +2872,13 @@ Scenarios:
     "playlistMechanic": "voting",
     "queueLocked": false,
     "chatLocked": false,
-    "maxSongDurationSeconds": 600
+    "maxSongDurationSeconds": 600,
+    "externalChatMusic": {
+      "embedMode": "player_and_queue_readonly",
+      "commandPrefix": "!",
+      "songRequestPolicy": "per_user_cooldown",
+      "preplayVetoEnabled": true
+    }
   },
   "currentPlayback": {
     "status": "playing",
@@ -1982,6 +2898,16 @@ Scenarios:
       "status": "queued"
     }
   ],
+  "preplayVeto": {
+    "status": "open",
+    "candidateRef": "K7Q",
+    "queueItemId": "uuid",
+    "closesAt": "2026-05-31T20:13:20.000Z",
+    "yayCount": 1,
+    "nayCount": 5,
+    "netNays": 4,
+    "requiredNetNays": 3
+  },
   "participants": [
     {
       "displayNickname": "Fredo",
