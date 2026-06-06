@@ -26,7 +26,7 @@
 
 - Shared base TS config enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`; avoid passing explicit `undefined` for optional object properties.
 - ESLint config treats `@typescript-eslint/no-explicit-any` as an error and `no-console` as a warning.
-- `packages/types` source imports are extensionless so Next can transpile the workspace package; don’t change them back to `.js` imports without checking the web build.
+- `packages/types` source imports are extensionless so Next can transpile the workspace package; don't change them back to `.js` imports without checking the web build.
 
 ## Runtime Boundaries
 
@@ -38,3 +38,29 @@
 
 - Next config is `apps/web/next.config.mjs`; `next.config.ts` is not supported by this Next 14 setup.
 - `apps/web/next.config.mjs` transpiles `@trackstacc/ui` and `@trackstacc/types`; keep this when changing package exports.
+
+## Testing
+
+- Tests live in `apps/api/src/__tests__/` and use Vitest; web has `--passWithNoTests` (no tests yet).
+- API tests mock external dependencies (DB, Redis, Socket.IO broadcast) — no local services needed to run them.
+- Run focused: `pnpm --filter api test`, `pnpm --filter web test`.
+
+## Environment & Services
+
+- `YOUTUBE_API_KEY` is optional. When absent, tracks get partial metadata only (`durationSeconds=null`) and the playback fallback timer is skipped entirely — no auto-advance on track end.
+- The API dev server loads `.env` via `dotenv` resolving `../../../.env` from the compiled source dir (`apps/api/src/main.ts:6`). Turbo does **not** propagate root `.env` to workspace packages, so the API must load it explicitly.
+- Docker local services: Postgres 16 on `:5432`, Redis 7 on `:6379`. Full reset-and-start flow: `docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d && pnpm --filter api prisma migrate dev --name init && pnpm db:seed`.
+
+## Route-Specific Room Resolution
+
+- `/api/rooms/:roomId/join` and `/api/rooms/:roomId/password/verify` accept room slug **or** UUID.
+- All other room routes (queue, playback, chat, moderation, settings) accept **UUID only**. Do not pass slugs to these routes.
+
+## Migration First-Run
+
+- `pnpm db:migrate` runs `prisma migrate dev`, which prompts for a migration name on first creation. For non-interactive first runs use: `pnpm --filter api prisma migrate dev --name init`.
+
+## Build Dependencies
+
+- `apps/api` build runs `prisma generate` (against the root schema) before `tsc`, because the Prisma client is generated at root but consumed by the API.
+- Turbo `dev` tasks are `persistent: true` (long-running dev servers). Turbo `build` tasks depend on `^build` (package dependencies must build first).

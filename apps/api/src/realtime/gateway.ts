@@ -3,7 +3,11 @@ import type { FastifyInstance } from "fastify";
 import { Server } from "socket.io";
 
 import { verifyWsToken } from "../lib/tokens.js";
-import { getPlaybackState } from "../modules/playback/playback.coordinator.js";
+import {
+  destroyAllTimers,
+  emitResync,
+  getPlaybackState,
+} from "../modules/playback/playback.coordinator.js";
 import { roomChannel } from "./broadcast.js";
 import { getParticipants } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
@@ -47,6 +51,19 @@ export async function registerRealtime(app: FastifyInstance) {
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
+    const [queueItems, messages, currentPlayback] = await Promise.all([
+      app.prisma.queueItem.findMany({
+        where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
+        orderBy: [{ score: "desc" }, { position: "asc" }],
+        include: { track: true },
+      }),
+      app.prisma.chatMessage.findMany({
+        where: { roomId, deletedAt: null },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      getPlaybackState(app, roomId),
+    ]);
     socket.emit("room.snapshot", {
       type: "room.snapshot",
       payload: {
@@ -67,12 +84,43 @@ export async function registerRealtime(app: FastifyInstance) {
           updatedAt: room.updatedAt.toISOString(),
           lastActiveAt: room.lastActiveAt.toISOString(),
         },
-        currentPlayback: await getPlaybackState(app, roomId),
-        queue: [],
+        currentPlayback,
+        queue: queueItems.map((item) => ({
+          id: item.id,
+          roomId,
+          track: {
+            provider: "youtube" as const,
+            videoId: item.track.providerVideoId,
+            title: item.track.title,
+            channelTitle: item.track.channelTitle,
+            thumbnailUrl: item.track.thumbnailUrl,
+            durationSeconds: item.track.durationSeconds,
+          },
+          addedBySessionId: item.addedBySessionId,
+          status: item.status,
+          position: item.position,
+          score: item.score,
+          mechanicContext: item.mechanicContext as Record<string, unknown>,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+        })),
         participants: await getParticipants(app, roomId),
-        recentMessages: [],
+        recentMessages: messages.reverse().map((msg) => ({
+          id: msg.id,
+          roomId,
+          senderSessionId: msg.senderSessionId,
+          senderNickname: null,
+          type: msg.messageType,
+          body: msg.body,
+          metadata: msg.metadata as Record<string, unknown>,
+          deletedAt: null,
+          createdAt: msg.createdAt.toISOString(),
+        })),
       },
     });
+    if (currentPlayback.status === "playing") {
+      emitResync(io, roomId, currentPlayback);
+    }
     registerRoomHandlers(app, io, socket, roomId, sessionId);
     socket.on("disconnect", async () => {
       await app.prisma.roomSession
@@ -85,6 +133,7 @@ export async function registerRealtime(app: FastifyInstance) {
     });
   });
   app.addHook("onClose", async () => {
+    destroyAllTimers();
     await pub.quit();
     await sub.quit();
     io.close();

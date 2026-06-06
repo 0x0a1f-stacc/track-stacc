@@ -10,10 +10,15 @@ import type {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string>),
+  };
+  if (init?.body) headers["content-type"] = "application/json";
+  const { headers: _h, ...rest } = init ?? {};
   const response = await fetch(`${apiUrl}${path}`, {
     credentials: "include",
-    headers: { "content-type": "application/json", ...init?.headers },
-    ...init,
+    headers,
+    ...rest,
   });
   if (!response.ok)
     throw new Error((await response.text()) || "Request failed");

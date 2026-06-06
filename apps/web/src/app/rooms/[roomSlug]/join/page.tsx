@@ -24,6 +24,7 @@ export default function JoinPage() {
       });
       setToken(response.websocketToken);
       sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
+      localStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
       router.push(`/rooms/${roomSlug}`);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Join failed";

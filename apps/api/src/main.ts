@@ -1,3 +1,10 @@
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
@@ -34,21 +41,17 @@ export async function buildApp() {
     if (error instanceof AppError)
       return reply.status(error.statusCode).send(toErrorResponse(error));
     if (error instanceof ZodError)
-      return reply
-        .status(400)
-        .send({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid request.",
-            details: error.flatten(),
-          },
-        });
-    app.log.error(error);
-    return reply
-      .status(500)
-      .send({
-        error: { code: "INTERNAL_ERROR", message: "Something went wrong." },
+      return reply.status(400).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid request.",
+          details: error.flatten(),
+        },
       });
+    app.log.error(error);
+    return reply.status(500).send({
+      error: { code: "INTERNAL_ERROR", message: "Something went wrong." },
+    });
   });
 
   app.get("/health", async () => ({ ok: true }));
@@ -60,11 +63,12 @@ export async function buildApp() {
 
   await app.register(roomsRouter);
   await app.register(nicknamesRouter);
-  await app.register(queueRouter);
   await app.register(chatRouter);
   await app.register(moderationRouter);
   const io = await registerRealtime(app);
+  app.decorate("io", io);
   await app.register(async (instance) => playbackRouter(instance, io));
+  await app.register(async (instance) => queueRouter(instance, io));
   return app;
 }
 

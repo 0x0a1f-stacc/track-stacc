@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useSocket } from "@/hooks/useSocket";
 import { useRoomStore } from "@/stores/room.store";
@@ -12,16 +13,33 @@ import { RoomSettings } from "./RoomSettings";
 import { YoutubePlayer } from "./YoutubePlayer";
 
 export function RoomShell({ roomSlug }: { roomSlug: string }) {
+  const router = useRouter();
   const token = useRoomStore((state) => state.websocketToken);
   const playback = useRoomStore((state) => state.playback);
   const room = useRoomStore((state) => state.room);
+  const queue = useRoomStore((state) => state.queue);
   const { emit } = useSocket(token);
+  const [checked, setChecked] = React.useState(false);
   React.useEffect(() => {
-    if (!token)
-      useRoomStore
-        .getState()
-        .setToken(sessionStorage.getItem(`ws:${roomSlug}`) ?? "");
+    if (!token) {
+      const stored =
+        sessionStorage.getItem(`ws:${roomSlug}`) ??
+        localStorage.getItem(`ws:${roomSlug}`);
+      if (stored) useRoomStore.getState().setToken(stored);
+      setChecked(true);
+    }
   }, [roomSlug, token]);
+  React.useEffect(() => {
+    if (checked && !token) router.replace(`/rooms/${roomSlug}/join`);
+  }, [checked, token, roomSlug, router]);
+
+  const nextQueuedItem = React.useMemo(() => {
+    return queue.find(
+      (item) => item.status === "queued" && item.track.provider === "youtube",
+    );
+  }, [queue]);
+  const nextVideoId = nextQueuedItem?.track.videoId ?? null;
+
   return (
     <main className="grid min-h-screen gap-4 p-4 lg:grid-cols-[1.2fr_420px]">
       <section className="space-y-4">
@@ -29,6 +47,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
           <h1 className="mb-3 text-2xl font-black">{room?.name ?? "Room"}</h1>
           <YoutubePlayer
             videoId={playback?.videoId}
+            nextVideoId={nextVideoId}
             startSeconds={playback?.serverPositionSeconds ?? 0}
             emit={emit}
             {...(playback?.queueItemId

@@ -24,7 +24,7 @@ export const rateLimits = {
     windowMs: Number(process.env.RATE_LIMIT_CHAT_WINDOW_MS ?? 10_000),
   },
   addSong: {
-    max: 1,
+    max: Number(process.env.RATE_LIMIT_ADD_SONG_MAX ?? 5),
     windowMs: Number(process.env.RATE_LIMIT_ADD_SONG_WINDOW_MS ?? 30_000),
   },
   nicknameChange: { max: 3, windowMs: 10 * 60_000 },
