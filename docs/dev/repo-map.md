@@ -301,7 +301,7 @@ or pass them via Docker build args.
 | Gap | Affects | Notes |
 |-----|---------|-------|
 | **SDD says `/api/v1/`, code uses `/api/`** | API conventions | SDD §15.1.1 specifies `/api/v1/` prefix. Actual routes use bare `/api/`. README and `AGENTS.md` correctly document `/api/`. |
-| **Listener tier not implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. None exist yet. **Not in scope of Issue #6.** |
+| **Listener tier not implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. **Schema and shared contracts are implemented** (`AccessTier` enum, `room_sessions.access_tier`, `rooms.listener_chat_visible`, nullable nickname fields, `Role.listener`). Runtime listener session creation, read-only API enforcement, and UI are pending follow-up work. |
 | **`HOST_SECRET_SALT` unused** | API config | `.env.example` lists it as required, but no code in `apps/api/src/` consumes it. Startup validation deliberately excludes it. Likely reserved for a future host token hashing feature. |
 | **`pnpm audit` not in CI** | CI/CD | SDD §39.4 specifies `pnpm audit` with critical/high failures blocking CI. Not yet implemented. |
 | **`packages/config` has no scripts** | Tooling | Pure config package — intentional, but may surprise agents trying `pnpm --filter @trackstacc/config lint`. |
@@ -319,8 +319,8 @@ All commands verified on 2026-06-08 against commit at `apps/api/src/main.ts:81`,
 
 - `pnpm lint`: 5 packages, all clean
 - `pnpm typecheck`: 4 packages with TS, all clean (`packages/config` skipped)
-- `pnpm test`: 24 tests across 5 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
-- `pnpm build`: 4 packages, Next.js output includes 6 static + 2 dynamic routes (no `listener` tier yet)
+- `pnpm test`: 31 tests across 6 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
+- `pnpm build`: 4 packages, Next.js output includes 6 static + 2 dynamic routes
 - `pnpm --filter api prisma validate`: schema valid (warns about deprecated `package.json#prisma` property — non-blocking)
 - `pnpm --filter api prisma generate`: Prisma Client generated to `node_modules/.pnpm/`
 - `docker compose -f infra/docker-compose.yml config`: valid, Postgres 16 on `:5432`, Redis 7 on `:6379`
