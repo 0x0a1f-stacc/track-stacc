@@ -29,6 +29,7 @@ export function useSocket(token: string | null) {
     if (!token) return undefined;
     const next = createSocket(token);
     for (const type of serverTypes) next.on(type, (event) => applyEvent(event));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(next);
     return () => {
       next.disconnect();

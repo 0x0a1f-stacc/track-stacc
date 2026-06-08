@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import type { ClientEvent } from "@trackstacc/types";
+import { ChatMessageType, type ClientEvent } from "@trackstacc/types";
 import { Button, Input, SystemMessage } from "@trackstacc/ui";
 import { useChat } from "@/hooks/useChat";
 import { ChatMessage } from "./ChatMessage";
@@ -12,7 +12,7 @@ export function ChatPanel({ emit }: { emit: (event: ClientEvent) => void }) {
       <h2 className="font-bold">Chat</h2>
       <div className="mt-3 flex-1 space-y-2 overflow-auto">
         {chat.map((message) =>
-          message.type === "system" ? (
+          message.type === ChatMessageType.System ? (
             <SystemMessage key={message.id}>{message.body}</SystemMessage>
           ) : (
             <ChatMessage key={message.id} message={message} />

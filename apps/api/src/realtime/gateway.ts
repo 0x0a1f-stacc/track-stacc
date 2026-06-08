@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { Server } from "socket.io";
 
 import { verifyWsToken } from "../lib/tokens.js";
+import { PlaybackStatus } from "@trackstacc/types";
 import {
   destroyAllTimers,
   emitResync,
@@ -22,26 +23,32 @@ export async function registerRealtime(app: FastifyInstance) {
   const pub = app.redis.duplicate();
   const sub = app.redis.duplicate();
   io.adapter(createAdapter(pub, sub));
-  io.use(async (socket, next) => {
-    try {
-      const token = String(
-        socket.handshake.auth.token ?? socket.handshake.query.token ?? "",
-      );
-      const payload = verifyWsToken(token);
-      const session = await app.prisma.roomSession.findUnique({
-        where: { id: payload.sessionId },
-      });
-      if (!session || session.roomId !== payload.roomId || session.isBanned)
-        throw new Error("invalid session");
-      socket.data.roomId = payload.roomId;
-      socket.data.sessionId = payload.sessionId;
-      next();
-    } catch (error) {
-      next(error instanceof Error ? error : new Error("unauthorized"));
-    }
+  io.use((socket, next) => {
+    void (async () => {
+      try {
+        const token = String(
+          socket.handshake.auth.token ?? socket.handshake.query.token ?? "",
+        );
+        const payload = verifyWsToken(token);
+        const session = await app.prisma.roomSession.findUnique({
+          where: { id: payload.sessionId },
+        });
+        if (!session || session.roomId !== payload.roomId || session.isBanned)
+          throw new Error("invalid session");
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        socket.data.roomId = payload.roomId;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        socket.data.sessionId = payload.sessionId;
+        next();
+      } catch (error) {
+        next(error instanceof Error ? error : new Error("unauthorized"));
+      }
+    })();
   });
   io.on("connection", async (socket) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const roomId = String(socket.data.roomId);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const sessionId = String(socket.data.sessionId);
     await socket.join(roomChannel(roomId));
     await app.prisma.roomSession.update({
@@ -118,7 +125,7 @@ export async function registerRealtime(app: FastifyInstance) {
         })),
       },
     });
-    if (currentPlayback.status === "playing") {
+    if (currentPlayback.status === PlaybackStatus.Playing) {
       emitResync(io, roomId, currentPlayback);
     }
     registerRoomHandlers(app, io, socket, roomId, sessionId);
@@ -136,7 +143,7 @@ export async function registerRealtime(app: FastifyInstance) {
     destroyAllTimers();
     await pub.quit();
     await sub.quit();
-    io.close();
+    void io.close();
   });
   return io;
 }
