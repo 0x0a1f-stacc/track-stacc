@@ -13,11 +13,20 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 
 ## Commands
 
-- Install: `pnpm install --config.confirmModulesPurge=false`.
+- Install: `pnpm install --config.confirmModulesPurge=false` (local) or `pnpm install --frozen-lockfile` (CI).
 - Full verification: `pnpm typecheck && pnpm test && pnpm build`.
 - Focused package commands: `pnpm --filter api test`, `pnpm --filter api typecheck`, `pnpm --filter web typecheck`, `pnpm --filter web build`.
 - API Prisma commands must go through the API wrapper: `pnpm --filter api prisma validate`, `pnpm --filter api prisma generate`, `pnpm db:migrate`, `pnpm db:seed`.
 - Local services are from `infra/docker-compose.yml`: `docker compose -f infra/docker-compose.yml up -d` starts Postgres on `5432` and Redis on `6379`.
+
+## CI and Env Validation
+
+- CI runs on every PR via `.github/workflows/ci.yml`: install → prisma validate → lint → typecheck → test (Postgres + Redis service containers) → build.
+- CI install uses `--frozen-lockfile`; local dev uses `--config.confirmModulesPurge=false`.
+- Required env vars (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`) cause startup failure with a descriptive error if absent. Validation in `apps/api/src/lib/env.ts`, called from `main()`.
+- `HOST_SECRET_SALT` is in `.env.example` but not validated at startup — not consumed in current code.
+- `YOUTUBE_API_KEY` is optional; absence yields `metadataStatus: "partial"` for tracks.
+- `turbo.json` `build` and `test` tasks include `env` cache keys for `DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `HOST_SECRET_SALT`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `YOUTUBE_API_KEY`. Changing these env vars locally busts the Turbo cache.
 
 ## Prisma And Env
 
