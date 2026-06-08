@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Repo Map
+
+Run `docs/dev/repo-map.md` is the canonical repository baseline and command reference. Read it before guessing workspace paths, package names, or commands.
+
 ## Repo Shape
 
 - pnpm workspace pinned to `pnpm@9.15.4`; packages are only `apps/*` and `packages/*`.

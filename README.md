@@ -114,6 +114,7 @@ Default URLs:
 Full repo checks:
 
 ```bash
+pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
@@ -128,6 +129,8 @@ pnpm --filter web typecheck
 pnpm --filter web build
 pnpm --filter api prisma validate
 ```
+
+A detailed command reference with prerequisites, package scripts, and verification notes lives at `docs/dev/repo-map.md`.
 
 Database helpers:
 
@@ -251,5 +254,6 @@ The production compose file expects environment values for database, Redis, API 
 ## Reference Docs
 
 - `docs/sdd.md`
+- `docs/dev/repo-map.md` (canonical workspace layout, command reference, and known gaps)
 - `AGENTS.md`
 - `infra/coolify/coolify.env.example`
