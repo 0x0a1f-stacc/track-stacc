@@ -40,9 +40,15 @@ enum SkipVoteThresholdType {
 }
 
 enum Role {
+  listener
   participant
   moderator
   host
+}
+
+enum AccessTier {
+  listener
+  member
 }
 
 enum TrackProvider {
@@ -113,6 +119,7 @@ model Room {
   skipVoteThresholdValue Int                   @default(50) @map("skip_vote_threshold_value")
   queueLocked            Boolean               @default(false) @map("queue_locked")
   chatLocked             Boolean               @default(false) @map("chat_locked")
+  listenerChatVisible    Boolean               @default(false) @map("listener_chat_visible")
   createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamptz
   expiresAt              DateTime?             @map("expires_at") @db.Timestamptz
@@ -131,9 +138,10 @@ model RoomSession {
   id                 String         @id @default(uuid()) @db.Uuid
   roomId             String         @map("room_id") @db.Uuid
   nicknameClaimId    String?        @map("nickname_claim_id") @db.Uuid
-  normalizedNickname String         @map("normalized_nickname")
-  displayNickname    String         @map("display_nickname")
-  role               Role           @default(participant)
+  normalizedNickname String?        @map("normalized_nickname")
+  displayNickname    String?        @map("display_nickname")
+  accessTier         AccessTier     @default(listener) @map("access_tier")
+  role               Role           @default(listener)
   sessionTokenHash   String         @unique @map("session_token_hash")
   isMuted            Boolean        @default(false) @map("is_muted")
   isBanned           Boolean        @default(false) @map("is_banned")
