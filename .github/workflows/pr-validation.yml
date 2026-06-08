@@ -1,0 +1,52 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+
+jobs:
+  validate-pr-body:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || ""
+            const failures = []
+
+            const requiredSections = [
+              "## Summary",
+              "## Type",
+              "## Area",
+              "## Acceptance Criteria",
+              "## Verification",
+              "## Final Checklist"
+            ]
+            for (const section of requiredSections) {
+              if (!body.includes(section)) {
+                failures.push(`Missing required section: ${section}`)
+              }
+            }
+
+            if (!body.match(/Closes\s+#\d+/i)) {
+              failures.push('Missing issue reference. Include "Closes #<number>" in the Summary section.')
+            }
+
+            const requiredChecks = [
+              "- [x] `pnpm lint`",
+              "- [x] `pnpm typecheck`",
+              "- [x] `pnpm test`",
+              "- [x] `pnpm build`"
+            ]
+            for (const check of requiredChecks) {
+              if (!body.includes(check)) {
+                failures.push(`Missing or unchecked verification checkbox: ${check}`)
+              }
+            }
+
+            if (failures.length > 0) {
+              core.setFailed(failures.join("\n"))
+            }
