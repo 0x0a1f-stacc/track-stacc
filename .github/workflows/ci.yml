@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: trackstacc
+          POSTGRES_USER: trackstacc
+          POSTGRES_PASSWORD: trackstacc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U trackstacc
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack and prepare pnpm
+        run: corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma validate
+        run: pnpm --filter api prisma validate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Migrate and test
+        env:
+          DATABASE_URL: postgresql://trackstacc:trackstacc@localhost:5432/trackstacc
+          REDIS_URL: redis://localhost:6379
+          SESSION_SECRET: ci_test_secret_for_github_actions_min_32_chars
+          HOST_SECRET_SALT: ci_test_salt_for_github_actions_here
+          CORS_ORIGINS: http://localhost:3000
+          YOUTUBE_API_KEY: ""
+        run: |
+          pnpm --filter api prisma migrate deploy
+          pnpm test
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000
+          NEXT_PUBLIC_WS_URL: http://localhost:4000
+          DATABASE_URL: postgresql://trackstacc:trackstacc@localhost:5432/trackstacc
+        run: pnpm build
