@@ -31,6 +31,7 @@ export function registerRoomHandlers(
   roomId: string,
   sessionId: string,
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   socket.onAny(async (_eventName: string, event: ClientEvent) => {
     try {
       if (event.type === "presence.heartbeat") {

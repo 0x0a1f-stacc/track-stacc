@@ -1,4 +1,5 @@
 "use client";
+import { Role } from "@trackstacc/types";
 import { Avatar, Badge } from "@trackstacc/ui";
 import { usePresence } from "@/hooks/usePresence";
 export function ParticipantList() {
@@ -14,8 +15,8 @@ export function ParticipantList() {
           >
             <Avatar nickname={participant.displayNickname} />
             <span className="flex-1">{participant.displayNickname}</span>
-            {participant.role !== "participant" ? (
-              <Badge tone={participant.role === "host" ? "host" : "mod"}>
+            {participant.role !== Role.Participant ? (
+              <Badge tone={participant.role === Role.Host ? "host" : "mod"}>
                 {participant.role}
               </Badge>
             ) : null}

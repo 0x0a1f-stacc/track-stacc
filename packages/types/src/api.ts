@@ -51,7 +51,6 @@ export interface NicknameProtectRequest {
   displayNickname: string;
   password: string;
 }
-export interface NicknameAuthenticateRequest extends NicknameProtectRequest {}
 export interface NicknameAuthenticateResponse {
   authenticated: boolean;
 }

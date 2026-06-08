@@ -35,7 +35,7 @@ export default function JoinPage() {
   return (
     <main className="mx-auto grid min-h-screen max-w-lg place-items-center px-6">
       <form
-        onSubmit={join}
+        onSubmit={(event) => { join(event).catch(console.error); }}
         className="w-full rounded-3xl border border-white/10 bg-zinc-950/85 p-8"
       >
         <h1 className="text-3xl font-black">Choose your nickname</h1>

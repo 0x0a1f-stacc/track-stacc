@@ -25,7 +25,7 @@ export default function LandingPage() {
   return (
     <main className="mx-auto grid min-h-screen max-w-5xl place-items-center px-6">
       <form
-        onSubmit={createRoom}
+        onSubmit={(event) => { createRoom(event).catch(console.error); }}
         className="w-full max-w-xl rounded-3xl border border-white/10 bg-zinc-950/80 p-8 shadow-2xl"
       >
         <p className="text-sm font-semibold uppercase tracking-[0.4em] text-brand-200">

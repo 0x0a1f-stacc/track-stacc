@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import * as React from "react";
+import { QueueItemStatus } from "@trackstacc/types";
 import { useSocket } from "@/hooks/useSocket";
 import { useRoomStore } from "@/stores/room.store";
 import { AddSongInput } from "./AddSongInput";
@@ -26,7 +27,8 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         sessionStorage.getItem(`ws:${roomSlug}`) ??
         localStorage.getItem(`ws:${roomSlug}`);
       if (stored) useRoomStore.getState().setToken(stored);
-      setChecked(true);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      else setChecked(true);
     }
   }, [roomSlug, token]);
   React.useEffect(() => {
@@ -35,7 +37,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
 
   const nextQueuedItem = React.useMemo(() => {
     return queue.find(
-      (item) => item.status === "queued" && item.track.provider === "youtube",
+      (item) => item.status === QueueItemStatus.Queued && item.track.provider === "youtube",
     );
   }, [queue]);
   const nextVideoId = nextQueuedItem?.track.videoId ?? null;

@@ -127,7 +127,7 @@ export async function startTrack(
     });
   } else {
     roomTimers.set(roomId, {
-      fallbackTimeout: null as unknown as NodeJS.Timeout,
+      fallbackTimeout: null!,
       resyncInterval,
       bufferingTimeout: null,
     });
@@ -260,16 +260,18 @@ export async function handleClientBuffering(
   if (!timers) return;
   if (timers.bufferingTimeout) return;
 
-  const bufferingTimeout = setTimeout(async () => {
-    const current = await getPlaybackState(app, roomId);
-    if (current.queueItemId !== queueItemId) return;
-    await app.prisma.queueItem
-      .update({
-        where: { id: queueItemId },
-        data: { status: "failed", endedAt: new Date() },
-      })
-      .catch(() => undefined);
-    await advanceQueue(app, io, roomId);
+  const bufferingTimeout = setTimeout(() => {
+    void (async () => {
+      const current = await getPlaybackState(app, roomId);
+      if (current.queueItemId !== queueItemId) return;
+      await app.prisma.queueItem
+        .update({
+          where: { id: queueItemId },
+          data: { status: "failed", endedAt: new Date() },
+        })
+        .catch(() => undefined);
+      await advanceQueue(app, io, roomId);
+    })();
   }, 30_000);
 
   roomTimers.set(roomId, { ...timers, bufferingTimeout });

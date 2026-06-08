@@ -15,6 +15,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   };
   if (init?.body) headers["content-type"] = "application/json";
   const { headers: _h, ...rest } = init ?? {};
+  void _h;
   const response = await fetch(`${apiUrl}${path}`, {
     credentials: "include",
     headers,

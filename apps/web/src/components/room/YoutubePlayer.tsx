@@ -24,14 +24,21 @@ export function YoutubePlayer({
   const [loading, setLoading] = React.useState(true);
 
   const emitRef = React.useRef(emit);
-  emitRef.current = emit;
   const queueItemRef = React.useRef(queueItemId);
-  queueItemRef.current = queueItemId;
   const nextVideoRef = React.useRef(nextVideoId);
-  nextVideoRef.current = nextVideoId;
   const loadedVideoRef = React.useRef<string | null>(null);
   const playerRef = React.useRef<YT.Player | null>(null);
   const everPlayedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    emitRef.current = emit;
+  }, [emit]);
+  React.useEffect(() => {
+    queueItemRef.current = queueItemId;
+  }, [queueItemId]);
+  React.useEffect(() => {
+    nextVideoRef.current = nextVideoId;
+  }, [nextVideoId]);
 
   React.useEffect(() => {
     let destroyed = false;
@@ -100,7 +107,7 @@ export function YoutubePlayer({
       });
       playerRef.current = p;
       setPlayer(p);
-    });
+    }).catch(() => undefined);
     return () => {
       destroyed = true;
       playerRef.current?.destroy();

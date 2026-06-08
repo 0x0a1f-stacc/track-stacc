@@ -12,7 +12,7 @@ export function PlaybackControls({ roomId }: { roomId?: string }) {
       <Button
         variant="secondary"
         disabled={!roomId}
-        onClick={() => roomId && api.skip(roomId)}
+        onClick={() => { if (roomId) void api.skip(roomId); }}
       >
         Skip
       </Button>

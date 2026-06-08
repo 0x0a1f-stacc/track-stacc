@@ -156,6 +156,7 @@ describe("playback coordinator", () => {
       expect(state.status).toBe(PlaybackStatus.Playing);
       expect(state.queueItemId).toBe(queueItemId);
       expect(state.videoId).toBe("dQw4w9WgXcQ");
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(app.redis.set).toHaveBeenCalled();
     });
 
@@ -466,6 +467,7 @@ describe("playback coordinator", () => {
       emitResync(ioMock, roomId, playingState);
       expect(broadcast).toHaveBeenCalledWith(ioMock, roomId, {
         type: "playback.resync",
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         state: expect.objectContaining({
           roomId,
           queueItemId,
