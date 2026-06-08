@@ -132,6 +132,8 @@ pnpm --filter api prisma validate
 
 A detailed command reference with prerequisites, package scripts, and verification notes lives at `docs/dev/repo-map.md`.
 
+These same commands run automatically on every pull request via `.github/workflows/ci.yml` with Postgres 16 and Redis 7 service containers.
+
 Database helpers:
 
 ```bash
