@@ -31,8 +31,8 @@ jobs:
               }
             }
 
-            if (!body.match(/Closes\s+#\d+/i)) {
-              failures.push('Missing issue reference. Include "Closes #<number>" in the Summary section.')
+            if (!body.match(/(?:Closes|Refs)\s+#\d+/i)) {
+              failures.push('Missing issue reference. Include "Closes #<number>" or "Refs #<number>" in the Summary section.')
             }
 
             const requiredChecks = [
