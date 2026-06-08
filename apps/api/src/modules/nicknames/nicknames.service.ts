@@ -109,6 +109,7 @@ export async function joinRoom(
       roomId: room.id,
       nicknameClaimId: claim?.id ?? null,
       ...normalized,
+      accessTier: "member",
       role,
       sessionTokenHash: hashToken(sessionToken),
     },

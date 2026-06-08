@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { Role } from "@trackstacc/types";
+import { AccessTier, Role } from "@trackstacc/types";
 
 type PresenceSession = {
   id: string;
-  displayNickname: string;
-  normalizedNickname: string;
-  role: "participant" | "moderator" | "host";
+  displayNickname: string | null;
+  normalizedNickname: string | null;
+  accessTier: "listener" | "member";
+  role: "listener" | "participant" | "moderator" | "host";
   nicknameClaimId: string | null;
   isMuted: boolean;
   joinedAt: Date;
@@ -19,14 +20,20 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     orderBy: { joinedAt: "asc" },
   })) as PresenceSession[];
   const roleMap = {
+    listener: Role.Listener,
     participant: Role.Participant,
     moderator: Role.Moderator,
     host: Role.Host,
+  } as const;
+  const tierMap = {
+    listener: AccessTier.Listener,
+    member: AccessTier.Member,
   } as const;
   return sessions.map((session) => ({
     roomSessionId: session.id,
     displayNickname: session.displayNickname,
     normalizedNickname: session.normalizedNickname,
+    accessTier: tierMap[session.accessTier],
     role: roleMap[session.role],
     protectedNickname: Boolean(session.nicknameClaimId),
     presence:
