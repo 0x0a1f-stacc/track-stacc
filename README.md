@@ -1,5 +1,7 @@
 # trackstacc.live
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Collaborative YouTube music rooms built as a pnpm workspace with a Next.js web app, a Fastify + Socket.IO API, PostgreSQL, and Redis.
 
 ## What This Repo Contains
@@ -253,6 +255,10 @@ The production compose file expects environment values for database, Redis, API 
 - Prisma packages are intentionally present at the workspace root so generation works from the root schema location
 - `apps/web/next.config.mjs` must stay `.mjs`; Next 14 in this repo does not use `next.config.ts`
 - `packages/types` uses extensionless source imports so the web app can transpile the workspace package correctly
+
+## License
+
+MIT — see the [LICENSE](LICENSE) file for details.
 
 ## Reference Docs
 
