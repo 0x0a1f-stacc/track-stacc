@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/assets/magic-context.schema.json",
+  "enabled": true,
+  
+  // Cache: maximize reuse
+  "cache_ttl": {
+    "default": "5m",
+    "opencode-go/deepseek-v4-pro": "58m"
+  },
+  
+  // Drop aggressively
+  "execute_threshold_percentage": 50,
+  "auto_drop_tool_age": 30,
+  "clear_reasoning_age": 20,
+  "protected_tags": 10,
+  "history_budget_percentage": 0.1,
+  
+  // Background agents: request-priced or free models
+  "historian": {
+    "model": "opencode/minimax-m3-free",
+    "fallback_models": [
+      "opencode/deepseek-v4-flash-free"
+    ]
+  },
+  "dreamer": {
+    "model": "opencode/minimax-m3-free",
+    "fallback_models": [
+      "opencode/deepseek-v4-flash-free"
+    ],
+    "schedule": "02:00-06:00",
+    "tasks": [
+      "consolidate",
+      "verify",
+      "archive-stale",
+      "improve",
+      "maintain-docs"
+    ],
+    "user_memories": {
+      "enabled": true
+    },
+    "pin_key_files": {
+      "enabled": true
+    }
+  },
+  "sidekick": {
+    "model": "opencode/minimax-m3-free",
+    "fallback_models": [
+      "opencode/deepseek-v4-flash-free"
+    ]
+  },
+  
+  // Free local embeddings
+  "embedding": {
+    "provider": "local"
+  },
+  
+  // Memory
+  "memory": {
+    "enabled": true,
+    "injection_budget_tokens": 3000, // tighter than default 4000
+    "auto_promote": true
+  },
+  "temporal_awareness": true
+}

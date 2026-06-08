@@ -1,0 +1,346 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // Project: trackstacc.live
+  // Stack: pnpm workspace, Next.js App Router web, Fastify + Socket.IO API,
+  // Prisma/PostgreSQL, Redis, shared TS packages, Docker Compose.
+  "model": "opencode-go/deepseek-v4-pro",
+  "small_model": "opencode-go/deepseek-v4-flash",
+
+  // Keep provider policy narrow so ad-hoc model switches do not accidentally use
+  // unrelated paid providers. Remove this allowlist if your OpenCode install exposes
+  // these models through a differently named provider.
+  "enabled_providers": ["opencode", "opencode-go"],
+
+  "provider": {
+    "opencode": {
+      // Free zen models used by Magic Context background agents.
+      // 2 min timeout prevents long hangs when free models rate-limit or stall.
+      "options": {
+        "timeout": 120000,
+        "chunkTimeout": 30000,
+        "setCacheKey": true
+      }
+    },
+    "opencode-go": {
+      "options": {
+        "timeout": 300000,
+        "chunkTimeout": 30000,
+        "setCacheKey": true
+      }
+    }
+  },
+
+  // Magic Context manages compression itself. Built-in compaction must stay off.
+  "plugin": ["@cortexkit/opencode-magic-context"],
+  "compaction": {
+    "auto": false,
+    "prune": false,
+    "reserved": 12000
+  },
+
+  // AGENTS.md and README.md cover repo shape, commands, TS constraints, and runtime rules.
+  // Agent prompts below are intentionally thin — they don't repeat what's already here.
+  // Verify docs/sdd.md is the correct path; remove sdd.md alias if both resolve the same file.
+  "instructions": [
+    "AGENTS.md",
+    "README.md",
+    "docs/sdd.md",
+    "infra/coolify/coolify.env.example"
+  ],
+
+  "default_agent": "trackstacc-builder",
+
+  "agent": {
+    "trackstacc-builder": {
+      "description": "Default implementation agent for the trackstacc.live pnpm monorepo.",
+      "model": "opencode-go/deepseek-v4-pro",
+      // AGENTS.md covers TS strictness, Prisma path, runtime boundaries, and YouTube rules.
+      // Prompt stays focused on role identity and tool preference only.
+      "prompt": "You are working on trackstacc.live: a no-registration collaborative YouTube music-room app. Treat the API as authoritative for sessions, permissions, queue/playback state, nickname auth, moderation, and rate limits. Prefer MCP semantic/AST tools before broad file reads for symbol-level code work.",
+      "permission": {
+        "bash": {
+          "*": "ask",
+          "pnpm *": "allow",
+          "corepack *": "allow",
+          "node *": "allow",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git branch*": "allow",
+          "curl http://localhost:4000/health*": "allow",
+          "docker compose -f infra/docker-compose.yml ps*": "allow",
+          "docker compose -f infra/docker-compose.yml up -d": "ask",
+          "docker compose -f infra/docker-compose.yml down*": "ask",
+          "docker compose -f infra/docker-compose.prod.yml *": "ask",
+          "git commit*": "ask",
+          "git push*": "deny",
+          "git reset --hard*": "deny",
+          "rm *": "ask"
+        }
+      }
+    },
+
+    "api-specialist": {
+      "description": "Fastify, Socket.IO, Prisma, Redis, auth, queue, playback, and moderation specialist.",
+      "model": "opencode-go/deepseek-v4-pro",
+      // AGENTS.md already covers: Zod validation, rate limits, signed WS tokens, httpOnly
+      // cookies, Argon2id, Prisma wrapper, root schema path, and strict TS rules.
+      "prompt": "Specialist for apps/api and packages/types. Enforce server-authoritative state — never trust client signals for role, playback, or session.",
+      "permission": {
+        "bash": {
+          "*": "ask",
+          "pnpm --filter api typecheck": "allow",
+          "pnpm --filter api test*": "allow",
+          "pnpm --filter api prisma validate": "allow",
+          "pnpm --filter api prisma generate": "allow",
+          "pnpm db:seed": "ask",
+          "pnpm db:migrate*": "ask"
+        }
+      }
+    },
+
+    "web-specialist": {
+      "description": "Next.js 14 App Router, React, Tailwind, and shared UI specialist.",
+      // UI/component work does not need pro — flash is sufficient and cheaper.
+      "model": "opencode-go/deepseek-v4-flash",
+      // AGENTS.md already covers: next.config.mjs constraint, transpilation rules,
+      // extensionless imports, and strict TS settings.
+      "prompt": "Specialist for apps/web, packages/ui, and packages/types. Preserve .mjs config and workspace transpilation for @trackstacc/ui and @trackstacc/types.",
+      "permission": {
+        "bash": {
+          "*": "ask",
+          "pnpm --filter web typecheck": "allow",
+          "pnpm --filter web build": "allow"
+        }
+      }
+    },
+
+    "schema-guardian": {
+      "description": "Database, Prisma schema, migrations, data retention, and audit-history reviewer.",
+      "model": "opencode-go/deepseek-v4-pro",
+      // AGENTS.md covers Prisma root path and wrapper command requirements.
+      "prompt": "Review root prisma/schema.prisma, migrations, and seed scripts. Maintain room/session/queue/chat/moderation invariants. Protect secrets, tokens, and password hashes from logs and outputs.",
+      "permission": {
+        "edit": {
+          "*": "ask",
+          "prisma/schema.prisma": "allow",
+          "prisma/migrations/**": "ask",
+          "prisma/seed.*": "allow"
+        },
+        "bash": {
+          "*": "ask",
+          "pnpm --filter api prisma validate": "allow",
+          "pnpm --filter api prisma generate": "allow",
+          "pnpm db:push": "ask",
+          "pnpm db:migrate*": "ask",
+          "pnpm db:seed": "ask"
+        }
+      }
+    },
+
+    "security-reviewer": {
+      "description": "Read-only reviewer for auth, session, XSS, YouTube compliance, MCP safety, and secret leakage.",
+      // Pattern recognition and read-only review — flash is sufficient and cheaper.
+      "model": "opencode-go/deepseek-v4-flash",
+      "prompt": "Read-only security reviewer. Identify trust-boundary violations, XSS, token/secret leakage, improper password handling, unsafe YouTube handling, missing rate limits, and authorization bypasses. Produce findings with file paths and suggested fixes. Do not edit files.",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "ask",
+          "pnpm typecheck": "allow",
+          "pnpm test*": "allow",
+          "pnpm --filter api test*": "allow",
+          "pnpm --filter api typecheck": "allow",
+          "pnpm --filter web typecheck": "allow"
+        }
+      }
+    }
+  },
+
+  "command": {
+    "verify": {
+      "description": "Run full repo verification and triage failures.",
+      // No model override — inherits from trackstacc-builder.
+      "agent": "trackstacc-builder",
+      "template": "Run the repo verification sequence: pnpm typecheck && pnpm test && pnpm build. If anything fails, identify the smallest failing package, explain the cause, and propose or apply a minimal fix."
+    },
+    "api-check": {
+      "description": "Check API package plus Prisma schema.",
+      "agent": "api-specialist",
+      "template": "Run focused API checks: pnpm --filter api typecheck, pnpm --filter api test, and pnpm --filter api prisma validate. Triage failures using the API as authoritative for sessions, permissions, queue/playback state, nickname auth, moderation, and rate limits."
+    },
+    "web-check": {
+      "description": "Check web package build and types.",
+      "agent": "web-specialist",
+      "template": "Run focused web checks: pnpm --filter web typecheck and pnpm --filter web build. Preserve Next.js 14 App Router conventions and keep next.config.mjs."
+    },
+    "db-check": {
+      "description": "Validate Prisma and migration assumptions.",
+      "agent": "schema-guardian",
+      "template": "Review root Prisma schema and migration/seed assumptions. Run pnpm --filter api prisma validate and identify any schema drift, unsafe migration, or data-model issue."
+    },
+    "security-review": {
+      "description": "Read-only security and trust-boundary review.",
+      "agent": "security-reviewer",
+      "template": "Perform a read-only security review of the current diff or requested files. Focus on auth, signed tokens, cookies, nickname password hashing, rate limits, XSS, YouTube API compliance, and server-authoritative state."
+    },
+    "ast-find": {
+      "description": "Use AST and semantic MCP tools before grep-heavy codebase analysis.",
+      "agent": "trackstacc-builder",
+      "template": "Use Serena for symbol-level navigation and ast-grep for syntax-aware search before broad file reads. Find the structural pattern requested in: $ARGUMENTS"
+    }
+  },
+
+  // Prefer explicit, safe operations. Env files are readable only when examples.
+  "permission": {
+    "*": "ask",
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      ".env": "deny",
+      ".env.*": "deny",
+      ".env.example": "allow",
+      "infra/coolify/coolify.env.example": "allow"
+    },
+    "grep": "allow",
+    "glob": "allow",
+    "lsp": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "task": "allow",
+    "skill": "ask",
+    "question": "ask",
+    "doom_loop": "ask",
+    "external_directory": "ask",
+    "edit": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      ".env": "deny",
+      ".env.*": "deny",
+      "pnpm-lock.yaml": "ask",
+      "prisma/migrations/**": "ask",
+      "infra/docker-compose.prod.yml": "ask"
+    },
+    "bash": {
+      "*": "ask",
+      "pnpm install --config.confirmModulesPurge=false": "ask",
+      "pnpm typecheck": "allow",
+      "pnpm test": "allow",
+      "pnpm test*": "allow",
+      "pnpm build": "allow",
+      "pnpm --filter api typecheck": "allow",
+      "pnpm --filter api test*": "allow",
+      "pnpm --filter api prisma validate": "allow",
+      "pnpm --filter api prisma generate": "allow",
+      "pnpm --filter web typecheck": "allow",
+      "pnpm --filter web build": "allow",
+      "pnpm db:seed": "ask",
+      "pnpm db:migrate*": "ask",
+      "pnpm db:push": "ask",
+      "pnpm db:studio": "ask",
+      "docker compose -f infra/docker-compose.yml ps*": "allow",
+      "docker compose -f infra/docker-compose.yml up -d": "ask",
+      "docker compose -f infra/docker-compose.yml down*": "ask",
+      "docker compose -f infra/docker-compose.prod.yml *": "ask",
+      "curl http://localhost:4000/health*": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "git commit*": "ask",
+      "git push*": "deny",
+      "git reset --hard*": "deny",
+      "rm *": "ask"
+    }
+  },
+
+  // Built-in LSP plus Serena MCP gives both editor-like and MCP-level symbol context.
+  "lsp": true,
+
+  "formatter": {
+    "prettier": {
+      "disabled": false
+    },
+    "prisma-format": {
+      "command": ["pnpm", "--filter", "api", "prisma", "format"],
+      "extensions": [".prisma"]
+    }
+  },
+
+  "mcp": {
+    // Semantic code intelligence through language servers. Install first:
+    //   uv tool install -p 3.13 serena-agent
+    //   serena init
+    "serena": {
+      "type": "local",
+      "command": [
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide",
+        "--project-from-cwd"
+      ],
+      "enabled": true
+    },
+
+    // AST structural search/refactor analysis. Requires uvx and ast-grep CLI:
+    //   brew install ast-grep   # or: cargo install ast-grep --locked
+    // TODO: pin to a specific release tag once stable, e.g.:
+    //   "git+https://github.com/ast-grep/ast-grep-mcp@v0.x.y"
+    "ast-grep": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/ast-grep/ast-grep-mcp",
+        "ast-grep-server"
+      ],
+      "enabled": true
+    },
+
+    // Usually redundant with OpenCode's built-in file tools. Keep disabled
+    // unless you explicitly want a filesystem MCP boundary.
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "."],
+      "enabled": false
+    }
+  },
+
+  "watcher": {
+    "ignore": [
+      ".git/**",
+      ".next/**",
+      ".turbo/**",
+      ".opencode/**",
+      ".serena/**",
+      ".magic-context/**",
+      "node_modules/**",
+      "**/node_modules/**",
+      "dist/**",
+      "build/**",
+      "coverage/**",
+      ".pnpm-store/**",
+      "tmp/**",
+      "logs/**",
+      "*.log",
+      "infra/**/data/**"
+    ]
+  },
+
+  "attachment": {
+    "image": {
+      "auto_resize": true,
+      "max_width": 2000,
+      "max_height": 2000,
+      "max_base64_bytes": 5242880
+    }
+  },
+
+  "share": "disabled",
+  "snapshot": true,
+  "autoupdate": "notify"
+}
