@@ -2,19 +2,87 @@
 
 **Project name:** trackstacc.live
 **Document type:** Software Design Document (SDD)
-**Version:** 1.1
-**Status:** Draft for product and engineering review
-**Primary concept:** A no-registration collaborative music-room web application where users join with manually chosen nicknames, chat in real time, collaboratively manage a YouTube-powered playlist, optionally password-protect nicknames to prevent impersonation, and optionally expose rooms through read-only external embeds controlled by secure external chat command integrations.
+**Version:** 1.4.0
+**Status:** Draft for design review sign-off; Priority 1, Priority 2, and Priority 3 audit remediations incorporated; mandatory native nickname-protection feature added
+**Primary concept:** A no-registration collaborative music-room web application where anyone can open a room on the native `trackstacc.live` site to listen to playback and view the playlist for free, and where, to chat and use full functionality on the native site, a participant must hold a password-protected nickname. Rooms can still be exposed through read-only external embeds controlled by secure external chat command integrations; the mandatory native protection requirement does not apply to those embeds, which continue to use the server-to-server external-identity model.
 
-**Revision note:** Version 1.1 adds external site embeds, external chat command integrations, pre-play veto voting, staff chat commands, song request policy controls, and additional abuse-prevention requirements.
+### Document Metadata
+
+| Field | Value |
+| ----- | ----- |
+| Author(s) | Project Lead / Engineering |
+| Reviewer(s) | Engineering Lead, Product Lead |
+| Initial Draft Date | 2026-05-31 |
+| Last Review Date | 2026-06-07 |
+| Approval Status | Draft — pending design review sign-off |
+| Next Scheduled Review | After Milestone 1 completion (see Section 39) |
+
+### Change Log
+
+| Version | Date | Author | Summary |
+| ------- | ---- | ------ | ------- |
+| 1.0.0 | 2026-05-31 | Project Lead | Initial SDD covering native room experience, queue mechanics, playback, chat, moderation, and nickname protection. |
+| 1.1.0 | 2026-06-01 | Project Lead | Added external site embeds, external chat command integrations, pre-play veto voting, staff chat commands, song request policy controls, and additional abuse-prevention requirements. |
+| 1.1.1 | 2026-06-02 | Project Lead | Added staff-controlled timed muting of external participants with configurable durations, auto-expiry, and early unmute. |
+| 1.1.2 | 2026-06-04 | Project Lead | Priority 1 audit remediation: formal error code registry, CORS/CSP policies for native and embed pages, external dependency circuit breaker and graceful degradation specifications, final backend framework decision (Fastify), and external role coverage in the permission matrix. |
+| 1.2.0 | 2026-06-05 | Project Lead | Priority 2 audit remediation: architecture and sequence diagrams, database migration strategy, API conventions (pagination, rate limit headers, versioning), WebSocket reconnection backoff specification, consolidated security cross-references, formal decision log resolving all 18 open questions, effort estimates for implementation milestones, and requirements traceability matrix. |
+| 1.3.0 | 2026-06-06 | Project Lead | Priority 3 audit remediation: document metadata and change log, table of contents, Known Limitations and Technical Debt section, Development Operations section (CI/CD, configuration management, environment strategy, dependency management), `external_chat_music` JSONB schema documentation with validation rules and decomposition evaluation, and periodic document review schedule. |
+| 1.4.0 | 2026-06-07 | Project Lead | Mandatory native nickname protection: on the native `trackstacc.live` site, a password-protected nickname is now required to chat, vote, add songs, react, or use any other interactive functionality. Visitors without a protected nickname become read-only Listeners who may open rooms to hear playback and view the playlist only. Introduced the Listener role and native access tiers, reworked the native permission matrix, join/create flows, identity service gating, `room_sessions` access-tier modeling, listener chat-visibility room setting, tier-enforcement error codes, and acceptance criteria. The requirement is explicitly scoped to the native site and does not change the read-only external embed or external chat command integration model. |
+
+**Revision note:** Version 1.1 adds external site embeds, external chat command integrations, pre-play veto voting, staff chat commands, song request policy controls, and additional abuse-prevention requirements. Version 1.1.1 adds staff-controlled timed muting of external participants with configurable durations, auto-expiry, and early unmute. Version 1.1.2 resolves Priority 1 audit findings by adding a formal error code registry, CORS/CSP policies for native and embed pages, external dependency circuit breaker and graceful degradation specifications, a final backend framework decision, and external role coverage in the permission matrix. Version 1.2.0 resolves Priority 2 audit findings by adding architecture and sequence diagrams, a database migration strategy, API conventions (pagination, rate limit headers, versioning), WebSocket reconnection backoff specification, consolidated security cross-references, a formal decision log resolving all 18 open questions, effort estimates for implementation milestones, and a requirements traceability matrix. Version 1.3.0 resolves Priority 3 audit findings by adding document metadata and change log, a table of contents, a Known Limitations and Technical Debt section, a Development Operations section covering CI/CD, configuration management, environment strategy, and dependency management, `external_chat_music` JSONB schema documentation with validation rules and decomposition evaluation, and a periodic document review schedule. Version 1.4.0 makes nickname protection mandatory for interactive participation on the native `trackstacc.live` site: a password-protected nickname is now required to chat, vote, add songs, react, or moderate, while visitors without one become read-only Listeners able to hear playback and view the playlist only. This change is scoped exclusively to the native site and does not alter the read-only external embed or external chat command integration authority model.
+
+---
+
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Goals and Non-Goals](#2-goals-and-non-goals)
+3. [Product Overview](#3-product-overview)
+4. [Definitions](#4-definitions)
+5. [Assumptions](#5-assumptions)
+6. [Stakeholders](#6-stakeholders)
+7. [Functional Requirements](#7-functional-requirements)
+8. [Non-Functional Requirements](#8-non-functional-requirements)
+9. [User Roles and Permissions](#9-user-roles-and-permissions)
+10. [UX Flows](#10-ux-flows)
+11. [Playlist Mechanics Design](#11-playlist-mechanics-design)
+12. [System Architecture](#12-system-architecture)
+13. [Component Design](#13-component-design)
+14. [Data Model](#14-data-model)
+15. [API Design](#15-api-design)
+16. [WebSocket Event Design](#16-websocket-event-design)
+17. [Queue Selection Algorithms](#17-queue-selection-algorithms)
+18. [Playback Synchronization Design](#18-playback-synchronization-design)
+19. [Security Design](#19-security-design)
+20. [Abuse Prevention and Moderation Policy](#20-abuse-prevention-and-moderation-policy)
+21. [Privacy Design](#21-privacy-design)
+22. [YouTube Integration Design](#22-youtube-integration-design)
+23. [Error Handling and Resilience](#23-error-handling-and-resilience)
+24. [Observability](#24-observability)
+25. [Deployment Architecture](#25-deployment-architecture)
+26. [Testing Strategy](#26-testing-strategy)
+27. [MVP Scope](#27-mvp-scope)
+28. [Decision Log](#28-decision-log)
+29. [Recommended Product Decisions](#29-recommended-product-decisions)
+30. [Implementation Milestones](#30-implementation-milestones)
+31. [Acceptance Criteria](#31-acceptance-criteria)
+32. [Risks and Mitigations](#32-risks-and-mitigations)
+33. [Appendix A: Recommended Default Settings](#33-appendix-a-recommended-default-settings)
+34. [Appendix B: Example System Messages](#34-appendix-b-example-system-messages)
+35. [Appendix C: Example Room State Snapshot](#35-appendix-c-example-room-state-snapshot)
+36. [Final Recommendation](#36-final-recommendation)
+37. [Appendix D: Requirements Traceability Matrix](#37-appendix-d-requirements-traceability-matrix)
+38. [Known Limitations and Technical Debt](#38-known-limitations-and-technical-debt)
+39. [Development Operations](#39-development-operations)
+40. [Document Review Schedule](#40-document-review-schedule)
 
 ---
 
 ## 1. Executive Summary
 
-This web application allows users to create and join real-time music rooms. Each room has a shared YouTube playback experience, a collaborative queue, chat, and configurable playlist mechanics such as first-come-first-served, voting queue, DJ rotation, host-curated mode, and moderated suggestions. Version 1.1 extends this model so external websites can embed a Trackstacc room/player/queue and route music commands from their own chat systems while Trackstacc remains the authoritative music-room backend.
+This web application allows users to create and join real-time music rooms. Each room has a shared YouTube playback experience, a collaborative queue, chat, and configurable playlist mechanics such as first-come-first-served, voting queue, DJ rotation, host-curated mode, and moderated suggestions. Version 1.1 extends this model so external websites can embed a Trackstacc room/player/queue and route music commands from their own chat systems while Trackstacc remains the authoritative music-room backend. Version 1.1.1 adds staff-controlled timed muting of external participants so that song requests from muted users are rejected and voting is blocked, with configurable mute durations (seconds, minutes, hours, days, or permanent) and early unmute support. Version 1.1.2 formalizes the implementation-signoff controls required by the audit: error taxonomy, CORS/CSP, dependency resilience, Fastify backend selection, and complete external-role permissions. Version 1.2.0 adds the design-review-sign-off artifacts required by the Priority 2 audit: architecture and sequence diagrams, database migration strategy, API conventions, WebSocket reconnection specification, consolidated security cross-references, a formal decision log, effort-estimated milestones, and a requirements traceability matrix. Version 1.3.0 adds the living-document maintenance artifacts required by the Priority 3 audit: document metadata with change log, a table of contents, a Known Limitations and Technical Debt section, a Development Operations section covering CI/CD pipelines, configuration management, environment strategy, and dependency management, formal `external_chat_music` JSONB schema documentation with validation rules and a decomposition evaluation, and a periodic document review schedule. Version 1.4.0 introduces mandatory nickname protection for interactive participation on the native `trackstacc.live` site: opening a room to listen and view the playlist remains free and frictionless, but chatting, voting, adding songs, reacting, and all other interactive and moderation functionality now require a password-protected nickname. This version adds the read-only **Listener** role and a two-tier native access model (Listener and authenticated Protected Nickname User), reworks the native permission matrix and join/create flows, and threads tier enforcement through the identity service, data model, API, WebSocket layer, security model, and acceptance criteria. The requirement applies only to the native site; the read-only external embed and external chat command integration authority model is unchanged.
 
-The defining product constraint is **no traditional registration**. Users do not need email, OAuth, or account creation. However, users must enter a nickname before participating. The system never assigns generic anonymous names such as `guest_1234`. Nicknames can optionally be password-protected, enabling lightweight identity continuity without requiring full accounts.
+The defining product constraint is **no traditional registration**. Users do not need email, OAuth, or account creation. On the native `trackstacc.live` site, anyone may open a room to listen to what is playing and view the playlist without entering any identity at all. To participate interactively — chat, vote, add songs, react, or moderate — a user must hold a **password-protected nickname**. This preserves the no-registration model (a protected nickname is a nickname plus a password, never an email or account) while ensuring every interactive actor has a lightweight, impersonation-resistant, continuous identity. The system never assigns generic anonymous names such as `guest_1234`. This mandatory-protection requirement applies only to the native site; external embeds remain read-only and are driven by the separate server-to-server external chat command integration model (Sections 3.2.2, 12.4, and 19.5).
 
 The room creator, called the **host**, can configure room behavior, including the playlist mechanic. The host may change the playlist mechanic later, subject to transparent guardrails: the current song is not interrupted, existing queue items are preserved by default, changes are announced in chat, and potentially disruptive changes require confirmation.
 
@@ -27,21 +95,23 @@ External site integrations preserve the same authority model. The embedding webs
 ### 2.1 Goals
 
 1. Provide instant music-room creation with minimal onboarding.
-2. Require every active participant to choose a nickname before chatting, voting, or adding tracks.
-3. Support optional password-protected nicknames without email or registration.
-4. Enable collaborative YouTube-based music playback.
-5. Provide real-time synchronized room state, queue updates, voting, chat, and moderation events.
-6. Support multiple playlist mechanics suitable for different social contexts.
-7. Allow the room creator to configure and later change playlist mechanics safely.
-8. Provide basic moderation tools suitable for no-registration public and private rooms.
-9. Design for MVP delivery while leaving room for future public discovery, profiles, persistent rooms, and richer moderation.
-10. Allow webmasters to embed a Trackstacc room/player/queue into their own websites.
-11. Allow external chat rooms to submit Trackstacc music commands through a secure server-to-server bridge.
-12. Preserve Trackstacc's server-side authority for all room mutations, playback decisions, moderation decisions, rate limits, and audit logs.
-13. Support pre-play veto voting through external chat commands.
-14. Support staff chat commands for queue moderation, force skip, and room setting changes.
-15. Provide configurable song request policies for public or semi-public communities.
-16. Prevent abuse through signing, idempotency, rate limits, duplicate controls, queue limits, and audit logs.
+2. Let anyone open a native room to listen to playback and view the playlist with zero onboarding (no nickname, no password).
+3. Require a password-protected nickname on the native site before a user can chat, vote, react, add tracks, or use any other interactive functionality.
+4. Support password-protected nicknames without email or registration, as the gateway to native participation.
+5. Enable collaborative YouTube-based music playback.
+6. Provide real-time synchronized room state, queue updates, voting, chat, and moderation events.
+7. Support multiple playlist mechanics suitable for different social contexts.
+8. Allow the room creator to configure and later change playlist mechanics safely.
+9. Provide basic moderation tools suitable for no-registration public and private rooms.
+10. Design for MVP delivery while leaving room for future public discovery, profiles, persistent rooms, and richer moderation.
+11. Allow webmasters to embed a Trackstacc room/player/queue into their own websites.
+12. Allow external chat rooms to submit Trackstacc music commands through a secure server-to-server bridge.
+13. Preserve Trackstacc's server-side authority for all room mutations, playback decisions, moderation decisions, rate limits, and audit logs.
+14. Support pre-play veto voting through external chat commands.
+15. Support staff chat commands for queue moderation, force skip, and room setting changes.
+16. Provide configurable song request policies for public or semi-public communities.
+17. Prevent abuse through signing, idempotency, rate limits, duplicate controls, queue limits, and audit logs.
+18. Allow staff to mute external participants with configurable durations (seconds, minutes, hours, days, or permanent) to block song requests and votes from abusive users, with early unmute support.
 
 ### 2.2 Non-Goals for MVP
 
@@ -59,6 +129,7 @@ External site integrations preserve the same authority model. The embedding webs
 12. Trackstacc does not scrape, proxy, download, cache, or re-stream YouTube audiovisual content.
 13. Trackstacc does not guarantee that external websites provide accurate identity, but it requires stable external user IDs for fair voting, rate limiting, moderation, and audit.
 14. Trackstacc does not moderate all content in the embedding site's chat; it only enforces Trackstacc room policy for music commands it receives.
+15. The mandatory native protected-nickname requirement does not apply to external embeds or external chat command integrations; those continue to operate under the read-only embed and server-to-server external-identity model and are not required to authenticate native protected nicknames.
 
 ---
 
@@ -72,18 +143,22 @@ A user creates a room, selects a playlist mechanic, shares the room link, and fr
 
 Trackstacc supports two room usage modes:
 
-1. **Native Trackstacc room experience.** Users visit Trackstacc directly, join with manually chosen nicknames, and use Trackstacc chat/queue/playback controls according to room permissions.
+1. **Native Trackstacc room experience.** Users visit Trackstacc directly and can listen to any room and view its playlist for free. To chat, vote, queue songs, or moderate, they claim or authenticate a password-protected nickname and then use Trackstacc controls according to room permissions.
 2. **Embedded external-site experience.** A webmaster creates or configures a Trackstacc room, registers the embedding site origin, chat channel, outbound webhook, command prefix, and command permissions, then receives an iframe embed URL and a server-side integration secret. Users listen through the embed but control music through the embedding site's chat commands. Trackstacc processes those commands and posts bot announcements back into the embedding site's chat.
 
 #### 3.2.1 Native Trackstacc Room Experience
 
+The native site supports two access tiers within a room (see Section 9 for the full role and permission model):
+
 1. Visitor opens a room URL.
-2. Visitor is prompted to enter a nickname.
-3. If the nickname is protected, the visitor must enter the nickname password.
-4. Once admitted, the participant enters the room.
-5. Participant can chat, view current playback, inspect the queue, and interact according to room permissions.
-6. Participant may protect their nickname by setting a password.
-7. Host and moderators can manage queue, chat, room settings, and playlist mechanic.
+2. The room loads immediately in **Listener** mode: the visitor can hear current playback and view the playlist/queue and room metadata without entering any identity. No nickname or password is required to listen.
+3. To do anything interactive — chat, vote, add a song, react, skip-vote, or moderate — the visitor must obtain a **protected nickname** by either:
+   - authenticating an existing protected nickname with its password, or
+   - claiming a new nickname and setting a password (a one-step protect-and-join).
+4. Once authenticated against a protected nickname, the participant becomes a **Protected Nickname User** with full functionality according to room permissions.
+5. A Listener may upgrade to a Protected Nickname User at any time from within the room; the upgrade prompt is surfaced wherever an interactive control would otherwise appear.
+6. The room creator must hold a protected nickname to exercise host authority; host and moderators can manage queue, chat, room settings, and playlist mechanic only as Protected Nickname Users.
+7. The system never assigns generic anonymous names; a Listener has no nickname at all until they protect one.
 
 #### 3.2.2 Embedded External-Site Experience
 
@@ -100,11 +175,11 @@ Trackstacc supports two room usage modes:
 
 ### 3.3 Core Differentiator
 
-The product offers **identity without registration**:
+The product offers **listening without onboarding, and identity without registration**:
 
-> Pick a nickname. Use it immediately. Protect it with a password if you care about impersonation.
+> Open any room and listen for free. To join in — chat, vote, and queue songs — claim a nickname and protect it with a password. No email, ever.
 
-This reduces friction while still supporting identity continuity and room-level community behavior.
+Listening is instant and frictionless. Interactive participation requires a protected nickname, which gives every active contributor a lightweight, impersonation-resistant, continuous identity without the friction of full account registration.
 
 ---
 
@@ -112,12 +187,15 @@ This reduces friction while still supporting identity continuity and room-level 
 
 | Term                 | Definition                                                                            |
 | -------------------- | ------------------------------------------------------------------------------------- |
-| Visitor              | A person who has opened the app but has not yet joined a room with a nickname.        |
-| Participant          | A person currently in a room with a valid nickname/session.                           |
-| Host                 | The room creator or holder of the room host secret.                                   |
-| Moderator            | A participant with moderation permissions granted by the host.                        |
-| Protected nickname   | A nickname reserved by password hash.                                                 |
-| Unprotected nickname | A nickname not yet claimed by password.                                               |
+| Visitor              | A person who has opened the app or a room but has not authenticated a protected nickname. On the native site a visitor inside a room is a Listener. |
+| Listener             | A native-site user inside a room without a protected-nickname session. Read-only: may hear playback and view the playlist/queue but cannot chat, vote, add songs, react, or moderate. |
+| Participant          | A person actively participating in a native room with an authenticated protected nickname. On the native site, interactive participation requires a protected nickname (see Native Access Tier). |
+| Native Access Tier   | The native-site access level of a user in a room: `listener` (read-only listen and view) or `member` (full interactive functionality, granted only with an authenticated protected nickname). |
+| Full Functionality   | The set of native interactive capabilities (chat, vote, react, add songs, skip-vote, host/moderator actions) available only to `member`-tier users holding a protected nickname. |
+| Host                 | The room creator or holder of the room host secret. On the native site the host must authenticate a protected nickname to exercise host authority. |
+| Moderator            | A participant with moderation permissions granted by the host. Must be a Protected Nickname User on the native site. |
+| Protected nickname   | A nickname reserved by password hash. On the native site, holding and authenticating one is the prerequisite for full functionality. |
+| Unprotected nickname | A nickname not yet claimed by password. On the native site an unprotected nickname does not by itself grant interactive functionality (the user remains a Listener until a nickname is protected). |
 | Room                 | A shared real-time space with chat, playback, queue, and settings.                    |
 | Queue item           | A pending or historical track entry added to a room queue.                            |
 | Playlist mechanic    | The algorithm/rule set that determines how songs enter and advance through the queue. |
@@ -143,6 +221,9 @@ This reduces friction while still supporting identity continuity and room-level 
 | Song Request Policy | Room or integration setting that controls who may submit songs and how often. |
 | External Reference | A short room/integration/channel-scoped reference such as `[K7Q]` used to identify queue items or current candidates in chat commands and bot messages. |
 | Active Voter / Eligible Voter | An external or native participant allowed to vote in the current pre-play veto window according to room policy, moderation status, and rate limits. |
+| External Mute | A staff-applied restriction on an external participant that prevents their song requests and votes from being accepted. Can be temporary (with a configurable duration in seconds, minutes, hours, or days) or permanent (until manually unmuted). |
+| Mute Duration | A time-limited mute period expressed as `<number><unit>` where unit is `s` (seconds), `m` (minutes), `h` (hours), or `d` (days). Omitting a unit or specifying `forever` applies a permanent mute. |
+| Early Unmute | The ability for staff to lift a mute before its configured duration expires, restoring the external participant's ability to submit song requests and cast votes. |
 
 ---
 
@@ -160,6 +241,9 @@ This reduces friction while still supporting identity continuity and room-level 
 10. External site integrations require stable external user IDs for fair voting, rate limiting, moderation, and audit.
 11. External embeds are read-only by default and must not store integration secrets or trust browser-provided role/session/user identity.
 12. Native in-app slash commands may remain Phase 2; external chat command integration is introduced in v1.1 as a server-to-server integration capability.
+13. On the native site, listening to playback and viewing the playlist require no identity; interactive participation requires an authenticated protected nickname. This raises the per-participant cost of abuse but is assumed acceptable given that listening remains frictionless.
+14. The mandatory native protected-nickname requirement is enforced server-side on every interactive action and does not rely on client-side gating.
+15. The mandatory native protected-nickname requirement does not apply to external embeds or external chat command integrations, which retain the read-only embed and server-to-server external-identity model.
 
 ---
 
@@ -190,19 +274,22 @@ This reduces friction while still supporting identity continuity and room-level 
 | FR-005 | Room creator can configure whether the room is temporary or persistent.                           | Phase 2     |
 | FR-006 | Room creator can configure queue limits, song duration limits, and duplicate rules.               | MVP         |
 
-### 7.2 Room Joining and Nicknames
+### 7.2 Room Joining, Listening, and Nicknames
 
 | ID     | Requirement                                                                                      | Priority |
 | ------ | ------------------------------------------------------------------------------------------------ | -------- |
-| FR-010 | Users must manually enter a nickname before chatting, voting, reacting, or adding songs.         | MVP      |
+| FR-010 | On the native site, a user must hold an authenticated protected nickname before chatting, voting, reacting, adding songs, or using any other interactive functionality. | MVP |
 | FR-011 | The system must not auto-generate `guest_1234`-style names for participants.                     | MVP      |
 | FR-012 | Nicknames are normalized for uniqueness checks.                                                  | MVP      |
 | FR-013 | Nickname display casing is preserved after normalization.                                        | MVP      |
-| FR-014 | If a nickname is protected, the user must provide the correct password to use it.                | MVP      |
-| FR-015 | If a nickname is unprotected, the user may use it immediately unless blocked by room moderation. | MVP      |
-| FR-016 | Users may protect their current nickname by setting a password.                                  | MVP      |
-| FR-017 | Users may change nicknames, subject to protected-name authentication and rate limits.            | MVP      |
+| FR-014 | To use a protected nickname, the user must provide its correct password.                          | MVP      |
+| FR-015 | A user may obtain full functionality by claiming a new nickname and setting a password in a single protect-and-join step. | MVP |
+| FR-016 | A user with an authenticated protected nickname may use it across rooms without re-claiming it.   | MVP      |
+| FR-017 | Users may change to another protected nickname, subject to authentication and rate limits.        | MVP      |
 | FR-018 | Offensive, reserved, or confusing nicknames may be blocked by policy.                            | MVP      |
+| FR-019 | On the native site, any user may open a room and remain a read-only **Listener** — hearing playback and viewing the playlist/queue — without entering a nickname or password. | MVP |
+
+This section applies to the native `trackstacc.live` site. External embeds and external chat command integrations are governed by Sections 7.11–7.14 and are not subject to the native protected-nickname requirement.
 
 ### 7.3 Nickname Protection
 
@@ -216,6 +303,8 @@ This reduces friction while still supporting identity continuity and room-level 
 | FR-025 | The UI must clearly warn users that forgotten nickname passwords cannot be recovered. | MVP      |
 | FR-026 | Protected nickname owners may change their nickname password after re-authentication. | Phase 2  |
 | FR-027 | Protected nickname owners may release/delete their nickname claim.                    | Phase 2  |
+| FR-028 | On the native site, the server must reject every interactive action (chat, vote, react, add song, skip-vote, moderation, settings change) from a session that is not bound to an authenticated protected nickname, returning a clear "protection required" error. | MVP |
+| FR-029 | The native UI must present a clear, low-friction prompt to claim or authenticate a protected nickname wherever an interactive control would appear for a Listener, explaining that protection unlocks participation. | MVP |
 
 ### 7.4 YouTube Track Input
 
@@ -263,13 +352,14 @@ This reduces friction while still supporting identity continuity and room-level 
 | ID     | Requirement                                                                                                        | Priority |
 | ------ | ------------------------------------------------------------------------------------------------------------------ | -------- |
 | FR-070 | Participants can send and receive real-time chat messages.                                                         | MVP      |
-| FR-071 | Visitors who have not entered a nickname cannot chat.                                                              | MVP      |
+| FR-071 | Native Listeners (users without an authenticated protected nickname) cannot send chat messages.                    | MVP      |
 | FR-072 | Chat messages include nickname, timestamp, and room context.                                                       | MVP      |
 | FR-073 | Chat messages are rate-limited.                                                                                    | MVP      |
 | FR-074 | System messages announce joins, nickname changes, song additions, skips, moderation actions, and mechanic changes. | MVP      |
 | FR-075 | Hosts/moderators can delete chat messages.                                                                         | MVP      |
 | FR-076 | Hosts/moderators can mute participants.                                                                            | MVP      |
 | FR-077 | Optional emoji reactions, mentions, and slash commands are supported.                                              | Phase 2  |
+| FR-078 | Whether native Listeners can read (but not send) chat is controlled by a per-room `listener_chat_visible` setting, defaulting to hidden so a Listener's surface is limited to playback and the playlist. | MVP |
 
 ### 7.8 Moderation
 
@@ -356,6 +446,12 @@ This reduces friction while still supporting identity continuity and room-level 
 | FR-160 | Staff-only mode restricts song additions to authorized staff.                                               | MVP/Phase 2 |
 | FR-161 | Closed mode rejects all song additions until reopened.                                                      | MVP/Phase 2 |
 | FR-162 | Room settings changed via external staff commands persist and broadcast.                                    | MVP/Phase 2 |
+| FR-163 | Staff can mute an external participant to block their song requests and votes.                                | MVP/Phase 2 |
+| FR-164 | Staff can specify a mute duration in seconds (`Ns`), minutes (`Nm`), hours (`Nh`), days (`Nd`), or permanent (omit unit or `forever`). | MVP/Phase 2 |
+| FR-165 | A timed mute auto-expires after its configured duration, restoring the participant's ability to request songs and vote. | MVP/Phase 2 |
+| FR-166 | Staff can unmute an external participant before the mute duration expires (early unmute).                     | MVP/Phase 2 |
+| FR-167 | Mute/unmute actions are audit logged and announced as bot/system messages.                                    | MVP         |
+| FR-168 | Muted external participants can still use read-only commands (`!song`, `!queue`) but are rejected from `!sr`, `!yay`, and `!nay`. | MVP/Phase 2 |
 
 ### 7.14 External Abuse Prevention and Integration Security
 
@@ -402,6 +498,7 @@ This reduces friction while still supporting identity continuity and room-level 
 | NFR-020 | Core app uptime.                                      | 99.5% MVP target                                                |
 | NFR-021 | Graceful degradation when YouTube metadata API fails. | URL adds may still use extracted video ID with partial metadata |
 | NFR-022 | Reconnect support for dropped WebSocket connections.  | automatic reconnect with room state refresh                     |
+| NFR-023 | External dependency failures must degrade safely.      | circuit breakers, timeouts, and documented fallback behavior for YouTube, Redis, PostgreSQL, and webhooks |
 
 ### 8.4 Security
 
@@ -413,6 +510,9 @@ This reduces friction while still supporting identity continuity and room-level 
 | NFR-033 | All writes must be authorized server-side.                            | required                              |
 | NFR-034 | Chat and room input must be sanitized.                                | required                              |
 | NFR-035 | API and real-time events must be rate-limited.                        | required                              |
+| NFR-036 | REST, WebSocket, and external command failures must use a formal error code registry. | required |
+| NFR-037 | Native pages, embed pages, REST APIs, and Socket.IO must enforce documented CORS and CSP policies. | required |
+| NFR-038 | On the native site, the protected-nickname gate for interactive actions must be enforced server-side on every request and WebSocket event, independent of client-side UI state. | required |
 
 ### 8.5 Privacy
 
@@ -455,11 +555,12 @@ This reduces friction while still supporting identity continuity and room-level 
 
 | Role                    | Description                                                                            |
 | ----------------------- | -------------------------------------------------------------------------------------- |
-| Visitor                 | Has not joined a room with a nickname. Can view limited room landing state if allowed. |
-| Participant             | Joined room with nickname. Can chat and interact according to room settings.           |
-| Protected Nickname User | Participant authenticated against a protected nickname.                                |
-| Host                    | Controls room settings, moderation, queue, and playlist mechanic.                      |
-| Moderator               | Delegated moderation role. Optional in MVP, stronger in Phase 2.                       |
+| Visitor                 | Has opened the app or a room but has not authenticated a protected nickname. Inside a native room, a visitor is a Listener. |
+| Listener                | Native-site user in a room without a protected-nickname session. Read-only: hears playback and views the playlist/queue. Cannot chat, vote, add songs, react, or moderate. |
+| Participant             | Native-site user actively participating. On the native site this requires `member` tier, i.e. an authenticated protected nickname. |
+| Protected Nickname User | Participant authenticated against a protected nickname. This is the `member` access tier and the prerequisite for all native interactive functionality, including host and moderator roles. |
+| Host                    | Controls room settings, moderation, queue, and playlist mechanic. Must hold an authenticated protected nickname to exercise host authority on the native site. |
+| Moderator               | Delegated moderation role. Must be a Protected Nickname User. Optional in MVP, stronger in Phase 2.                       |
 | System                  | Server-generated events and automated actions.                                         |
 | External Participant    | User represented by an embedding site's stable external user ID.                       |
 | External Staff          | External participant authorized for staff commands through allowlist or trusted role mapping. |
@@ -467,23 +568,56 @@ This reduces friction while still supporting identity continuity and room-level 
 
 ### 9.2 Permission Matrix
 
-| Action                   | Visitor |                 Participant |              Protected User | Moderator | Host |
-| ------------------------ | ------: | --------------------------: | --------------------------: | --------: | ---: |
-| View public room landing |     Yes |                         Yes |                         Yes |       Yes |  Yes |
-| Join room                |     Yes |                         N/A |                         N/A |       N/A |  N/A |
-| Chat                     |      No |                         Yes |                         Yes |       Yes |  Yes |
-| Add song                 |      No |                Configurable |                Configurable |       Yes |  Yes |
-| Vote                     |      No |                         Yes |                         Yes |       Yes |  Yes |
-| Protect nickname         |      No |                         Yes |                         N/A |       Yes |  Yes |
-| Skip by vote             |      No |                         Yes |                         Yes |       Yes |  Yes |
-| Force skip               |      No |                          No |                          No |       Yes |  Yes |
-| Delete chat message      |      No |                          No |                          No |       Yes |  Yes |
-| Remove queue item        |      No | Own item only, configurable | Own item only, configurable |       Yes |  Yes |
-| Mute/ban participant     |      No |                          No |                          No |       Yes |  Yes |
-| Change playlist mechanic |      No |                          No |                          No |  Optional |  Yes |
-| Change room settings     |      No |                          No |                          No |  Optional |  Yes |
+#### 9.2.1 Native Trackstacc Permission Matrix
 
-External participants do not inherit native Trackstacc role authority from browser state. Staff authority for external integrations is derived only from configured external user ID allowlists, trusted external role mappings, or a future authenticated identity bridge.
+On the native site, every interactive capability requires the `member` access tier (an authenticated protected nickname). A **Listener** is any in-room user without a protected-nickname session; Listeners are strictly read-only. Host and Moderator authority is exercised only by Protected Nickname Users; a host who has not yet authenticated a protected nickname is treated as a Listener of their own room until they do.
+
+| Action                        | Listener | Protected Nickname User | Moderator | Host |
+| ----------------------------- | -------: | ----------------------: | --------: | ---: |
+| Open room / hear playback     | Yes      | Yes                     | Yes       | Yes  |
+| View playlist / queue         | Yes      | Yes                     | Yes       | Yes  |
+| Read chat                     | Configurable (`listener_chat_visible`, default No) | Yes | Yes | Yes |
+| Claim/authenticate protected nickname (upgrade) | Yes | N/A           | N/A       | N/A  |
+| Chat                          | No       | Yes                     | Yes       | Yes  |
+| Add song                      | No       | Configurable            | Yes       | Yes  |
+| Vote                          | No       | Yes                     | Yes       | Yes  |
+| React (Phase 2)               | No       | Yes                     | Yes       | Yes  |
+| Skip by vote                  | No       | Yes                     | Yes       | Yes  |
+| Force skip                    | No       | No                      | Yes       | Yes  |
+| Delete chat message           | No       | No                      | Yes       | Yes  |
+| Remove queue item             | No       | Own item only, configurable | Yes   | Yes  |
+| Mute/ban participant          | No       | No                      | Yes       | Yes  |
+| Change playlist mechanic      | No       | No                      | Optional  | Yes  |
+| Change room settings          | No       | No                      | Optional  | Yes  |
+
+A Listener attempting any "No" action receives a clear prompt to claim or authenticate a protected nickname rather than a generic denial (see FR-029).
+
+#### 9.2.2 External Integration Permission Matrix
+
+External participants do not inherit native Trackstacc role authority from browser state. Staff authority for external integrations is derived only from configured external user ID allowlists, trusted external role mappings, or a future authenticated identity bridge. The Integration Bot is a system actor used only for signed outbound announcements and command results; it is not a user, cannot initiate privileged state changes, and must not bypass server-side authorization checks.
+
+The native mandatory protected-nickname requirement (Sections 9.2.1, 7.2, 7.3) does **not** apply to external participants. External capabilities depend on integration configuration, song request policy, moderation state, and rate limits as below; they are never gated on a native protected nickname.
+
+| Action / Capability                                      | External Participant | External Staff | Integration Bot |
+| -------------------------------------------------------- | -------------------: | -------------: | --------------: |
+| View read-only embed state                               | Yes                  | Yes            | N/A             |
+| Use read-only commands (`!song`, `!np`, `!queue`, help)  | Yes                  | Yes            | N/A             |
+| Submit song request (`!sr`)                              | Configurable by room/integration policy, rate limits, and moderation state | Yes, unless room is administratively closed | No |
+| Cast pre-play veto vote (`!yay` / `!nay`)                | Yes, if eligible and not muted/banned/rate-limited | Yes, if eligible and not muted/banned/rate-limited | No |
+| Change own active veto vote during window                | Yes                  | Yes            | No              |
+| Remove own queued item                                   | Configurable         | Yes            | No              |
+| Remove any queue item by reference or URL                | No                   | Yes, if staff command permission is enabled | No |
+| Force skip current track                                 | No                   | Yes, if staff command permission is enabled | No |
+| Change song request policy                               | No                   | Yes, if staff command permission is enabled | No |
+| Change veto settings                                     | No                   | Yes, if staff command permission is enabled | No |
+| Change duplicate policy or max duration                  | No                   | Yes, if staff command permission is enabled | No |
+| Mute or unmute external participant                      | No                   | Yes, if moderation command permission is enabled | No |
+| Bypass per-user request cooldown                         | No                   | Configurable; default yes for staff commands only | No |
+| Post command result or room announcement to external chat | No                   | No             | Yes, via signed outbound webhook only |
+| Read or expose integration secret                        | No                   | No             | No              |
+| Act from browser-provided role/session/user identity     | No                   | No             | No              |
+
+Authorization for External Staff must be evaluated on every command from the server-side command payload and stored integration configuration. Staff role claims from browser embeds, query strings, or unsigned client payloads are ignored.
 
 ---
 
@@ -507,42 +641,45 @@ External participants do not inherit native Trackstacc role authority from brows
    - Skip vote threshold
 
 5. Server creates room and host secret.
-6. User is prompted to enter nickname.
-7. User enters room as host.
+6. User is prompted to claim or authenticate a **protected nickname** (set a password, or sign in to an existing one). Host authority requires the `member` tier, so this step is mandatory before entering as host.
+7. User enters room as host (a Protected Nickname User).
 8. Host can copy share link.
 
-### 10.2 Join Room Flow
+### 10.2 Open Room and Join Flow
 
-1. Visitor opens room link.
-2. App shows room name, current track, participant count, and nickname prompt.
-3. Visitor enters nickname.
-4. Server normalizes nickname.
-5. If nickname is protected:
-   - Prompt for password.
-   - Validate password server-side.
-   - Rate-limit failed attempts.
+This flow covers the native site. The embed/external flow is unchanged (Sections 10.6–10.18).
 
-6. If nickname is unprotected:
-   - Allow join, unless banned or blocked by policy.
-
-7. Server creates room session.
-8. Client opens WebSocket connection.
+1. Visitor opens a room link.
+2. The room loads immediately in **Listener** mode showing room name, current track, playback, participant count, and the playlist/queue. Chat is shown read-only or hidden per the room's `listener_chat_visible` setting.
+3. If the room is password-protected, the room password is required to load the room at all (applies to Listeners and members alike).
+4. The Listener can hear playback and browse the playlist with no further action.
+5. To participate, the Listener selects **Join in / Get a nickname** (also surfaced inline wherever an interactive control is gated). They then either:
+   - **Authenticate an existing protected nickname:** enter the nickname and password; the server validates server-side and rate-limits failed attempts; or
+   - **Claim a new protected nickname:** enter a nickname plus a password and confirmation in one protect-and-join step (see Section 10.3 for the warnings shown).
+6. The server normalizes the nickname, verifies/creates the protected nickname claim, and checks the user is not banned or blocked by policy.
+7. Server creates or upgrades the room session to `member` tier.
+8. Client (re)opens or upgrades the WebSocket connection with a member-tier token.
 9. Server broadcasts presence update and optional system join message.
+
+A user with no protected nickname who never completes step 5 remains a Listener for the entire session.
 
 ### 10.3 Protect Nickname Flow
 
-1. Participant clicks **Protect Nickname**.
+On the native site this flow is the gateway to participation. A Listener reaches it by choosing **Join in / Get a nickname** or by attempting any gated action.
+
+1. Listener (or existing participant changing nickname) opens **Protect Nickname**.
 2. App explains:
+   - A protected nickname is required to chat, vote, add songs, and otherwise take part.
    - This prevents others from using the nickname.
    - No email recovery exists in MVP.
-   - Forgotten passwords cannot be recovered.
+   - Forgotten passwords cannot be recovered, and a forgotten password means losing the ability to participate under that nickname.
 
-3. Participant enters password and confirmation.
+3. Participant enters a nickname (if not already chosen), password, and confirmation.
 4. Server validates password strength.
-5. Server checks nickname is not already protected.
-6. Server stores password hash.
-7. Server marks participant as authenticated owner of protected nickname.
-8. System confirms success.
+5. Server checks the nickname is not already protected by someone else and is not reserved/blocked.
+6. Server stores the password hash and creates the nickname claim.
+7. Server marks the room session as the authenticated owner of the protected nickname and upgrades it to `member` tier.
+8. System confirms success; previously gated interactive controls become available immediately.
 
 ### 10.4 Add Song Flow
 
@@ -659,6 +796,33 @@ Up next [K7Q]: "Song Title" requested by @alice. Vote now: !yay to keep, !nay to
 
 1. External user types `!song` or `!np`.
 2. Trackstacc returns the current song, requester when available, elapsed time where useful, and current external reference.
+
+### 10.16 Staff Mutes an External Participant
+
+1. External staff user types `!music mute @alice 30m` or `!music mute @alice` for a permanent mute.
+2. Trackstacc authenticates the integration and authorizes the actor server-side.
+3. Trackstacc resolves the target external user ID by display name or external user ID from the command.
+4. Trackstacc updates the external participant's `moderation_status` to `muted`, records `muted_at`, computes and stores `muted_until` from the duration (or leaves `NULL` for permanent), and stores the acting staff external user ID as `muted_by`.
+5. Trackstacc logs the mute action in the audit log.
+6. Trackstacc broadcasts the moderation state change.
+7. Trackstacc posts a bot announcement: `@alice was muted from song requests for 30 minutes.`
+
+### 10.17 Staff Unmutes an External Participant (Early Unmute)
+
+1. External staff user types `!music unmute @alice`.
+2. Trackstacc authenticates the integration and authorizes the actor server-side.
+3. Trackstacc resolves the target external user ID and verifies the participant is currently muted.
+4. Trackstacc resets `moderation_status` to `active`, clears `muted_until`, `muted_at`, and `muted_by`.
+5. Trackstacc logs the unmute action in the audit log.
+6. Trackstacc broadcasts the moderation state change.
+7. Trackstacc posts a bot announcement: `@alice was unmuted and can request songs again.`
+
+### 10.18 Mute Auto-Expires
+
+1. A timed mute reaches its `muted_until` timestamp.
+2. On the muted participant's next command attempt (or via periodic cleanup), Trackstacc detects the mute has expired.
+3. Trackstacc resets `moderation_status` to `active` and clears `muted_until`, `muted_at`, and `muted_by`.
+4. No bot announcement is posted for auto-expiry (the expiry was announced when the mute was first applied).
 
 ---
 
@@ -909,20 +1073,31 @@ External Services
   └─ Embedding site chat backends / outbound bot webhooks
 ```
 
-### 12.2 Suggested Technology Stack
+### 12.2 Selected Technology Stack
 
-| Layer            | Recommendation                                   | Rationale                                         |
+The backend framework decision is **Fastify 5 with TypeScript and Socket.IO**, matching the implementation already underway. NestJS is no longer an open option for MVP. Fastify is selected because it keeps the API layer lightweight, has first-class TypeScript support, integrates cleanly with Socket.IO, works well with Zod-style request validation, and avoids framework-level abstraction that is not needed for the current service count.
+
+| Layer            | Decision                                         | Rationale                                         |
 | ---------------- | ------------------------------------------------ | ------------------------------------------------- |
-| Frontend         | Next.js + React + TypeScript                     | Fast web UI, good routing, SSR where useful.      |
+| Frontend         | Next.js 14 + React 18 + TypeScript              | Fast web UI, App Router support, SSR where useful. |
 | Styling          | Tailwind CSS                                     | Rapid, consistent UI development.                 |
-| Backend          | Node.js + TypeScript, NestJS or Fastify          | Strong real-time ecosystem.                       |
-| Realtime         | WebSockets with Socket.IO or native ws           | Room-based events and reconnect support.          |
-| Database         | PostgreSQL                                       | Durable relational state and constraints.         |
-| Cache/pubsub     | Redis                                            | Presence, rate limiting, distributed room events. |
-| ORM              | Prisma or Drizzle                                | Type-safe schema access.                          |
-| Password hashing | Argon2id                                         | Strong password hashing for nickname protection.  |
-| Deployment       | Fly.io, Render, Railway, AWS, GCP, or Kubernetes | Depends on scale and budget.                      |
-| Observability    | OpenTelemetry + Sentry + structured logs         | Debugging real-time systems.                      |
+| Backend          | Fastify 5 + TypeScript                          | Lightweight HTTP framework aligned with the active repo and suitable for explicit domain-service boundaries. |
+| Realtime         | Socket.IO                                       | Room-based events, reconnection support, and Redis adapter support. |
+| Database         | PostgreSQL                                      | Durable relational state and constraints.         |
+| Cache/pubsub     | Redis + `ioredis` + Socket.IO Redis adapter     | Presence, rate limiting, distributed room events. |
+| ORM              | Prisma                                          | Type-safe schema access and existing root schema workflow. |
+| Request validation | Zod                                           | Shared validation patterns for REST and command payloads. |
+| Password hashing | Argon2id                                        | Strong password hashing for nickname protection.  |
+| Deployment       | Docker Compose for local/prod; Coolify-compatible deployment | Matches current infrastructure packaging. |
+| Observability    | OpenTelemetry-compatible traces, structured logs, Sentry or equivalent | Debugging real-time systems and dependency failures. |
+
+Framework guardrails:
+
+1. API routes should be thin Fastify handlers that delegate business rules to domain services.
+2. Domain services must not depend on Fastify request or reply objects.
+3. Socket.IO handlers should share authorization, validation, rate-limit, and error-mapping utilities with REST handlers.
+4. Fastify plugins should be used for cross-cutting infrastructure only: configuration, Prisma, Redis, authentication, rate limits, logging, and error handling.
+5. If future module count or team size justifies NestJS-style structure, evaluate that as a post-MVP architecture decision, not an MVP framework variable.
 
 ### 12.3 Server Authority
 
@@ -985,7 +1160,7 @@ External site integrations add an integration boundary without changing Tracksta
 8. Trackstacc returns a command result.
 9. Trackstacc also sends an outbound bot webhook if configured.
 
-**Authority constraints:**
+**Authority constraints** (see Section 19.5 for the authoritative external integration security specification):
 
 1. The external website chat is a command surface, not the authority.
 2. Trackstacc remains authoritative for queue writes, playback state, veto logic, staff authorization, moderation, rate limits, duplicate policy, room settings, and audit logs.
@@ -997,6 +1172,275 @@ External site integrations add an integration boundary without changing Tracksta
 8. Preserve YouTube compliance boundaries: metadata-only server use plus client IFrame playback.
 9. Preserve current room mechanics such as FIFO, voting queue, DJ rotation, host curated, and suggestions; external pre-play veto is an additional gate, not a replacement for all mechanics.
 
+### 12.5 Architecture Diagrams
+
+#### 12.5.1 System Context Diagram
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                        trackstacc.live                              │
+│                                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │  Next.js Web │  │  Fastify API │  │  Background Workers      │  │
+│  │  (Frontend)  │  │  + Socket.IO │  │  (Webhook retry, expiry) │  │
+│  └──────┬───────┘  └──────┬───────┘  └────────────┬─────────────┘  │
+│         │                 │                        │                │
+│         │        ┌────────┴────────┐               │                │
+│         │        │                 │               │                │
+│  ┌──────┴──┐  ┌──┴───────┐  ┌─────┴───────┐       │                │
+│  │ CDN /   │  │PostgreSQL│  │    Redis     │───────┘                │
+│  │ Static  │  │  (state) │  │ (cache/pub)  │                       │
+│  └─────────┘  └──────────┘  └─────────────┘                        │
+└─────────────────────────────────────────────────────────────────────┘
+        ▲               ▲                     ▲
+        │               │                     │
+   ┌────┴────┐   ┌──────┴──────┐     ┌───────┴───────┐
+   │ Browser │   │  YouTube    │     │  Embedding    │
+   │ Clients │   │  Data API + │     │  Site Backend │
+   │         │   │  IFrame     │     │  (commands/   │
+   │         │   │  Player     │     │   webhooks)   │
+   └─────────┘   └─────────────┘     └───────────────┘
+```
+
+#### 12.5.2 Container Diagram
+
+```text
+┌───────────────────────────────────────────────────────────────────────────┐
+│  Browser / Embed Client                                                   │
+│  ┌────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐  │
+│  │ React/Next.js  │  │ YouTube IFrame   │  │ Socket.IO Client         │  │
+│  │ UI + App       │  │ Player           │  │ (room events, presence)  │  │
+│  │ Router         │  │                  │  │                          │  │
+│  └───────┬────────┘  └──────────────────┘  └────────────┬─────────────┘  │
+│          │              REST (HTTPS)                     │  WSS           │
+└──────────┼──────────────────────────────────────────────┼────────────────┘
+           │                                              │
+           ▼                                              ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Fastify API + Socket.IO Gateway (single deployable in MVP)             │
+│  ┌────────────────────┐  ┌──────────────────────┐  ┌─────────────────┐ │
+│  │ Auth / Session     │  │ REST Route Handlers   │  │ Socket.IO Event │ │
+│  │ Middleware         │  │ (Room, Queue, Chat,   │  │ Handlers        │ │
+│  │                    │  │  Moderation, Nickname, │  │                 │ │
+│  │                    │  │  Integration, Health)  │  │                 │ │
+│  └────────┬───────────┘  └──────────┬────────────┘  └────────┬────────┘ │
+│           │                         │                         │          │
+│  ┌────────┴─────────────────────────┴─────────────────────────┴───────┐  │
+│  │ Domain Services                                                    │  │
+│  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌─────────┐ │  │
+│  │ │ Room     │ │ Identity │ │ Queue    │ │ Playback  │ │ Chat    │ │  │
+│  │ │ Service  │ │ Service  │ │ Engine   │ │ Coord.    │ │ Service │ │  │
+│  │ └──────────┘ └──────────┘ └──────────┘ └───────────┘ └─────────┘ │  │
+│  │ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐            │  │
+│  │ │Moderation│ │Rate Limit│ │ External │ │ Outbound  │            │  │
+│  │ │ Service  │ │ Service  │ │ Command  │ │ Webhook   │            │  │
+│  │ │          │ │          │ │ Service  │ │ Service   │            │  │
+│  │ └──────────┘ └──────────┘ └──────────┘ └───────────┘            │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│           │                         │                                    │
+│  ┌────────┴───────┐        ┌───────┴──────────┐                         │
+│  │ Prisma Client  │        │ ioredis Client   │                         │
+│  └────────┬───────┘        └───────┬──────────┘                         │
+└───────────┼────────────────────────┼────────────────────────────────────┘
+            ▼                        ▼
+   ┌────────────────┐       ┌────────────────┐
+   │  PostgreSQL 16 │       │   Redis 7      │
+   │  (durable      │       │   (presence,   │
+   │   state)       │       │    rate limits, │
+   │                │       │    pub/sub)     │
+   └────────────────┘       └────────────────┘
+```
+
+#### 12.5.3 Component Dependency Direction
+
+Domain services communicate through direct method calls within the same process. The allowed dependency directions are:
+
+```text
+REST / Socket.IO Handlers
+       │
+       ▼
+Domain Services (may call peer services within the same tier):
+  Room Service ──► Identity Service (nickname validation)
+  Queue Engine ──► Rate Limit Service (song add limits)
+  Queue Engine ──► Moderation Service (mute/ban check)
+  Playback Coordinator ──► Queue Engine (next track selection)
+  Chat Service ──► Rate Limit Service (message limits)
+  Chat Service ──► Moderation Service (mute check)
+  External Command Service ──► Queue Engine, Playback Coordinator,
+                                Moderation Service, Rate Limit Service
+  Outbound Webhook Service ◄── External Command Service, Playback Coordinator
+       │
+       ▼
+Data Access (Prisma + ioredis)
+```
+
+Domain services must not depend on Fastify request/reply objects. Handler-to-service calls pass plain typed arguments and receive plain typed results. Cross-service calls within the domain tier are synchronous method calls in MVP; if future scale requires asynchronous decoupling, introduce an event bus at that time.
+
+### 12.6 Sequence Diagrams
+
+#### 12.6.1 External Song Request Lifecycle
+
+```text
+Embedding Site          Trackstacc API             Domain Services            PostgreSQL / Redis
+Backend                 (External Command          (Queue Engine,
+                         Handler)                   Rate Limit, Webhook)
+    │                        │                          │                          │
+    │ POST /api/integrations │                          │                          │
+    │    /site-command       │                          │                          │
+    │ {integrationId,        │                          │                          │
+    │  rawText: "!sr <url>", │                          │                          │
+    │  externalUserId,       │                          │                          │
+    │  signature, timestamp} │                          │                          │
+    ├───────────────────────►│                          │                          │
+    │                        │ Verify HMAC/bearer,      │                          │
+    │                        │ timestamp freshness,     │                          │
+    │                        │ idempotency key          │                          │
+    │                        ├─────────────────────────►│                          │
+    │                        │                          │ Check rate limits (Redis) │
+    │                        │                          ├─────────────────────────►│
+    │                        │                          │◄─────────────────────────┤
+    │                        │                          │ Check mute/ban status    │
+    │                        │                          ├─────────────────────────►│
+    │                        │                          │◄─────────────────────────┤
+    │                        │                          │ Validate URL, fetch      │
+    │                        │                          │ YouTube metadata         │
+    │                        │                          │ Check duplicate/duration/ │
+    │                        │                          │ queue size/pending limits │
+    │                        │                          ├─────────────────────────►│
+    │                        │                          │◄─────────────────────────┤
+    │                        │                          │ INSERT queue_item,       │
+    │                        │                          │ external_command,        │
+    │                        │                          │ external_reference       │
+    │                        │                          ├─────────────────────────►│
+    │                        │                          │◄─────────────────────────┤
+    │                        │                          │ Emit queue.item.added    │
+    │                        │                          │ via Redis pub/sub →      │
+    │                        │                          │ Socket.IO rooms          │
+    │                        │                          ├ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ►│
+    │                        │                          │                          │
+    │                        │                          │ Enqueue outbound webhook │
+    │                        │                          │ (async, non-blocking)    │
+    │                        │◄─────────────────────────┤                          │
+    │  200 {ok: true,        │                          │                          │
+    │   resultCode:          │                          │                          │
+    │   "SONG_QUEUED",       │                          │                          │
+    │   message, ref}        │                          │                          │
+    │◄───────────────────────┤                          │                          │
+    │                        │                          │                          │
+    │         (async)        │                          │                          │
+    │◄ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤                          │
+    │  Signed outbound       │                          │                          │
+    │  webhook: bot message  │                          │                          │
+```
+
+#### 12.6.2 Pre-Play Veto Voting Cycle
+
+```text
+Playback              Queue Engine /            Socket.IO /           Embedding Site
+Coordinator           Veto Service              Redis Pub/Sub         (via Webhook)
+    │                      │                         │                      │
+    │ Current track ends   │                         │                      │
+    ├─────────────────────►│                         │                      │
+    │                      │ Select next candidate   │                      │
+    │                      │ via active mechanic     │                      │
+    │                      │                         │                      │
+    │                      │ Check: alternate exists? │                      │
+    │                      │ Check: veto enabled?    │                      │
+    │                      │                         │                      │
+    │                      │ [no alternate OR veto   │                      │
+    │                      │  disabled → play now]   │                      │
+    │                      │                         │                      │
+    │                      │ [alternate exists AND   │                      │
+    │                      │  veto enabled]          │                      │
+    │                      │                         │                      │
+    │                      │ Open veto window        │                      │
+    │                      │ INSERT preplay_veto_    │                      │
+    │                      │ windows (status=open)   │                      │
+    │                      │                         │                      │
+    │                      │ Emit veto_window.opened │                      │
+    │                      ├────────────────────────►│──── broadcast ──────►│
+    │                      │                         │    "Up next [K7Q]…"  │
+    │                      │                         │                      │
+    │                      │   ◄── !nay from user ───│◄─── site-command ───│
+    │                      │ Validate voter, record  │                      │
+    │                      │ UPSERT preplay_veto_    │                      │
+    │                      │ votes                   │                      │
+    │                      │                         │                      │
+    │                      │ Emit veto_window.updated│                      │
+    │                      ├────────────────────────►│──── broadcast ──────►│
+    │                      │                         │                      │
+    │                      │ [netNays >= threshold]  │                      │
+    │                      │ Mark candidate vetoed   │                      │
+    │                      │ Emit queue.item.vetoed  │                      │
+    │                      ├────────────────────────►│──── broadcast ──────►│
+    │                      │                         │   "Veto passed…"     │
+    │                      │                         │                      │
+    │◄─────────────────────┤ Select next candidate   │                      │
+    │  (loop: re-evaluate  │ (do not reselect vetoed │                      │
+    │   veto for new       │  item in same cycle)    │                      │
+    │   candidate)         │                         │                      │
+    │                      │                         │                      │
+    │                      │ [window closes without  │                      │
+    │                      │  veto → play candidate] │                      │
+    │                      │ Emit veto_passed        │                      │
+    │◄─────────────────────┤                         │                      │
+    │ Start playback       ├────────────────────────►│──── broadcast ──────►│
+    │ Emit playback.state  │                         │   "Now playing…"     │
+```
+
+#### 12.6.3 Playlist Mechanic Change with Queue Transition
+
+```text
+Host Client           Fastify API             Room Service /           Socket.IO /
+                      (Settings Handler)      Queue Engine             Redis Pub/Sub
+    │                      │                         │                      │
+    │ PATCH /api/rooms/    │                         │                      │
+    │   :roomId/settings   │                         │                      │
+    │ {playlistMechanic:   │                         │                      │
+    │  "voting"}           │                         │                      │
+    ├─────────────────────►│                         │                      │
+    │                      │ Validate host session   │                      │
+    │                      │ Validate cooldown       │                      │
+    │                      ├────────────────────────►│                      │
+    │                      │                         │ Read current room    │
+    │                      │                         │ mechanic ("fifo")    │
+    │                      │                         │                      │
+    │                      │                         │ UPDATE rooms SET     │
+    │                      │                         │ playlist_mechanic =  │
+    │                      │                         │ "voting"             │
+    │                      │                         │                      │
+    │                      │                         │ INSERT room_settings_│
+    │                      │                         │ history (actor,      │
+    │                      │                         │ old=fifo, new=voting)│
+    │                      │                         │                      │
+    │                      │                         │ Preserve existing    │
+    │                      │                         │ queue order (default)│
+    │                      │                         │ Current song NOT     │
+    │                      │                         │ interrupted          │
+    │                      │                         │                      │
+    │                      │                         │ Create system chat   │
+    │                      │                         │ message: "Fredo      │
+    │                      │                         │ changed playlist     │
+    │                      │                         │ mode from FIFO to    │
+    │                      │                         │ Voting Queue."       │
+    │                      │                         │                      │
+    │                      │                         │ Emit events:         │
+    │                      │                         ├─────────────────────►│
+    │                      │                         │ room.mechanic.changed│
+    │                      │                         │ chat.message (system)│
+    │                      │◄────────────────────────┤                      │
+    │  200 {ok: true}      │                         │                      │
+    │◄─────────────────────┤                         │                      │
+    │                      │                         │                      │
+    │◄ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─│
+    │  room.mechanic.changed event via Socket.IO     │                      │
+    │  chat.message (system) event via Socket.IO     │                      │
+    │                      │                         │                      │
+    │  UI updates mechanic │                         │                      │
+    │  label; new adds     │                         │                      │
+    │  follow voting rules │                         │                      │
+```
+
 ---
 
 ## 13. Component Design
@@ -1005,14 +1449,16 @@ External site integrations add an integration boundary without changing Tracksta
 
 Responsibilities:
 
-1. Render room UI.
-2. Collect nickname and password inputs.
-3. Display YouTube player.
-4. Maintain WebSocket connection.
-5. Render chat, queue, participant list, and room settings.
-6. Handle optimistic UI carefully for chat and queue interactions.
-7. Report player state events to server.
-8. Resync playback state when instructed.
+1. Render room UI, adapting to the user's native access tier (Listener vs member).
+2. For Listeners, render a read-only experience (playback + playlist/queue, optional read-only chat) and surface clear inline prompts to claim or authenticate a protected nickname wherever an interactive control would otherwise appear.
+3. Collect nickname and password inputs for the protect-and-join / authenticate flows.
+4. Display YouTube player.
+5. Maintain WebSocket connection; reconnect/upgrade the token when a Listener becomes a member.
+6. Render chat, queue, participant list, and room settings according to tier and role.
+7. Handle optimistic UI carefully for chat and queue interactions (member tier only).
+8. Report player state events to server.
+9. Resync playback state when instructed.
+10. Treat the tier-gating UI as a convenience only; the server remains authoritative (NFR-038).
 
 Key pages:
 
@@ -1043,9 +1489,11 @@ Responsibilities:
 2. Validate nickname format.
 3. Check protected nickname status.
 4. Verify nickname passwords.
-5. Create protected nickname claims.
-6. Issue participant room sessions.
-7. Prevent nickname impersonation in active rooms.
+5. Create protected nickname claims (including the single-step protect-and-join).
+6. Issue room sessions at the correct native access tier: `listener` for users without an authenticated protected nickname, `member` for those with one.
+7. Upgrade a `listener` session to `member` in place when the user authenticates or claims a protected nickname, without forcing a full rejoin.
+8. Provide the authoritative tier and role to downstream services so every interactive action can be gated server-side (NFR-038, FR-028).
+9. Prevent nickname impersonation in active rooms.
 
 Nickname normalization rules:
 
@@ -1126,10 +1574,10 @@ MVP recommendation:
 
 Responsibilities:
 
-1. Accept chat messages from authorized participants.
+1. Accept chat messages only from `member`-tier participants (authenticated protected nickname); reject sends from Listeners with a "protection required" error.
 2. Apply rate limits and content rules.
 3. Store recent messages.
-4. Broadcast chat events.
+4. Broadcast chat events; gate delivery to Listeners by the room's `listener_chat_visible` setting (default off).
 5. Create system messages.
 6. Support deletion/moderation of messages.
 
@@ -1223,9 +1671,11 @@ Default embed modes:
 
 Voting controls may be considered in a future authenticated embed identity bridge, but they are out of scope for v1.1/MVP unless user identity can be verified server-side.
 
+The native mandatory protected-nickname requirement (v1.4.0) does not apply to the embeddable room client. Embeds are already read-only and route any mutations through the server-to-server external command bridge using external user IDs; they neither prompt for nor require a native protected nickname. The embed's read-only listening-and-viewing surface is unchanged by v1.4.0.
+
 ### 13.11 External Command Service
 
-Responsibilities:
+Responsibilities (security constraints follow the authoritative specification in Section 19.5):
 
 1. Authenticate inbound command requests.
 2. Enforce timestamp freshness, replay protection, idempotency, strict schema validation, and rate limits.
@@ -1271,6 +1721,8 @@ Staff-only external chat commands:
 | `!music veto hybrid <percent> min <count>` | Set hybrid veto threshold.                                            |
 | `!music max-duration <seconds>`           | Set max song duration.                                                |
 | `!music duplicate <policy>`               | Set duplicate policy.                                                 |
+| `!music mute <@displayName \| externalUserId> [duration]` | Mute an external participant from song requests and votes. Duration: `<N>s` (seconds), `<N>m` (minutes), `<N>h` (hours), `<N>d` (days), or `forever`/omit for permanent. Example: `!music mute @alice 30m`. |
+| `!music unmute <@displayName \| externalUserId>` | Lift an active mute before it expires (early unmute). Example: `!music unmute @alice`. |
 
 Staff command rules:
 
@@ -1305,6 +1757,8 @@ Example bot messages:
 | Staff remove       | `Removed [K7Q] "Song Title" from the queue.`                                                              |
 | Staff skip         | `@mod skipped "Song Title". Reason: bad audio.`                                                           |
 | Policy changed     | `Song requests are now limited to 1 request every 90 seconds per user.`                                    |
+| User muted         | `@alice was muted from song requests for 30 minutes.`                                                    |
+| User unmuted       | `@alice was unmuted and can request songs again.`                                                        |
 
 ---
 
@@ -1370,25 +1824,108 @@ Stores room configuration.
 | `skip_vote_threshold_value` | INTEGER        | Example 50 or 3.                                         |
 | `queue_locked`              | BOOLEAN        | Whether normal users can add.                            |
 | `chat_locked`               | BOOLEAN        | Whether normal users can chat.                           |
+| `listener_chat_visible`     | BOOLEAN        | Whether native Listeners (no protected nickname) may read chat. Default FALSE (FR-078). |
 | `external_chat_music`       | JSONB          | External embed/chat configuration such as embed mode, command prefix, enabled commands, song request policy, pre-play veto config, staff permissions, duplicate policy, max queue size, max pending per user, max duration, webhook config, allowed origins, and abuse/rate-limit settings. |
 | `created_at`                | TIMESTAMP      | Creation time.                                           |
 | `updated_at`                | TIMESTAMP      | Last settings update.                                    |
 | `expires_at`                | TIMESTAMP NULL | For temporary rooms.                                     |
 | `last_active_at`            | TIMESTAMP      | Room activity.                                           |
 
+##### `external_chat_music` JSONB Schema
+
+The `external_chat_music` column stores the full external integration configuration for a room. While this column uses JSONB for flexibility and atomic reads/writes, it must conform to the following documented schema. The application layer validates this schema on every write using Zod (or equivalent runtime validator). Invalid payloads are rejected with error code `INVALID_EXTERNAL_CONFIG`.
+
+```jsonc
+{
+  // Embed configuration
+  "embedMode": "readonly" | "interactive",           // Default: "readonly"
+
+  // Command routing
+  "commandPrefix": "!",                               // 1–5 character string, default "!"
+  "enabledCommands": ["sr", "song", "np", "queue", "yay", "nay", "help"],
+
+  // Song request policy
+  "songRequestPolicy": {
+    "mode": "open" | "cooldown" | "allowlist" | "closed",  // Default: "cooldown"
+    "cooldownSeconds": 120,                                  // Required when mode = "cooldown"
+    "allowlistExternalUserIds": []                           // Required when mode = "allowlist"
+  },
+
+  // Pre-play veto configuration
+  "preplayVeto": {
+    "enabled": false,                                   // Default: false
+    "windowSeconds": 30,                                // 10–120, default 30
+    "thresholdType": "hybrid",                          // "fixed" | "percentage" | "hybrid"
+    "minimumNetNays": 3,                                // >= 1
+    "percentageThreshold": 0.5,                         // 0.0–1.0, used when hybrid or percentage
+    "maxConsecutiveVetoes": 3                            // >= 1
+  },
+
+  // Staff permissions
+  "staffPermissions": {
+    "canRemove": true,
+    "canSkip": true,
+    "canMute": true,
+    "canChangePolicy": true,
+    "canChangeVetoSettings": false,
+    "canChangeDuration": false,
+    "canChangeDuplicatePolicy": false
+  },
+
+  // Queue limits
+  "duplicatePolicy": "block_queue" | "block_recent" | "allow" | "block_session",
+  "maxQueueSize": 50,                                   // 1–500, default 50
+  "maxPendingPerUser": 3,                                // 1–20, default 3
+  "maxSongDurationSeconds": 600,                         // 30–3600, default 600
+
+  // Webhook configuration
+  "webhook": {
+    "outboundUrl": "https://...",                        // Optional, valid HTTPS URL
+    "botDisplayName": "TrackstaccBot",                   // Optional, 1–32 characters
+    "retryPolicy": {
+      "maxRetries": 3,                                   // 0–5, default 3
+      "backoffBaseSeconds": 2                            // 1–10, default 2
+    }
+  },
+
+  // Origin and abuse controls
+  "allowedOrigins": ["https://example.com"],             // Array of valid HTTPS origins
+  "rateLimits": {
+    "commandsPerMinutePerUser": 10,                      // 1–60, default 10
+    "commandsPerMinuteGlobal": 100,                      // 10–1000, default 100
+    "duplicateWindowSeconds": 5                           // 1–60, default 5
+  }
+}
+```
+
+**Validation rules enforced on write:**
+
+1. `commandPrefix` must be 1–5 non-whitespace characters and unique per room per channel (application-layer check against `site_integrations`).
+2. `enabledCommands` must be a subset of the recognized command set. Unknown commands are rejected.
+3. `songRequestPolicy.mode` determines which sub-fields are required. `cooldownSeconds` is required and must be > 0 when mode is `cooldown`. `allowlistExternalUserIds` is required and non-empty when mode is `allowlist`.
+4. `preplayVeto.windowSeconds` must be between 10 and 120.
+5. `preplayVeto.minimumNetNays` must be >= 1.
+6. `maxQueueSize`, `maxPendingPerUser`, and `maxSongDurationSeconds` must be positive integers within documented ranges.
+7. `webhook.outboundUrl` must be a valid HTTPS URL if provided.
+8. `allowedOrigins` entries must be valid HTTPS origins.
+9. `rateLimits` values must be positive integers within documented ranges.
+
+**Decomposition evaluation:** This configuration was evaluated for normalization into separate relational tables. The decision is to **retain the JSONB column for MVP** for the following reasons: the configuration is always read and written atomically as a unit during room settings updates, it does not participate in cross-row joins or WHERE clauses, and it avoids a complex multi-table transaction for what is conceptually a single settings object. The documented schema above with application-layer Zod validation provides equivalent data integrity to column-level constraints for this use case. In Phase 2, if per-field querying or independent update patterns emerge (for example, an admin dashboard filtering rooms by `songRequestPolicy.mode`), the `songRequestPolicy`, `preplayVeto`, `staffPermissions`, `webhook`, and `rateLimits` sub-objects should be promoted to dedicated relational tables or at minimum backed by generated columns with indexes.
+
 #### `room_sessions`
 
-Represents participants in rooms.
+Represents participants in rooms, including read-only Listeners.
 
 | Column                | Type           | Notes                                   |
 | --------------------- | -------------- | --------------------------------------- |
 | `id`                  | UUID           | Primary key.                            |
 | `room_id`             | UUID           | FK to rooms.                            |
-| `nickname_claim_id`   | UUID NULL      | FK if protected nickname authenticated. |
-| `normalized_nickname` | TEXT           | Current nickname key.                   |
-| `display_nickname`    | TEXT           | Display nickname.                       |
-| `role`                | ENUM           | `participant`, `moderator`, `host`.     |
-| `session_token_hash`  | TEXT           | Token hash.                             |
+| `access_tier`         | ENUM           | `listener` or `member`. `member` requires a non-null `nickname_claim_id`. Default `listener`. |
+| `nickname_claim_id`   | UUID NULL      | FK to the authenticated protected nickname. NULL for Listeners; required for `member` tier. |
+| `normalized_nickname` | TEXT NULL      | Current nickname key. NULL for Listeners (no nickname assigned). |
+| `display_nickname`    | TEXT NULL      | Display nickname. NULL for Listeners.   |
+| `role`                | ENUM           | `listener`, `participant`, `moderator`, `host`. Roles above `listener` require `access_tier = member`. |
+| `session_token_hash`  | TEXT           | Token hash. Encodes the access tier so tier can be checked on every request/event. |
 | `is_muted`            | BOOLEAN        | Room-level mute.                        |
 | `is_banned`           | BOOLEAN        | Room-level ban.                         |
 | `joined_at`           | TIMESTAMP      | Initial join.                           |
@@ -1397,7 +1934,10 @@ Represents participants in rooms.
 
 Constraints:
 
-- Unique active nickname per room, unless same authenticated session is reconnecting.
+- Unique active nickname per room, enforced only for `member`-tier sessions, unless the same authenticated session is reconnecting. Listener sessions are exempt because they hold no nickname.
+- `access_tier = member` requires a non-null `nickname_claim_id`, `normalized_nickname`, and `display_nickname` (application-layer and/or CHECK constraint).
+- `role` may only be `participant`, `moderator`, or `host` when `access_tier = member`.
+- A `listener` session is upgraded in place to `member` when the user authenticates or claims a protected nickname; the upgrade populates the nickname columns and `nickname_claim_id`.
 
 #### `tracks`
 
@@ -1552,6 +2092,9 @@ Logical entity for external website integrations. Exact Prisma naming may differ
 | `normalized_name`        | TEXT           | Normalized display name for moderation/search. |
 | `mapped_room_session_id` | UUID NULL      | Optional native room session mapping.          |
 | `moderation_status`      | ENUM           | `active`, `muted`, `banned`, `limited`.        |
+| `muted_until`            | TIMESTAMP NULL | When a timed mute expires. NULL for permanent. |
+| `muted_at`               | TIMESTAMP NULL | When the mute was applied.                     |
+| `muted_by`               | TEXT NULL      | External user ID of staff who applied the mute. |
 | `last_seen_at`           | TIMESTAMP      | Last command or integration activity.          |
 
 Constraint:
@@ -1622,6 +2165,46 @@ Constraint:
 | `threshold_snapshot` | JSONB     | Veto threshold evaluated for this window. |
 | `result`             | JSONB     | Final counts and outcome.                 |
 
+### 14.3 Database Migration Strategy
+
+#### 14.3.1 Tooling
+
+Database schema evolution uses **Prisma Migrate** as the authoritative migration tooling, consistent with the Prisma ORM selection in Section 12.2. The root Prisma schema lives at `prisma/schema.prisma` and is accessed through the API package workspace wrapper.
+
+Key practices:
+
+1. Every schema change requires a named migration created with `prisma migrate dev --name <descriptive_name>`.
+2. Migrations are committed to version control alongside the code changes they support.
+3. Production deployments apply pending migrations with `prisma migrate deploy`, which runs non-interactively and does not create new migration files.
+4. Migration history is tracked in the `_prisma_migrations` table, which Prisma manages automatically.
+5. Developers must run `prisma validate` before committing schema changes.
+
+#### 14.3.2 Zero-Downtime Migration Patterns
+
+Schema changes must follow expand-contract patterns to avoid downtime during rolling deployments:
+
+1. **Adding columns:** Add as nullable with a default or as `NULL`-allowed. Backfill in a subsequent migration or background task. Make non-nullable only after all rows are populated and application code handles the new column.
+2. **Removing columns:** Stop reading the column in application code first. Deploy that change. Then remove the column in a subsequent migration.
+3. **Renaming columns:** Create the new column, backfill, update application code to read/write the new column, deploy, then drop the old column.
+4. **Adding indexes:** Use `CREATE INDEX CONCURRENTLY` where supported by the migration tooling, or schedule index creation during low-traffic windows. Prisma migrations that add indexes should be reviewed for lock impact.
+5. **Changing column types:** Prefer adding a new column with the desired type, backfilling, switching reads, then dropping the old column. Direct `ALTER COLUMN ... TYPE` may lock the table for large tables.
+6. **Adding tables:** Safe to deploy at any time; no existing code depends on the new table.
+7. **Removing tables:** Stop all application access first; drop in a subsequent migration after confirming no references remain.
+
+#### 14.3.3 Rollback Procedures
+
+1. Prisma Migrate does not generate automatic down-migrations. Rollback migrations must be written manually when the risk of a migration warrants it.
+2. For high-risk migrations (column renames, type changes, data transformations), prepare a corresponding rollback SQL script and test it in staging before production deployment.
+3. Database backups must be taken before applying high-risk migrations in production.
+4. If a migration fails partway, Prisma marks it as failed in `_prisma_migrations`. Resolve by fixing the migration SQL and running `prisma migrate resolve --applied <migration_name>` or `--rolled-back <migration_name>` as appropriate.
+
+#### 14.3.4 Migration Testing
+
+1. Run `prisma migrate dev` in the local Docker-backed development environment before committing.
+2. CI runs `prisma migrate deploy` against a disposable test database to verify migration applicability.
+3. Staging environments mirror production schema state; migrations are deployed to staging before production.
+4. Seed data is maintained separately from migrations via `prisma db seed` and must not be included in migration files.
+
 ---
 
 ## 15. API Design
@@ -1633,6 +2216,84 @@ Constraint:
 3. All writes are validated server-side.
 4. Client-provided role, nickname auth, queue state, or playback state must not be trusted.
 5. Use idempotency keys for sensitive repeated actions where useful.
+
+#### 15.1.1 API Versioning Strategy
+
+All REST endpoints use a URL path prefix: `/api/v1/`. The current version is `v1`. When breaking changes are introduced (field removal, incompatible type changes, removed endpoints, changed authentication flows), a new version prefix (`/api/v2/`) is created and the previous version is maintained for a documented deprecation period. Additive changes (new optional fields, new endpoints, new enum values) do not require a version bump but must be documented in a changelog.
+
+External integrations using the command endpoint (`/api/v1/integrations/site-command`) are versioned under the same scheme. Breaking changes to the external command payload or response envelope require a new API version.
+
+#### 15.1.2 HTTP Status Code Conventions
+
+Standard HTTP status codes follow the conventions documented in Section 23.3. All REST responses include a `Content-Type: application/json` header. Success responses use the following codes:
+
+| Status | Usage |
+| ------ | ----- |
+| `200` | Successful read, update, or action that returns a body. |
+| `201` | Successful resource creation (room, queue item, integration, nickname claim). |
+| `204` | Successful action with no response body (delete, acknowledge). |
+
+Error responses use the structured envelope from Section 23.2.1 and the status codes from Section 23.3.
+
+#### 15.1.3 Pagination Format
+
+List endpoints that may return unbounded results use cursor-based pagination. The cursor is an opaque string (typically a base64-encoded composite of the sort key and row identifier). Offset-based pagination is not used because it performs poorly with real-time insertions and deletions.
+
+Paginated request format:
+
+```text
+GET /api/v1/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>
+```
+
+Paginated response format:
+
+```json
+{
+  "data": [ ... ],
+  "pagination": {
+    "hasMore": true,
+    "nextCursor": "eyJjcmVhdGVkQXQiOiIyMDI2LTA2LTA1VDIwOjAwOjAwLjAwMFoiLCJpZCI6InV1aWQifQ"
+  }
+}
+```
+
+Pagination parameters:
+
+| Parameter | Type   | Default | Max | Description |
+| --------- | ------ | ------- | --- | ----------- |
+| `limit`   | integer | 50     | 100 | Number of items to return. |
+| `before`  | string  | (none) | N/A | Cursor for backward pagination (older items). |
+| `after`   | string  | (none) | N/A | Cursor for forward pagination (newer items). |
+
+Endpoints supporting pagination: chat messages, queue items (history), room moderation actions, room settings history, external commands (audit), and external participants.
+
+#### 15.1.4 Rate Limit Response Headers
+
+All rate-limited endpoints return the following headers on every response, including successful ones:
+
+| Header | Description |
+| ------ | ----------- |
+| `X-RateLimit-Limit` | Maximum number of requests allowed in the current window. |
+| `X-RateLimit-Remaining` | Number of requests remaining in the current window. |
+| `X-RateLimit-Reset` | Unix timestamp (seconds) when the current window resets. |
+| `Retry-After` | Seconds until the client should retry. Present only on `429` responses. |
+
+Rate limit windows vary by action (see Section 13.9 for per-action limits). When a request is rejected due to rate limiting, the response uses HTTP `429` with error code `RATE_LIMITED` or the applicable domain-specific rate limit code (e.g., `SONG_REQUEST_COOLDOWN`, `NICKNAME_PASSWORD_RATE_LIMITED`).
+
+#### 15.1.5 Request ID and Correlation
+
+Every API request is assigned a unique request ID. If the client sends an `X-Request-Id` header, the server uses it; otherwise, the server generates one. The request ID is returned in the `X-Request-Id` response header and included in structured logs, error responses, and audit entries. External command results also include the request ID for cross-system correlation.
+
+#### 15.1.6 Naming Conventions
+
+| Context | Convention | Examples |
+| ------- | ---------- | -------- |
+| Database columns | `snake_case` | `room_id`, `display_nickname`, `created_at` |
+| API request/response payloads | `camelCase` | `roomId`, `displayNickname`, `createdAt` |
+| WebSocket event names | `dot.separated` with `snake_case` segments | `room.mechanic.changed`, `queue.item.veto_window.opened` |
+| Enum values (data/events) | `snake_case` | `fifo`, `voting`, `dj_rotation`, `host_curated`, `per_user_cooldown` |
+| Enum display text | Title Case or descriptive | "First Come, First Served", "Voting Queue" |
+| Error codes | `UPPER_SNAKE_CASE` | `VIDEO_TOO_LONG`, `QUEUE_LOCKED` |
 
 ### 15.2 REST Endpoints
 
@@ -1672,39 +2333,67 @@ Response:
 }
 ```
 
-#### Nickname Endpoints
+#### Nickname and Session Endpoints
 
 ```http
 POST /api/nicknames/check
 POST /api/nicknames/protect
 POST /api/nicknames/authenticate
+POST /api/rooms/:roomId/listen
 POST /api/rooms/:roomId/join
 POST /api/rooms/:roomId/nickname/change
 ```
 
-`POST /api/rooms/:roomId/join` request:
+`POST /api/rooms/:roomId/listen` establishes a read-only **Listener** session (native access tier `listener`). It requires no nickname or password; it requires the room password only if the room is password-protected.
 
 ```json
 {
-  "displayNickname": "DJ Fredo",
-  "nicknamePassword": "optional-if-protected",
   "roomPassword": "optional-if-room-protected"
 }
 ```
 
-Response:
+Listen response:
 
 ```json
 {
   "session": {
     "roomSessionId": "uuid",
+    "accessTier": "listener",
+    "role": "listener"
+  },
+  "websocketToken": "signed-listener-token"
+}
+```
+
+`POST /api/rooms/:roomId/join` establishes or upgrades to a `member` session. It requires a protected nickname: the caller either authenticates an existing one (`nicknamePassword` against an existing claim) or claims a new one (`newNicknamePassword` + `confirmPassword`) in a single protect-and-join step. If an existing Listener session is supplied, it is upgraded in place rather than duplicated.
+
+```json
+{
+  "displayNickname": "DJ Fredo",
+  "nicknamePassword": "required-if-nickname-already-protected",
+  "newNicknamePassword": "required-if-claiming-a-new-nickname",
+  "confirmPassword": "required-if-claiming-a-new-nickname",
+  "roomPassword": "optional-if-room-protected",
+  "listenerSessionId": "optional-uuid-to-upgrade-in-place"
+}
+```
+
+Join response:
+
+```json
+{
+  "session": {
+    "roomSessionId": "uuid",
+    "accessTier": "member",
     "displayNickname": "DJ Fredo",
     "role": "participant",
     "protectedNickname": true
   },
-  "websocketToken": "signed-token"
+  "websocketToken": "signed-member-token"
 }
 ```
+
+If the caller attempts to `join` without supplying a way to obtain a protected nickname, the server responds `409 NICKNAME_PROTECTION_REQUIRED`. Interactive REST and WebSocket actions performed on a `listener`-tier session are rejected with `403 LISTENER_READ_ONLY` (see Section 23.4).
 
 #### Queue Endpoints
 
@@ -1827,19 +2516,49 @@ Server validates:
 4. Ban/mute status.
 5. Expiration.
 
+#### 16.1.1 Reconnection Backoff Specification
+
+When a WebSocket connection drops (network failure, server restart, intermediary timeout), the client must attempt reconnection using exponential backoff with jitter to avoid thundering-herd effects.
+
+| Parameter | Value |
+| --------- | ----- |
+| Initial delay | 1 second |
+| Backoff multiplier | 2x |
+| Jitter | ±25% randomized per attempt |
+| Maximum delay | 30 seconds |
+| Maximum retries before connection-lost state | 10 |
+| Heartbeat interval | 25 seconds (client sends `presence.heartbeat`) |
+| Server heartbeat timeout | 60 seconds (server marks participant offline) |
+
+Reconnection behavior by phase:
+
+1. **Reconnecting (attempts 1–5):** Client shows a subtle "Reconnecting…" indicator. Chat, queue, and playback UI remain visible but inputs are disabled. The client continues displaying the last-known room state.
+2. **Degraded (attempts 6–10):** Client shows "Connection lost. Retrying…" with a visible countdown to the next attempt. Inputs remain disabled.
+3. **Disconnected (after 10 failed attempts):** Client shows "Connection lost. Click to reconnect." and stops automatic retries. The user can manually trigger a reconnection attempt, which resets the backoff counter.
+
+On successful reconnection:
+
+1. Client sends the existing WebSocket token.
+2. If the token has expired, client requests a new token via `POST /api/v1/rooms/:roomId/session/refresh` (or equivalent) and reconnects with the fresh token.
+3. Server sends a full `room.snapshot` event containing current room state, playback, queue, participants, recent messages, and any active veto window.
+4. Client reconciles the snapshot with its local state and resumes normal operation.
+5. If the participant's session has been invalidated (ban, room deletion, session expiry beyond refresh window), the server sends an `error` event with code `SESSION_INVALID` and the client redirects to the room join flow.
+
 ### 16.2 Client-to-Server Events
 
-| Event                  | Purpose                         |
-| ---------------------- | ------------------------------- |
-| `chat.send`            | Send chat message.              |
-| `queue.add`            | Add YouTube track.              |
-| `queue.vote`           | Vote on queue item.             |
-| `playback.skipVote`    | Vote to skip current track.     |
-| `playback.clientState` | Report local player state.      |
-| `presence.heartbeat`   | Maintain presence.              |
-| `room.settings.update` | Host/mod setting update.        |
-| `room.mechanic.change` | Host changes playlist mechanic. |
-| `moderation.action`    | Host/mod action.                |
+| Event                  | Purpose                         | Minimum native tier |
+| ---------------------- | ------------------------------- | ------------------- |
+| `chat.send`            | Send chat message.              | `member`            |
+| `queue.add`            | Add YouTube track.              | `member`            |
+| `queue.vote`           | Vote on queue item.             | `member`            |
+| `playback.skipVote`    | Vote to skip current track.     | `member`            |
+| `playback.clientState` | Report local player state.      | `listener`          |
+| `presence.heartbeat`   | Maintain presence.              | `listener`          |
+| `room.settings.update` | Host/mod setting update.        | `member` (host/mod) |
+| `room.mechanic.change` | Host changes playlist mechanic. | `member` (host)     |
+| `moderation.action`    | Host/mod action.                | `member` (host/mod) |
+
+Listener-tier sessions may connect to receive read-only state (Section 16.3) and may emit `playback.clientState` and `presence.heartbeat` only. Any `member`-only event received on a `listener`-tier connection is rejected with an `error` acknowledgement carrying code `LISTENER_READ_ONLY`; the server never trusts a client-supplied tier and re-derives it from the signed session token on every event (NFR-038).
 
 ### 16.3 Server-to-Client Events
 
@@ -2049,6 +2768,7 @@ Key risks:
 13. External role spoofing.
 14. Vote manipulation through unstable or browser-provided identity.
 15. Secret leakage through iframe URLs or browser JavaScript.
+16. Listener-tier privilege escalation (a read-only user attempting interactive actions by manipulating the client or forging a tier claim).
 
 ### 19.2 Mitigations
 
@@ -2069,6 +2789,7 @@ Key risks:
 | External role spoofing | Trusted role mappings configured per integration; no client-side trust. |
 | Vote manipulation      | One vote per stable external user ID per candidate; no anonymous embed votes by default. |
 | Secret leakage         | Public embed token distinct from server-side integration secret; no secrets in browser payloads. |
+| Listener privilege escalation | Native access tier is encoded in the signed session token and re-derived server-side on every REST request and WebSocket event; interactive actions on a `listener` session are rejected (`LISTENER_READ_ONLY` / `NICKNAME_PROTECTION_REQUIRED`) regardless of client state (NFR-038, FR-028). |
 
 ### 19.3 Password Storage
 
@@ -2093,6 +2814,8 @@ Recommended:
 
 ### 19.5 External Integration Security
 
+**This section is the single authoritative source for external integration security requirements.** Sections 12.4 (Authority Constraints), 13.11 (External Command Service), 20.3 (External Integration Abuse Controls), 31.7 (External Site Integration acceptance criteria), and 31.9 (External Staff Commands acceptance criteria) reference this section rather than restating these constraints independently. If a conflict exists between this section and a downstream reference, this section takes precedence.
+
 External command ingestion and outbound bot delivery must use defense-in-depth:
 
 1. HMAC signature or bearer token verification for inbound commands.
@@ -2108,6 +2831,88 @@ External command ingestion and outbound bot delivery must use defense-in-depth:
 11. Allowed origin/domain allowlist for embeds.
 12. CSP `frame-ancestors` guidance for registered embed origins.
 13. No privileged mutation endpoints callable from the embed without authenticated server-side identity.
+
+### 19.6 CORS and CSP Policy
+
+CORS and CSP are mandatory security controls for native pages, API routes, WebSocket connections, and embeddable room pages. The default stance is deny-by-default with explicit allowlists per environment and per external integration.
+
+#### 19.6.1 Origin Model
+
+| Surface | Allowed origins | Credentials | Notes |
+| ------- | --------------- | ----------- | ----- |
+| Native web app pages | First-party Trackstacc origins only. Local development may allow `http://localhost:3000`. | N/A | Native pages should not be frameable by arbitrary third-party sites. |
+| Public REST API used by native web app | First-party web app origins from `APP_ORIGINS` / `CORS_ORIGINS`. | Yes, only for first-party origins. | `Access-Control-Allow-Origin: *` must never be used with credentials. |
+| Socket.IO gateway | Same allowlist as REST API, plus explicit development origins. | Yes, only for first-party origins. | Validate both HTTP polling and WebSocket upgrade origins. |
+| Read-only embed pages | Per-integration registered `allowed_origins`. | No Trackstacc session cookies by default. | Embed access is display-only unless a future authenticated identity bridge is introduced. |
+| External command endpoint | Server-to-server only. Browser CORS is not a trust boundary and should be disabled or limited to first-party admin tooling. | No browser credentials. | Authentication is HMAC or bearer credential plus timestamp/replay/idempotency checks. |
+| Outbound bot webhook | Egress from Trackstacc to configured webhook URL. | N/A | Webhook target validation and signing are covered by Section 19.5. |
+
+#### 19.6.2 Required CORS Behavior
+
+1. Maintain separate allowlists for first-party web origins and external embed origins.
+2. Reject API and Socket.IO browser requests whose `Origin` is absent or not allowlisted, except explicitly documented same-origin server-to-server health checks.
+3. Return `Vary: Origin` on CORS-enabled responses.
+4. Allow credentials only for first-party Trackstacc origins that need httpOnly session cookies.
+5. Do not allow credentials for third-party embed origins in MVP.
+6. Keep allowed methods minimal: `GET`, `POST`, `PATCH`, `DELETE`, and `OPTIONS` only where implemented.
+7. Keep allowed headers minimal: `Content-Type`, `Authorization`, `X-Request-Id`, `X-Idempotency-Key`, `X-Trackstacc-Timestamp`, and `X-Trackstacc-Signature`.
+8. Set `Access-Control-Max-Age` to a bounded value, recommended 600 seconds.
+9. Log rejected origins with request ID, route, and environment, but never log bearer tokens, HMAC secrets, cookies, or full signatures.
+
+#### 19.6.3 Native Page CSP
+
+Native Trackstacc pages should use a strict CSP. A representative production policy is:
+
+```text
+default-src 'self';
+base-uri 'self';
+object-src 'none';
+frame-ancestors 'self';
+form-action 'self';
+img-src 'self' data: https://i.ytimg.com;
+media-src 'none';
+script-src 'self' 'nonce-{request_nonce}' https://www.youtube.com https://www.gstatic.com;
+style-src 'self' 'nonce-{request_nonce}';
+frame-src https://www.youtube.com https://www.youtube-nocookie.com;
+connect-src 'self' https://api.trackstacc.live wss://api.trackstacc.live;
+font-src 'self' data:;
+upgrade-insecure-requests;
+report-to csp-endpoint;
+```
+
+If a framework or third-party component temporarily requires inline styles, the exception must be documented and removed before production sign-off. Avoid `unsafe-inline` and `unsafe-eval` in production script policy.
+
+#### 19.6.4 Embed Page CSP
+
+Read-only embed pages require a dynamic per-integration CSP because `frame-ancestors` must match the integration's registered origins.
+
+```text
+default-src 'self';
+base-uri 'self';
+object-src 'none';
+frame-ancestors {integration_allowed_origins};
+form-action 'none';
+img-src 'self' data: https://i.ytimg.com;
+script-src 'self' 'nonce-{request_nonce}' https://www.youtube.com https://www.gstatic.com;
+style-src 'self' 'nonce-{request_nonce}';
+frame-src https://www.youtube.com https://www.youtube-nocookie.com;
+connect-src 'self' https://api.trackstacc.live wss://api.trackstacc.live;
+font-src 'self' data:;
+upgrade-insecure-requests;
+report-to csp-endpoint;
+```
+
+Embed pages must not include integration secrets, host secrets, room passwords, session IDs, or staff role assertions in iframe URLs, JavaScript, localStorage, sessionStorage, postMessage payloads, or public room snapshots.
+
+#### 19.6.5 Frame and Header Policy
+
+1. Use `frame-ancestors 'self'` or a stricter value for native pages.
+2. Use dynamic `frame-ancestors` for embed pages based on registered external origins.
+3. Do not send `X-Frame-Options: DENY` or `SAMEORIGIN` on embed pages because it conflicts with legitimate framing. Native pages may use `SAMEORIGIN` if compatible with CSP.
+4. Set `Referrer-Policy: strict-origin-when-cross-origin`.
+5. Set `Permissions-Policy` to disable unnecessary browser capabilities by default, including camera, microphone, geolocation, payment, and USB.
+6. Set `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` conservatively for native pages; validate compatibility before enabling on embed pages.
+7. Run CSP in report-only mode in staging, enforce in production, and monitor violations by route, integration, and origin.
 
 ---
 
@@ -2132,8 +2937,8 @@ External command ingestion and outbound bot delivery must use defense-in-depth:
 
 ### 20.2 Controls
 
-1. Required manual nickname before participation.
-2. Nickname protection.
+1. Mandatory protected nickname before any native interactive participation (chat, vote, add, react), raising the per-actor cost of chat/queue/vote abuse while keeping listening free.
+2. Nickname protection with password strength checks and per-nickname/IP brute-force rate limits.
 3. Chat rate limits.
 4. Queue add rate limits.
 5. Max video duration.
@@ -2145,6 +2950,8 @@ External command ingestion and outbound bot delivery must use defense-in-depth:
 11. Optional public-room report feature in Phase 2.
 
 ### 20.3 External Integration Abuse Controls
+
+The external integration security architecture is specified authoritatively in Section 19.5. The controls below detail the abuse-specific layering that builds on those security foundations.
 
 #### Command Bridge Controls
 
@@ -2194,6 +3001,9 @@ External command ingestion and outbound bot delivery must use defense-in-depth:
 5. Bot/system announcement for staff actions.
 6. No client-side trust in staff role.
 7. Settings changes should be reversible or clearly announced.
+8. Mute/unmute actions are rate-limited per staff user and per target.
+9. Permanent mutes require explicit confirmation or a dedicated syntax to avoid accidental lifetime bans.
+10. Auto-expiry of timed mutes is checked lazily on the muted participant's next command attempt, ensuring no timer infrastructure is needed.
 
 #### Embed Abuse Controls
 
@@ -2220,6 +3030,8 @@ MVP may collect:
 7. IP-derived rate-limit signals, stored minimally and preferably hashed.
 8. Basic logs for security, debugging, and abuse prevention.
 9. External user IDs, display names, command records, vote records, and staff command audit metadata needed for external integrations.
+
+Listener sessions (native users without a protected nickname) hold no nickname and no password hash; they generate only a minimal read-only session plus the rate-limit and log signals above. A protected nickname password hash is collected only when a user chooses to participate.
 
 ### 21.2 Data Not Collected in MVP
 
@@ -2308,47 +3120,180 @@ Before production launch:
 
 ---
 
-## 23. Error Handling
+## 23. Error Handling and Resilience
 
-### 23.1 User-Facing Errors
+### 23.1 Error Handling Principles
 
-| Scenario                          | Message Direction                                             |
-| --------------------------------- | ------------------------------------------------------------- |
-| Protected nickname wrong password | “That nickname is protected. The password was incorrect.”     |
-| Nickname unavailable in room      | “Someone is already using that nickname in this room.”        |
-| Video too long                    | “This video is longer than the room limit.”                   |
-| Duplicate video                   | “That song is already in the queue.”                          |
-| Video unavailable                 | “This video cannot be played here. Try another YouTube link.” |
-| Queue locked                      | “The host has locked song additions.”                         |
-| Muted                             | “You are muted in this room.”                                 |
-| Rate limited                      | “You’re doing that too quickly. Try again shortly.”           |
-| Mechanic change cooldown          | “Playlist mode was changed recently. Try again later.”        |
-| No veto vote open                 | “No song is currently open for veto voting.”                  |
-| No alternate for veto             | “There is no alternate song in the queue, so veto voting is closed.” |
-| External command unauthorized     | “That music command is not available to you.”                 |
-| External command duplicate        | “That command was already processed.”                         |
-| Song request policy closed        | “Song requests are currently closed.”                         |
+1. Every REST error, WebSocket command error, and external command rejection must use a stable error code from the registry in Section 23.4.
+2. Error codes are machine-readable and stable. User-facing messages may be revised for clarity without changing the code.
+3. Do not leak internal stack traces, SQL details, dependency credentials, HMAC material, room secrets, session tokens, password metadata, or raw signed payloads.
+4. Include a request/correlation ID in every REST response, WebSocket error acknowledgement, external command result, structured log, and audit entry.
+5. Prefer explicit recoverable errors over generic failures. Use `INTERNAL_ERROR` only when no safer, more specific code applies.
+6. Rate-limit and dependency errors must include retry guidance where it is safe to do so.
+7. Privileged command failures should be audit-logged without exposing sensitive implementation details to the external chat.
 
-### 23.2 Server Error Principles
+### 23.2 Transport Error Envelopes
 
-1. Do not leak internal stack traces.
-2. Return structured error codes.
-3. Log enough detail for debugging.
-4. Avoid logging secrets, passwords, full tokens, or sensitive request bodies.
-
-Example error response:
+#### 23.2.1 REST API Error Envelope
 
 ```json
 {
   "error": {
     "code": "VIDEO_TOO_LONG",
     "message": "This video is longer than the room limit.",
+    "requestId": "req_01J...",
+    "retryable": false,
+    "retryAfterSeconds": null,
     "details": {
       "maxDurationSeconds": 600
     }
   }
 }
 ```
+
+REST responses must set the corresponding HTTP status from Section 23.4. `429` responses must include `Retry-After` when a retry time is known. `503` responses should include `Retry-After` only when the service can make a bounded recovery estimate.
+
+#### 23.2.2 WebSocket Error Acknowledgement
+
+Client-to-server Socket.IO events that can fail must acknowledge with the same registry code:
+
+```json
+{
+  "ok": false,
+  "sourceEvent": "queue.item.add",
+  "code": "QUEUE_LOCKED",
+  "message": "The host has locked song additions.",
+  "requestId": "req_01J...",
+  "retryable": false,
+  "retryAfterSeconds": null,
+  "details": {}
+}
+```
+
+Unsolicited server-side errors should use `error` or a domain-specific failure event with the same fields. WebSocket errors must not disconnect the client unless the error is authentication, authorization, protocol abuse, or unrecoverable server degradation.
+
+#### 23.2.3 External Command Result Envelope
+
+External command responses and outbound bot webhook payloads must preserve the same code taxonomy:
+
+```json
+{
+  "ok": false,
+  "resultCode": "EXTERNAL_USER_MUTED",
+  "userMessage": "@alice is muted from song requests and veto voting.",
+  "requestId": "req_01J...",
+  "idempotencyStatus": "processed",
+  "retryable": false,
+  "retryAfterSeconds": null
+}
+```
+
+Accepted duplicate external commands must return the original result where available and set `idempotencyStatus` to `duplicate_replayed`. Duplicate handling must not create a second queue item, vote, setting change, or moderation action.
+
+### 23.3 HTTP Status and Retry Conventions
+
+| Status | Meaning | Retry guidance |
+| ------ | ------- | -------------- |
+| `400` | Invalid request shape, invalid command syntax, invalid URL, invalid enum, or failed validation. | Do not retry without changing input. |
+| `401` | Missing, expired, invalid, or unauthenticated session/integration credential. | Retry only after re-authentication or credential rotation. |
+| `403` | Authenticated actor lacks permission or is blocked by moderation/policy. | Do not automatically retry. |
+| `404` | Room, queue item, track, message, participant, or integration was not found or not visible to actor. | Do not automatically retry. |
+| `409` | State conflict, duplicate request, nickname taken, mechanic transition conflict, or idempotency collision. | Retry only after refreshing state or using a new idempotency key where appropriate. |
+| `422` | Semantically valid request shape but impossible domain action, such as no veto window or no alternate candidate. | Do not retry without state change. |
+| `429` | Rate-limited by user, room, integration, IP/session, command, or global abuse control. | Retry after `Retry-After` or after the returned cooldown. |
+| `503` | Dependency unavailable, circuit breaker open, degraded mode preventing requested write, or maintenance. | Retry after backoff if `retryable=true`. |
+| `500` | Unexpected server error. | Retry with backoff only for idempotent reads or idempotent writes. |
+
+### 23.4 Formal Error Code Registry
+
+| Code | HTTP | Applies to | User-facing message direction | Retry guidance |
+| ---- | ---- | ---------- | ----------------------------- | -------------- |
+| `VALIDATION_FAILED` | 400 | REST, WebSocket, external command | "Some fields are missing or invalid." | Correct input before retrying. |
+| `INVALID_COMMAND_SYNTAX` | 400 | External command | "That music command was not understood. Try `!help music`." | Correct command before retrying. |
+| `AUTH_REQUIRED` | 401 | REST, WebSocket | "Please join the room again." | Rejoin or refresh session. |
+| `SESSION_INVALID` | 401 | REST, WebSocket | "Your room session expired. Please rejoin." | Rejoin room. |
+| `WEBSOCKET_TOKEN_INVALID` | 401 | WebSocket | "Realtime connection could not be authenticated." | Refresh session and reconnect. |
+| `INTEGRATION_AUTH_INVALID` | 401 | External command | "Music command integration is not authenticated." | Rotate or fix integration credential; do not expose detail to chat. |
+| `FORBIDDEN` | 403 | REST, WebSocket, external command | "You are not allowed to do that." | Do not retry unless permissions change. |
+| `HOST_REQUIRED` | 403 | REST, WebSocket, external command | "Only the host can do that." | Do not retry unless actor becomes host. |
+| `MODERATOR_REQUIRED` | 403 | REST, WebSocket, external command | "Only a host or moderator can do that." | Do not retry unless role changes. |
+| `EXTERNAL_COMMAND_UNAUTHORIZED` | 403 | External command | "That music command is not available to you." | Do not retry unless staff mapping changes. |
+| `EXTERNAL_ROLE_UNTRUSTED` | 403 | External command | "That staff role could not be verified." | Fix integration role mapping before retrying. |
+| `MUTED` | 403 | REST, WebSocket | "You are muted in this room." | Do not retry until unmuted or mute expires. |
+| `BANNED` | 403 | REST, WebSocket | "You cannot participate in this room." | Do not retry. |
+| `EXTERNAL_USER_MUTED` | 403 | External command | "You are muted from song requests and veto voting." | Do not retry until unmuted or mute expires. |
+| `ROOM_NOT_FOUND` | 404 | REST, WebSocket, external command | "Room not found." | Check room link or integration room ID. |
+| `QUEUE_ITEM_NOT_FOUND` | 404 | REST, WebSocket, external command | "That queue item was not found." | Refresh queue or use a valid reference. |
+| `TRACK_NOT_FOUND` | 404 | REST, WebSocket | "That track was not found." | Refresh state before retrying. |
+| `CHAT_MESSAGE_NOT_FOUND` | 404 | REST, WebSocket | "That chat message was not found." | Refresh chat before retrying. |
+| `EXTERNAL_INTEGRATION_NOT_FOUND` | 404 | External command | "Music integration was not found." | Fix integration ID/configuration. |
+| `NICKNAME_REQUIRED` | 409 | REST, WebSocket | "Choose a nickname before participating." | Join with nickname. |
+| `NICKNAME_PROTECTION_REQUIRED` | 409 | REST, WebSocket | "Set a password for your nickname to chat and take part." | Claim or authenticate a protected nickname, then retry. |
+| `LISTENER_READ_ONLY` | 403 | REST, WebSocket | "You're listening as a guest. Get a protected nickname to do that." | Upgrade to a protected nickname (member tier), then retry. |
+| `NICKNAME_TAKEN` | 409 | REST | "Someone is already using that nickname in this room." | Choose another nickname. |
+| `NICKNAME_PROTECTED` | 409 | REST | "That nickname is protected. Enter its password to use it." | Retry with password. |
+| `NICKNAME_PASSWORD_INCORRECT` | 403 | REST | "That nickname is protected. The password was incorrect." | Retry carefully; rate limits apply. |
+| `NICKNAME_PASSWORD_RATE_LIMITED` | 429 | REST | "Too many incorrect attempts. Try again later." | Retry after cooldown. |
+| `ROOM_PASSWORD_REQUIRED` | 401 | REST | "This room requires a password." | Retry with password. |
+| `ROOM_PASSWORD_INCORRECT` | 403 | REST | "Room password was incorrect." | Retry carefully; rate limits apply. |
+| `QUEUE_LOCKED` | 403 | REST, WebSocket, external command | "The host has locked song additions." | Retry only after queue unlock. |
+| `CHAT_LOCKED` | 403 | REST, WebSocket | "Chat is locked right now." | Retry only after chat unlock. |
+| `SONG_REQUEST_POLICY_CLOSED` | 403 | REST, WebSocket, external command | "Song requests are currently closed." | Retry only after policy changes. |
+| `SONG_REQUEST_COOLDOWN` | 429 | REST, WebSocket, external command | "You can request another song after the cooldown." | Retry after returned cooldown. |
+| `MAX_PENDING_PER_USER_REACHED` | 409 | REST, WebSocket, external command | "Wait until one of your songs resolves before adding another." | Retry after queue state changes. |
+| `QUEUE_FULL` | 409 | REST, WebSocket, external command | "The queue is full right now." | Retry after queue shrinks. |
+| `VIDEO_URL_INVALID` | 400 | REST, WebSocket, external command | "Enter a valid YouTube video URL." | Correct URL before retrying. |
+| `VIDEO_UNAVAILABLE` | 422 | REST, WebSocket, external command | "This video cannot be played here. Try another YouTube link." | Choose another video. |
+| `VIDEO_TOO_LONG` | 422 | REST, WebSocket, external command | "This video is longer than the room limit." | Choose shorter video or request host approval. |
+| `DUPLICATE_VIDEO` | 409 | REST, WebSocket, external command | "That song is already in the queue." | Choose another video or wait for duplicate window to pass. |
+| `YOUTUBE_METADATA_DEGRADED` | 503 | REST, WebSocket, external command | "YouTube metadata is temporarily limited. The song may be queued with partial details." | Retry metadata lookup later; queue write may still succeed when allowed. |
+| `VOTE_NOT_ALLOWED` | 403 | REST, WebSocket, external command | "You cannot vote on this item." | Do not retry unless eligibility changes. |
+| `NO_VETO_OPEN` | 422 | REST, WebSocket, external command | "No song is currently open for veto voting." | Retry when a veto window opens. |
+| `NO_ALTERNATE_FOR_VETO` | 422 | REST, WebSocket, external command | "There is no alternate song in the queue, so veto voting is closed." | Retry after another eligible song is queued. |
+| `VETO_WINDOW_CLOSED` | 409 | REST, WebSocket, external command | "Voting for that song has closed." | Wait for next candidate. |
+| `MECHANIC_CHANGE_COOLDOWN` | 429 | REST, WebSocket | "Playlist mode was changed recently. Try again later." | Retry after cooldown. |
+| `EXTERNAL_COMMAND_REPLAY` | 409 | External command | "That command could not be processed." | Do not retry same signed payload. |
+| `EXTERNAL_COMMAND_DUPLICATE` | 409 | External command | "That command was already processed." | Do not create another command; return original result where possible. |
+| `RATE_LIMITED` | 429 | REST, WebSocket, external command | "You're doing that too quickly. Try again shortly." | Retry after `Retry-After`. |
+| `WEBHOOK_DELIVERY_DEFERRED` | 503 | External command/outbound webhook | "Command accepted, but the chat announcement is delayed." | No user retry needed; system retries webhook. |
+| `DEPENDENCY_UNAVAILABLE` | 503 | REST, WebSocket, external command | "A required service is temporarily unavailable." | Retry with backoff if retryable. |
+| `SERVICE_DEGRADED` | 503 | REST, WebSocket, external command | "Trackstacc is running in degraded mode. Try again shortly." | Retry with backoff if retryable. |
+| `INTERNAL_ERROR` | 500 | REST, WebSocket, external command | "Something went wrong. Try again." | Retry idempotent operations with backoff; report request ID if persistent. |
+
+### 23.5 User-Facing Error Message Requirements
+
+1. User-facing messages must be short, action-oriented, and safe to display in native UI or external chat.
+2. External command failures should mention the actor only when the embedding site's display name has already been sanitized.
+3. Staff-only failure reasons should not reveal staff allowlists, secret validation details, raw role claims, or moderation identifiers.
+4. Dependency failures should distinguish between "request rejected" and "request accepted but announcement delayed."
+5. The UI should map `retryAfterSeconds` to countdown text when present.
+
+### 23.6 Circuit Breakers and Graceful Degradation
+
+Trackstacc must treat external dependencies as unreliable and use explicit circuit breakers, timeouts, and degraded-mode behavior. Circuit breaker state should be visible in health/readiness checks, logs, metrics, and alerts.
+
+| Dependency | Timeout target | Open breaker trigger | Open duration | Fallback / degraded behavior | User-visible behavior |
+| ---------- | -------------- | -------------------- | ------------- | ---------------------------- | --------------------- |
+| YouTube Data API / metadata lookup | 2s connect, 4s total request | 5 failures or timeout rate >50% over 60s | 60s, then half-open probe | Queue by validated video ID with `metadata_status=partial` when room policy allows; defer metadata enrichment to worker; disable in-app search while open. | Song request may succeed with partial title/thumbnail; search shows temporary outage. |
+| Redis | 500ms connect, 1s operation | 3 consecutive connection failures or p95 Redis latency >1s for 60s | 30s, then half-open probe | Fail closed for rate-limit-protected writes, external commands, nickname password attempts, and staff actions; allow safe reads from PostgreSQL; mark presence approximate; avoid cross-instance broadcast assumptions. | Writes that require rate limiting or distributed coordination return `SERVICE_DEGRADED`; room may show "realtime degraded." |
+| PostgreSQL | 1s connect, 3s query for interactive routes | 3 consecutive failed health probes or pool exhaustion for 30s | 30s, then half-open probe | Readiness fails; durable reads/writes stop; optionally serve cached read-only room snapshot if marked stale and no secrets are exposed. | Most actions return `DEPENDENCY_UNAVAILABLE`; health readiness reports unavailable. |
+| Outbound bot webhook endpoint | 2s connect, 5s total request | 5 consecutive delivery failures, repeated 429/5xx, or timeout rate >50% over 5 minutes per integration | 5 minutes, then half-open probe | Do not roll back accepted queue, vote, playback, moderation, or setting changes; enqueue bounded retries with exponential backoff and idempotent delivery IDs; move exhausted deliveries to dead-letter queue. | External command can return success with `WEBHOOK_DELIVERY_DEFERRED` note when only announcement delivery failed. |
+
+#### 23.6.1 Circuit Breaker State Machine
+
+1. **Closed:** dependency is healthy; normal operations allowed.
+2. **Open:** dependency is considered unhealthy; protected calls fail fast or use documented fallback.
+3. **Half-open:** allow a small number of probe requests. Close breaker after successful probes; reopen on failure.
+4. Circuit breaker transitions must emit structured logs and metrics tagged by dependency, operation, room/integration where applicable, and environment.
+5. Manual override may force a dependency into maintenance/degraded mode, but the override must be auditable.
+
+#### 23.6.2 Dependency-Specific Degradation Rules
+
+1. **YouTube metadata degradation:** The queue engine may accept a song with only a validated video ID if the URL format is valid, room duration policy can be enforced from cache or deferred policy, and the room does not require complete metadata before acceptance. If max-duration cannot be verified and the room requires strict duration enforcement, reject with `YOUTUBE_METADATA_DEGRADED` rather than accepting an unknown-duration video.
+2. **Redis degradation:** Because Redis backs rate limits and realtime coordination, abuse-sensitive writes must fail closed when Redis is unavailable. This includes external song requests, external votes, staff commands, nickname password attempts, room creation bursts, and public-room queue writes. Local in-memory fallback may be used only for development or single-instance emergency operation and must be marked unsafe for horizontal scale.
+3. **PostgreSQL degradation:** PostgreSQL is the source of truth. Do not accept queue, chat, moderation, playback, nickname, integration, or settings writes unless they can be durably committed. Redis/cache state must not become authoritative.
+4. **Webhook degradation:** Webhook failure is non-transactional relative to room state. The command result should distinguish accepted state changes from delayed external announcements.
+5. **Readiness:** `/health` may remain alive during degraded mode; `/health/ready` must fail when PostgreSQL is unavailable or when Redis is unavailable for deployments where realtime/rate-limit correctness is required.
 
 ---
 
@@ -2378,6 +3323,7 @@ Track:
 18. Outbound bot webhook failures and retry counts.
 19. Integration abuse/rate-limit triggers.
 20. External staff command volume and settings changes.
+21. External mute/unmute actions and currently active mute counts.
 
 ### 24.2 Logs
 
@@ -2394,6 +3340,7 @@ Use structured logs with:
 9. External user ID hash where needed for abuse investigation.
 10. External message ID and idempotency result.
 11. Webhook delivery ID and result.
+12. Mute/unmute action reason and duration.
 
 Do not log:
 
@@ -2467,6 +3414,7 @@ Test:
 5. Queue selection algorithms.
 6. Vote scoring.
 7. Permission checks.
+8. Native access-tier gating (Listener vs member) for interactive actions.
 8. Rate-limit calculations.
 9. Mechanic change transition rules.
 10. External command parsing.
@@ -2479,11 +3427,11 @@ Test:
 
 Test:
 
-1. Create room → join room → chat.
-2. Join with unprotected nickname.
-3. Protect nickname → rejoin with password.
+1. Open room as Listener → listen and view playlist → attempt to chat → rejected with upgrade prompt.
+2. Claim protected nickname (protect-and-join) → Listener session upgraded to member in place → chat succeeds.
+3. Authenticate existing protected nickname → rejoin with password.
 4. Attempt protected nickname with wrong password.
-5. Add YouTube URL → queue item created.
+5. Add YouTube URL → queue item created (member only).
 6. Current track ends → next track selected.
 7. Host changes mechanic → current song unaffected.
 8. Moderator removes queue item.
@@ -2502,6 +3450,7 @@ Test:
 
 1. Connect with valid token.
 2. Reject invalid token.
+3. Reject member-only event on a listener-tier connection with `LISTENER_READ_ONLY`.
 3. Broadcast chat to room only.
 4. Broadcast queue updates.
 5. Reconnect and receive snapshot.
@@ -2514,14 +3463,16 @@ Test:
 
 Test with Playwright or Cypress:
 
-1. Two users join same room with different nicknames.
+1. Two users join same room with different protected nicknames.
 2. User A sends chat; User B sees it.
 3. User A adds song; User B sees queue update.
 4. Host changes playlist mechanic; both users see system message.
 5. Protected nickname cannot be used by another user without password.
-6. Read-only embed displays current track, queue, veto status, and command hints.
-7. Embed does not expose mutation controls by default.
-8. External chat command flow posts a bot-style result back into a test embedding site harness.
+6. Listener opens room, hears playback and views playlist, and is blocked from chatting/voting/adding with an upgrade prompt.
+7. Listener claims a protected nickname (protect-and-join) and gains full functionality without losing playback.
+8. Read-only embed displays current track, queue, veto status, and command hints.
+9. Embed does not expose mutation controls by default.
+10. External chat command flow posts a bot-style result back into a test embedding site harness.
 
 ### 26.5 Load Tests
 
@@ -2542,9 +3493,9 @@ Scenarios:
 
 ### 27.1 MVP Must-Haves
 
-1. Create room.
-2. Join room with required manual nickname.
-3. Optional protected nickname creation and authentication.
+1. Create room (host must hold a protected nickname).
+2. Open any room as a read-only Listener (hear playback, view playlist) with no nickname or password.
+3. Mandatory protected nickname creation/authentication as the gate to chat, vote, add songs, and all other native interactive functionality.
 4. YouTube URL paste to add track.
 5. Shared queue.
 6. Current track playback with YouTube embed.
@@ -2597,34 +3548,40 @@ Scenarios:
 
 ---
 
-## 28. Open Questions
+## 28. Decision Log
 
-1. Should protected nicknames be global across the entire app or scoped to rooms? Recommended: global.
-2. Should room host authority be based on host link, host password, protected nickname binding, or a combination? Recommended MVP: host link/session; Phase 2: bind to protected nickname.
-3. Should temporary rooms expire after 7, 14, or 30 days of inactivity?
-4. Should chat history be visible to users who join later?
-5. Should public rooms appear in a directory in MVP or only later?
-6. Should voting allow downvotes or only upvotes?
-7. Should host-curated rooms allow participant suggestions by default?
-8. How strict should nickname content moderation be?
-9. What minimum password length should protected nicknames require?
-10. What is the acceptable YouTube playback sync tolerance?
-11. Should external site integration be included in MVP delivery or treated as MVP/Phase 2 depending on current native-room completion?
-12. Should external participant records be retained per room, per integration, or globally per embedding site?
-13. Should requester's own `!yay`/`!nay` count in pre-play veto by default long term?
-14. When repeated vetoes exhaust alternatives, should rooms always play the last candidate, stop gracefully, or let hosts choose?
-15. What account-age or trust signals should embedding sites optionally send for voter eligibility?
-16. Should staff command changes require chat confirmation for destructive or broad actions in Phase 2?
-17. What webhook retry limits and dead-letter behavior should be exposed to webmasters?
-18. Should external command prefixes be unique per room/channel, or can multiple integrations share the same prefix?
+All 18 open questions from previous versions have been resolved. Two additional decisions (DL-019, DL-020) were recorded in v1.4.0 for the mandatory native nickname-protection feature. Decisions are recorded below with rationale and status.
+
+| ID | Question | Decision | Rationale | Status |
+| -- | -------- | -------- | --------- | ------ |
+| DL-001 | Should protected nicknames be global across the entire app or scoped to rooms? | **Global.** | Global nicknames make identity meaningful across rooms and align with the product goal of lightweight identity continuity. Room-scoped nicknames would create confusion when users move between rooms. | Accepted |
+| DL-002 | Should room host authority be based on host link, host password, protected nickname binding, or a combination? | **MVP: host link/session. Phase 2: bind to protected nickname.** | Host link/session is simplest for MVP and matches the no-registration model. Binding to a protected nickname in Phase 2 adds recovery and continuity without requiring account registration. | Accepted |
+| DL-003 | Should temporary rooms expire after 7, 14, or 30 days of inactivity? | **14 days.** | 14 days balances storage efficiency with user expectations. 7 days is too aggressive for rooms that might be used weekly; 30 days retains too much stale data. Configurable per-room in Phase 2. | Accepted |
+| DL-004 | Should chat history be visible to users who join later? | **Yes, limited to the most recent 100 messages.** | Providing context helps late joiners understand the room state. The limit prevents overwhelming new participants and bounds storage/rendering cost. Paginated history is available via REST for older messages. | Accepted |
+| DL-005 | Should public rooms appear in a directory in MVP or only later? | **Phase 2 only.** | MVP should focus on core room experience and moderation foundations. A public directory without mature moderation tools risks surfacing abusive or low-quality rooms. | Accepted |
+| DL-006 | Should voting allow downvotes or only upvotes? | **Upvotes only in MVP; downvotes configurable in Phase 2.** | Upvote-only is simpler, friendlier for small groups, and avoids negative social dynamics in early rooms. Downvotes can be added as a room setting once moderation tools are mature. | Accepted |
+| DL-007 | Should host-curated rooms allow participant suggestions by default? | **No.** Suggestions are disabled by default in host-curated mode. The host can enable the suggestions mechanic separately. | Host-curated mode is designed for full host control. Auto-enabling suggestions would undermine the curator's intent. Suggestion mode exists as a separate mechanic for rooms that want moderated input. | Accepted |
+| DL-008 | How strict should nickname content moderation be? | **Block reserved names (admin, system, moderator, host, youtube, support) and visually confusable variants. No profanity filter in MVP.** | Reserved name blocking prevents impersonation of system roles. Profanity filtering is culturally variable and error-prone; defer to host moderation tools. Revisit with a configurable filter in Phase 2 if needed. | Accepted |
+| DL-009 | What minimum password length should protected nicknames require? | **10 characters.** | 10 characters provides reasonable entropy for a no-recovery password system while being memorable. Shorter passwords increase brute-force risk against a system with no password reset. Strength checks (reject common passwords) supplement the length requirement. | Accepted |
+| DL-010 | What is the acceptable YouTube playback sync tolerance? | **3 seconds.** | YouTube IFrame playback varies by client network, device, and buffer state. 3 seconds is acceptable for social listening rooms and matches the existing NFR-003 target. Tighter sync would require custom media synchronization infrastructure beyond MVP scope. | Accepted |
+| DL-011 | Should external site integration be included in MVP delivery or treated as MVP/Phase 2 depending on current native-room completion? | **External integration is an MVP should-have (Section 27.2). Prioritize native room completion first; external integration follows in the same release if schedule permits, otherwise Phase 2.** | Native room experience is the product foundation. External integration adds significant surface area. Delivering it as a stretch goal within MVP preserves optionality without blocking the core launch. | Accepted |
+| DL-012 | Should external participant records be retained per room, per integration, or globally per embedding site? | **Per integration per room.** | Per-integration-per-room scoping matches the data model constraint `UNIQUE(integration_id, room_id, external_user_id)` and ensures moderation state (mutes, bans) is room-scoped. Cross-room identity correlation is a Phase 2 consideration. | Accepted |
+| DL-013 | Should requester's own `!yay`/`!nay` count in pre-play veto by default long term? | **Yes, allow requester votes unless abuse data suggests otherwise.** | Disallowing requester votes penalizes good-faith requesters and adds implementation complexity. If abuse patterns emerge (requesters always self-voting to block vetoes), a configurable policy can be introduced. | Accepted |
+| DL-014 | When repeated vetoes exhaust alternatives, should rooms always play the last candidate, stop gracefully, or let hosts choose? | **MVP: play the last candidate without veto. Phase 2: make this configurable per room (play last, stop, or loop to first non-vetoed).** | Playing the last candidate ensures the room always has music. Stopping gracefully could frustrate listeners. Configurability is a natural Phase 2 addition. | Accepted |
+| DL-015 | What account-age or trust signals should embedding sites optionally send for voter eligibility? | **MVP: no mandatory trust signals beyond stable external user ID. Accept optional `accountCreatedAt` and `messageCount` fields in the command payload for future eligibility rules.** | Requiring trust signals would increase integration complexity and block adoption. Accepting optional fields future-proofs the payload without imposing requirements on embedding sites. | Accepted |
+| DL-016 | Should staff command changes require chat confirmation for destructive or broad actions in Phase 2? | **Yes, Phase 2 should add confirmation for destructive actions such as clearing the queue, changing request policy to closed, and permanent mutes.** | Destructive actions are difficult to reverse. Chat-based confirmation ("Type `!confirm` within 15s to clear the queue") adds a friction layer that prevents accidental damage. MVP staff commands execute immediately because the integration surface is small and staff users are trusted. | Accepted |
+| DL-017 | What webhook retry limits and dead-letter behavior should be exposed to webmasters? | **3 retries with exponential backoff (2s, 8s, 32s). Failed deliveries after retries move to a dead-letter queue. MVP does not expose dead-letter inspection to webmasters; Phase 2 adds a webhook delivery dashboard.** | Bounded retries prevent runaway retry loops. Dead-letter queuing ensures no delivery is silently lost. Exposing the dead-letter queue in MVP adds integration dashboard scope that is not needed for initial adoption. | Accepted |
+| DL-018 | Should external command prefixes be unique per room/channel, or can multiple integrations share the same prefix? | **Command prefixes must be unique per room per channel.** | Shared prefixes would create ambiguity about which integration should process a command. Uniqueness per room/channel is enforced as a `UNIQUE(room_id, channel_id, command_prefix)` constraint or equivalent application-layer validation. | Accepted |
+| DL-019 | Should nickname protection be mandatory for native participation, and what can users without one do? | **Mandatory for participation, free to listen.** On the native `trackstacc.live` site, a password-protected nickname is required to chat, vote, add songs, react, or moderate. Users without one are read-only Listeners who may open rooms to hear playback and view the playlist. The requirement does not apply to external embeds or external chat command integrations. | Lifting the bar to a protected nickname makes every interactive actor accountable and impersonation-resistant, which strengthens moderation and abuse prevention, while free listening preserves low-friction reach and the no-registration ethos. Scoping the rule to the native site avoids disturbing the already-secure server-to-server embed model. This supersedes the previous "protection is optional" stance (v1.4.0; see Section 29). | Accepted |
+| DL-020 | Can native Listeners read chat, and what is the default? | **Configurable per room via `listener_chat_visible`, default hidden.** Listeners get playback and the playlist by default; chat is hidden from them unless a host opts in. | The literal v1.4.0 scope is "listen and view the playlist," so the safe default keeps chat private to participants and avoids exposing conversation to unaccountable viewers. Hosts who want a more open, broadcast-style room can reveal read-only chat. | Accepted |
 
 ---
 
 ## 29. Recommended Product Decisions
 
-1. **Require manual nickname entry before participation.** This is central to the product identity.
-2. **Make nickname protection optional.** Do not force password creation.
-3. **Warn clearly that nickname passwords cannot be recovered.** This avoids support expectations.
+1. **Let anyone listen for free.** Opening a native room to hear playback and view the playlist requires no nickname or password, preserving low-friction reach.
+2. **Require a protected nickname for native participation.** As of v1.4.0, chatting, voting, adding songs, reacting, and moderating require a password-protected nickname. This supersedes the earlier "protection is optional" recommendation; it makes every interactive actor accountable without introducing email or account registration (see DL-019).
+3. **Warn clearly that nickname passwords cannot be recovered.** This is now doubly important because a forgotten password blocks participation, not just a single nickname; the warning avoids support expectations.
 4. **Use global protected nicknames.** This makes identity meaningful across rooms.
 5. **Let host change playlist mechanic later.** This is useful and should be supported.
 6. **Do not interrupt current song when mechanic changes.** This avoids chaotic room behavior.
@@ -2642,24 +3599,43 @@ Scenarios:
 
 ## 30. Implementation Milestones
 
+### 30.0 Team Assumptions and Effort Conventions
+
+Estimates assume a small product team of 2–3 full-stack engineers, 1 product/design resource (part-time), and access to a part-time DevOps/infrastructure resource. Effort is expressed in t-shirt sizes per milestone:
+
+| Size | Approximate Duration (2–3 engineers) | Story Points (relative) |
+| ---- | ------------------------------------ | ----------------------- |
+| S    | 1–2 weeks | 5–13 |
+| M    | 2–4 weeks | 13–21 |
+| L    | 4–6 weeks | 21–34 |
+| XL   | 6–10 weeks | 34–55 |
+
+Total estimated MVP duration: 16–24 weeks for Milestones 1–6 with 2–3 engineers. Milestone 7 (external integrations) adds 6–10 weeks if included in MVP.
+
 ### Milestone 1: Foundation
 
+**Effort: M (2–4 weeks)**
+
 1. Project setup.
-2. Database schema.
-3. Room creation.
-4. Nickname join flow.
-5. Session management.
-6. WebSocket connection and room snapshot.
+2. Database schema (including `room_sessions.access_tier` and `rooms.listener_chat_visible`).
+3. Room creation (host protect-and-join).
+4. Listener session (`/listen`) and member join/upgrade flow with the two-tier access model.
+5. Session management with tier encoded in the signed token; server-side tier gating middleware (FR-028, NFR-038).
+6. WebSocket connection and room snapshot, tier-aware.
 
 ### Milestone 2: Chat and Presence
 
-1. Real-time chat.
+**Effort: S (1–2 weeks)**
+
+1. Real-time chat (member-tier send only; Listener visibility gated by `listener_chat_visible`).
 2. System messages.
 3. Presence list.
 4. Chat rate limiting.
 5. Mute support.
 
 ### Milestone 3: YouTube Queue and Playback
+
+**Effort: M (2–4 weeks)**
 
 1. YouTube URL parser.
 2. Metadata fetch/cache.
@@ -2670,6 +3646,8 @@ Scenarios:
 
 ### Milestone 4: Playlist Mechanics
 
+**Effort: M (2–4 weeks)**
+
 1. FIFO mode.
 2. Voting mode.
 3. Host-curated mode.
@@ -2677,15 +3655,23 @@ Scenarios:
 5. Queue transition policies.
 6. System/audit messages.
 
-### Milestone 5: Nickname Protection
+### Milestone 5: Nickname Protection (Participation Gate)
 
-1. Claim nickname.
+**Effort: M (2–4 weeks)**
+
+Note: the core tier model and server-side gating land in Milestone 1 because chat (M2) and queue (M3/M4) depend on it. This milestone completes the protection feature set and the Listener-to-member experience.
+
+1. Claim nickname (single-step protect-and-join).
 2. Authenticate protected nickname.
 3. Failed attempt rate limiting.
-4. Protected nickname UI states.
-5. Password warning and validation.
+4. Listener-tier UI: read-only experience plus inline upgrade prompts wherever interactive controls are gated (FR-029).
+5. In-place Listener-to-member session upgrade without full rejoin.
+6. Protected nickname UI states.
+7. Password warning and validation, including the "no recovery blocks participation" messaging.
 
 ### Milestone 6: Moderation and Hardening
+
+**Effort: M (2–4 weeks)**
 
 1. Ban support.
 2. Remove queue item.
@@ -2696,6 +3682,8 @@ Scenarios:
 7. Terms/privacy/compliance review.
 
 ### Milestone 7: External Embeds and Chat Integrations
+
+**Effort: XL (6–10 weeks)**
 
 1. Site integration configuration and secret management.
 2. Read-only room/player/queue embed with origin allowlist.
@@ -2711,23 +3699,56 @@ Scenarios:
 
 ## 31. Acceptance Criteria
 
+### 31.0 Priority 1 Audit Remediation
+
+- The SDD includes a formal error code registry for REST, WebSocket, and external command responses.
+- REST, WebSocket, and external command errors use consistent structured envelopes, request IDs, retryability fields, and retry guidance.
+- Native pages, REST APIs, Socket.IO, embed pages, and external command endpoints have explicit CORS and CSP policies.
+- Dependency circuit breaker behavior is specified for YouTube Data API, Redis, PostgreSQL, and outbound webhook endpoints.
+- The backend framework decision is resolved as Fastify 5 with TypeScript and Socket.IO for MVP.
+- The permission matrix covers External Participant, External Staff, and Integration Bot roles.
+
+### 31.0.1 Priority 2 Audit Remediation
+
+- Architecture diagrams (system context, container, component dependency direction) are included in Section 12.5.
+- Three sequence diagrams are included for critical flows: external song request lifecycle, pre-play veto voting cycle, and playlist mechanic change with queue transition (Section 12.6).
+- A database migration strategy covers Prisma Migrate tooling, zero-downtime patterns, rollback procedures, and migration testing (Section 14.3).
+- API conventions document versioning strategy, pagination format, rate limit response headers, request ID correlation, and naming conventions (Section 15.1).
+- WebSocket reconnection backoff is specified with exponential backoff, jitter, retry limits, and user-facing behavior per phase (Section 16.1.1).
+- External integration security content is consolidated under Section 19.5 as the single authoritative source, with cross-references from Sections 12.4, 13.11, 20.3, 31.7, and 31.9.
+- All 18 open questions are resolved in a formal decision log with rationale and accepted status (Section 28).
+- Implementation milestones include team assumptions and t-shirt effort estimates (Section 30.0).
+- A requirements traceability matrix maps FRs and NFRs to design components, API endpoints, and test coverage areas (Appendix D).
+
+### 31.0.2 v1.4.0 Mandatory Native Nickname Protection
+
+- Any user can open a native room and listen to playback and view the playlist with no nickname and no password.
+- A Listener attempting to chat, vote, add a song, react, skip-vote, or perform a moderation/settings action is rejected with `LISTENER_READ_ONLY` or `NICKNAME_PROTECTION_REQUIRED` and shown a prompt to claim or authenticate a protected nickname.
+- A user can obtain full functionality by either authenticating an existing protected nickname or claiming a new one with a password in a single protect-and-join step.
+- A Listener session can be upgraded to member tier in place without losing playback continuity.
+- Tier enforcement is applied server-side on every REST request and WebSocket event and cannot be bypassed by client manipulation (NFR-038).
+- Native Listeners can read chat only when the room's `listener_chat_visible` setting is enabled; the default is hidden.
+- The host must hold a protected nickname to exercise host authority; an unauthenticated creator is treated as a Listener of their own room until they protect a nickname.
+- External embeds and external chat command integrations are unaffected: they neither require nor prompt for a native protected nickname.
+
 ### 31.1 Room Creation
 
 - A user can create a room without email or registration.
 - A host session is established.
 - A shareable room link is generated.
-- Host can enter the room with a manually chosen nickname.
+- Host can enter the room with full authority only after claiming or authenticating a protected nickname.
 
 ### 31.2 Room Join
 
-- A visitor cannot chat, vote, or add songs before entering a nickname.
-- The app never assigns a generic guest nickname.
-- Protected nicknames require password authentication.
+- A Listener (no protected nickname) cannot chat, vote, or add songs, and is prompted to get a protected nickname.
+- The app never assigns a generic guest nickname; a Listener has no nickname at all.
+- Joining as a member requires a protected nickname (authenticated or newly claimed with a password).
 - Wrong protected nickname password is rejected and rate-limited.
 
 ### 31.3 Chat
 
-- Participants can exchange real-time messages.
+- Member-tier participants can exchange real-time messages.
+- Listeners cannot send chat; they can read it only when `listener_chat_visible` is enabled.
 - Muted users cannot send chat messages.
 - Chat messages are sanitized.
 - System messages appear for relevant room events.
@@ -2757,6 +3778,8 @@ Scenarios:
 
 ### 31.7 External Site Integration
 
+External integration security requirements are specified authoritatively in Section 19.5. The acceptance criteria below verify implementation of those requirements.
+
 - Host can create an external site integration with allowed origin, channel ID, command prefix, webhook URL, enabled commands, and staff mappings.
 - Trackstacc returns an iframe embed URL and one-time server-side integration secret material.
 - Read-only embed displays current track, YouTube player where configured, queue preview, pre-play veto state, command hints, and request policy state.
@@ -2778,6 +3801,8 @@ Scenarios:
 
 ### 31.9 External Staff Commands and Abuse Controls
 
+Staff command authorization and abuse controls follow the authoritative security specification in Section 19.5 and abuse controls in Section 20.3.
+
 - Staff commands are authorized server-side through external user ID allowlist or trusted role mapping.
 - `!rm <ref>` removes a queue item and announces the result.
 - `!skip <reason>` force-skips current song and records the reason in audit metadata.
@@ -2785,6 +3810,10 @@ Scenarios:
 - Staff actions are audit logged and announced.
 - Outbound bot webhooks are signed and webhook failure does not roll back successful room state changes.
 - Embed origins are restricted and integration secrets are never exposed to browser embeds.
+- `!music mute <@displayName | externalUserId> [duration]` blocks the target's `!sr`, `!yay`, and `!nay` commands while still allowing `!song` and `!queue`.
+- Timed mutes auto-expire after their configured duration.
+- `!music unmute <@displayName | externalUserId>` lifts a mute early and restores the target's permissions immediately.
+- Mute/unmute actions are audit logged and announced as bot messages.
 
 ---
 
@@ -2796,7 +3825,9 @@ Scenarios:
 | YouTube embed restrictions      | Some videos fail to play      | Detect failures, mark failed, skip gracefully.                    |
 | No-registration abuse           | Spam and impersonation        | Rate limits, protected nicknames, host moderation.                |
 | Host link leaked                | Room takeover risk            | Host secret rotation in Phase 2, bind host to protected nickname. |
-| Forgotten nickname passwords    | Support burden                | Clear warning; no recovery in MVP.                                |
+| Forgotten nickname passwords    | Support burden; also blocks participation entirely under that nickname | Clear up-front warning; no recovery in MVP; Phase 2 recovery without mandatory registration (LIM-001). |
+| Mandatory protection reduces participation | Fewer users convert from listening to chatting/queuing | Keep listening fully free and instant; one-step protect-and-join; inline, contextual upgrade prompts rather than hard walls. |
+| Listener confusion about why controls are disabled | Frustration, perceived bugs | Show clear "get a protected nickname to take part" prompts in place of gated controls (FR-029); never silently fail. |
 | Public room moderation          | Toxic behavior                | Delay public directory until moderation tools mature.             |
 | Playback sync drift             | Poor listening experience     | Periodic resync and server-authoritative state.                   |
 | XSS via chat/nicknames/metadata | Security incident             | Escape output, sanitize input, CSP.                               |
@@ -2806,6 +3837,8 @@ Scenarios:
 | Staff role spoofing             | Privileged abuse              | Staff allowlists and trusted role mappings configured per integration. |
 | Webhook failure                 | Missing chat announcements    | Retry with backoff, log failures, and avoid rolling back successful state changes. |
 | Embed secret leakage            | Integration compromise        | Public embed token separate from server-side secret; no secrets in browser payloads. |
+| Mute abuse / accidental permanent mutes | Blocked legitimate participants indefinitely | Rate-limit mute commands per actor, audit every mute, require explicit duration formatting, allow early unmute. |
+| TTL-based auto-expiry race    | Expired mute not detected quickly | Lazy check on next command is acceptable; periodic cleanup can supplement. |
 
 ---
 
@@ -2821,6 +3854,8 @@ Scenarios:
 | Nickname max length                 | 24 characters.                                      |
 | Nickname min length                 | 2 characters.                                       |
 | Protected nickname password minimum | 10 characters.                                      |
+| Native participation requirement    | Protected nickname required to chat/vote/add/react; listening and viewing the playlist are free. |
+| Listener chat visibility            | Hidden (`listener_chat_visible = false`).           |
 | Skip vote threshold                 | 50% of active non-muted participants, minimum 2.    |
 | Mechanic change cooldown            | None for private rooms; 5 minutes for public rooms. |
 | Temporary room expiration           | 14 days after inactivity.                           |
@@ -2858,6 +3893,8 @@ Scenarios:
 | Staff remove       | `Removed [K7Q] "Song Title" from the queue.`                                |
 | Staff skip         | `@mod skipped "Song Title". Reason: bad audio.`                             |
 | Policy changed     | `Song requests are now limited to 1 request every 90 seconds per user.`      |
+| User muted         | `@alice was muted from song requests for 30 minutes.`                        |
+| User unmuted       | `@alice was unmuted and can request songs again.`                            |
 
 ---
 
@@ -2931,10 +3968,266 @@ Scenarios:
 
 ## 36. Final Recommendation
 
+Version 1.3.0 addresses Priority 1 (implementation sign-off), Priority 2 (design review sign-off), and Priority 3 (living document maintenance) audit findings. The document now includes document metadata with a change log, a table of contents, architecture and sequence diagrams, a database migration strategy, comprehensive API conventions, WebSocket reconnection specification, consolidated security cross-references, a resolved decision log, effort-estimated milestones, a requirements traceability matrix, a Known Limitations and Technical Debt register, a Development Operations section covering CI/CD and environment strategy, formal `external_chat_music` JSONB schema documentation, and a periodic document review schedule.
+
+Version 1.4.0 makes nickname protection mandatory for interactive participation on the native site while keeping listening free, introducing the Listener role and a two-tier native access model. Engineering should treat the server-side tier gate (FR-028, NFR-038), the Listener/member session model, and the protect-and-join flow as baseline MVP requirements landing in Milestone 1, and must preserve the existing read-only external embed and external chat command integration model unchanged.
+
+Engineering should treat the error registry, CORS/CSP rules, dependency circuit breakers, Fastify backend decision, expanded permission matrix, API conventions, migration strategy, reconnection backoff, resolved decision log, and DevOps conventions as baseline MVP requirements rather than optional design notes.
+
 Build the MVP around three core pillars:
 
-1. **Low-friction identity:** manual nicknames, optional password protection, no registration.
+1. **Listen free, participate with identity:** anyone can listen and view the playlist with no onboarding; chatting, voting, and queuing require a password-protected nickname (no registration, no email).
 2. **Healthy collaborative rooms:** real-time chat, queue, voting/FIFO/host modes, and strong host moderation.
 3. **Safe playlist flexibility:** host-selectable playlist mechanics that can be changed later without disrupting the current song or confusing participants.
 
 The host should be allowed to set and later change the playlist mechanic, but the system must make that action transparent, reversible where possible, and non-disruptive by default. This gives rooms enough flexibility to evolve naturally while preserving trust among participants.
+
+---
+
+## 37. Appendix D: Requirements Traceability Matrix
+
+This matrix maps functional requirements (FRs) and non-functional requirements (NFRs) to the design components, API endpoints, data tables, and test coverage areas that satisfy them. It is not exhaustive for every low-priority or Phase 2 requirement but covers all MVP-priority items and the most significant Phase 2 items.
+
+### 37.1 Functional Requirements Traceability
+
+| Requirement | Component(s) | API Endpoint(s) | Data Table(s) | Test Area(s) |
+| ----------- | ------------ | ---------------- | -------------- | ------------- |
+| FR-001 Room creation without registration | Room Service | `POST /api/v1/rooms` | `rooms` | Unit: room creation; Integration: create room flow |
+| FR-002 Default playlist mechanic | Room Service | `POST /api/v1/rooms` | `rooms.playlist_mechanic` | Unit: mechanic default; Integration: create room |
+| FR-003 Host authority via secret | Room Service, Identity Service | `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/host/claim` | `rooms.host_secret_hash` | Unit: host token; Integration: host claim |
+| FR-006 Queue limits and duplicate rules | Queue Engine | `PATCH /api/v1/rooms/:roomId/settings` | `rooms` | Unit: limit validation; Integration: settings update |
+| FR-010 Protected nickname required for native participation | Identity Service, Auth Middleware | `POST /api/v1/rooms/:roomId/join` | `room_sessions.access_tier`, `nickname_claims` | Unit: tier gate; Integration: gated-action rejection |
+| FR-019 Read-only Listener access | Identity Service, Frontend Client | `POST /api/v1/rooms/:roomId/listen` | `room_sessions.access_tier` | Integration: listen flow; E2E: read-only room |
+| FR-028 Server-side rejection of interactive actions for non-members | Auth Middleware, Chat/Queue/Moderation Services | `POST /api/v1/rooms/:roomId/*`, WebSocket events | `room_sessions.access_tier` | Unit: tier enforcement; Integration: listener escalation attempt |
+| FR-029 Inline upgrade prompts for Listeners | Frontend Client | N/A | N/A | E2E: gated control prompt |
+| FR-078 Listener chat visibility setting | Chat Service | `PATCH /api/v1/rooms/:roomId/settings` | `rooms.listener_chat_visible` | Integration: listener chat visibility |
+| FR-011 Nickname prompt | Frontend Client | N/A | N/A | E2E: join flow |
+| FR-012 Never assign generic nicknames | Identity Service | `POST /api/v1/rooms/:roomId/join` | N/A | Unit: nickname validation |
+| FR-020 Password-protect nickname | Identity Service | `POST /api/v1/nicknames/protect` | `nickname_claims` | Unit: claim creation; Integration: protect flow |
+| FR-021 Authenticate protected nickname | Identity Service | `POST /api/v1/nicknames/authenticate`, `POST /api/v1/rooms/:roomId/join` | `nickname_claims` | Unit: password verify; Integration: protected join |
+| FR-022 Rate-limit failed password attempts | Rate Limit Service | `POST /api/v1/rooms/:roomId/join` | Redis | Unit: rate limit calc; Integration: brute force |
+| FR-025 Warn no password recovery | Frontend Client | N/A | N/A | E2E: protect nickname flow |
+| FR-030 Add song by YouTube URL | Queue Engine, YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items`, `tracks` | Unit: URL parsing; Integration: add song |
+| FR-031 Extract and validate video IDs | YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `tracks` | Unit: URL parsing |
+| FR-032 Fetch metadata | YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `tracks` | Unit: metadata fetch; Integration: add song |
+| FR-033 Reject over-duration videos | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `rooms.max_song_duration_seconds` | Unit: duration check |
+| FR-034 Reject duplicates | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items` | Unit: duplicate check |
+| FR-037 Handle unavailable videos | YouTube Metadata Service, Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `tracks.metadata_status` | Unit: unavailable handling |
+| FR-040 Authoritative current track | Playback Coordinator | WebSocket `playback.state` | `queue_items` | Integration: playback state |
+| FR-041 Clients receive playback state | Playback Coordinator | WebSocket `room.snapshot`, `playback.state` | `queue_items` | WebSocket: snapshot on connect |
+| FR-042 Host skip | Playback Coordinator, Moderation Service | `POST /api/v1/rooms/:roomId/playback/skip` | `queue_items`, `room_moderation_actions` | Integration: host skip |
+| FR-044 Auto-advance on track end | Playback Coordinator, Queue Engine | WebSocket `playback.clientState` | `queue_items` | Integration: track end advance |
+| FR-050 FIFO mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items.position` | Unit: FIFO selection |
+| FR-051 Voting mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items/:id/vote` | `queue_items.score`, `queue_votes` | Unit: voting selection |
+| FR-053 Host-curated mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items` | Unit: host-curated selection |
+| FR-055 Change playlist mechanic | Room Service, Queue Engine | `PATCH /api/v1/rooms/:roomId/settings` | `rooms`, `room_settings_history` | Unit: mechanic change; Integration: change flow |
+| FR-056 No interruption on change | Room Service, Playback Coordinator | `PATCH /api/v1/rooms/:roomId/settings` | `rooms` | Integration: mechanic change |
+| FR-057 Announce change in chat | Chat Service | WebSocket `chat.message` | `chat_messages` | WebSocket: system message |
+| FR-070 Real-time chat | Chat Service | WebSocket `chat.send` / `chat.message` | `chat_messages` | WebSocket: chat broadcast |
+| FR-073 Chat rate limiting | Rate Limit Service, Chat Service | WebSocket `chat.send` | Redis | Unit: rate limit; WebSocket: rate limit |
+| FR-075 Delete chat messages | Moderation Service | `DELETE /api/v1/rooms/:roomId/chat/messages/:id` | `chat_messages.deleted_at` | Integration: delete message |
+| FR-076 Mute participants | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/mute` | `room_sessions.is_muted` | Integration: mute flow |
+| FR-080–FR-085 Host moderation | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/*` | `room_moderation_actions` | Integration: moderation actions |
+| FR-090 Show participants | Frontend Client, Presence Manager | WebSocket `presence.updated` | Redis, `room_sessions` | WebSocket: presence |
+| FR-110–FR-119 External site integration | External Command Service, Outbound Webhook Service | `POST /api/v1/rooms/:roomId/integrations/site`, `POST /api/v1/integrations/site-command`, embed endpoints | `site_integrations`, `external_participants`, `external_commands` | Integration: external command flow; E2E: embed display |
+| FR-130–FR-143 Pre-play veto | Queue Engine (veto logic), Playback Coordinator | WebSocket veto events, `POST /api/v1/integrations/site-command` | `preplay_veto_votes`, `preplay_veto_windows`, `queue_items` | Unit: veto threshold; Integration: veto cycle |
+| FR-150–FR-168 Staff commands and muting | External Command Service, Moderation Service | `POST /api/v1/integrations/site-command` | `external_commands`, `external_participants`, `room_moderation_actions` | Integration: staff command flow; Unit: mute expiry |
+| FR-170–FR-179 Abuse prevention | Rate Limit Service, External Command Service | `POST /api/v1/integrations/site-command` | `external_commands`, Redis | Unit: rate limits; Integration: abuse scenarios |
+
+### 37.2 Non-Functional Requirements Traceability
+
+| Requirement | Design Section(s) | Implementation Area |
+| ----------- | ------------------ | ------------------- |
+| NFR-001 REST p95 < 200ms | 12.2 (Fastify), 25.1 (Deployment) | Load tests: API latency |
+| NFR-002 WebSocket p95 < 100ms | 12.2 (Socket.IO), 16 (WebSocket Design) | Load tests: event propagation |
+| NFR-003 Playback sync ≤ 3s | 18 (Playback Sync) | Integration: resync test |
+| NFR-004 LCP < 2s | 12.2 (Next.js), 13.1 (Frontend) | E2E: page load |
+| NFR-010–NFR-013 Scalability | 25.2 (Scaling Strategy) | Load tests: room capacity |
+| NFR-020 99.5% uptime | 25 (Deployment), 23.6 (Circuit Breakers) | Monitoring: uptime tracking |
+| NFR-021 YouTube degradation | 23.6.2 (YouTube degradation) | Integration: metadata failure |
+| NFR-022 Reconnect with refresh | 16.1.1 (Reconnection Backoff) | WebSocket: reconnect test |
+| NFR-030–NFR-035 Security | 19 (Security Design) | Unit: auth checks; Integration: permission tests |
+| NFR-038 Server-side native tier enforcement | 9.2.1, 13.3, 16.2, 19.2 | Unit: tier middleware; Integration: listener escalation |
+| NFR-036 Error code registry | 23.4 (Error Code Registry) | Unit: error code mapping |
+| NFR-037 CORS/CSP policies | 19.6 (CORS and CSP) | Integration: CORS validation; Security: CSP audit |
+| NFR-040–NFR-043 Privacy | 21 (Privacy Design) | Integration: no sensitive data in public payloads |
+| NFR-050–NFR-053 YouTube compliance | 22 (YouTube Integration) | Manual: compliance checklist |
+| NFR-060–NFR-069 External integration NFRs | 8.7, 12.4, 13.11, 19.5 | Integration: external command tests; Load: command burst |
+
+---
+
+## 38. Known Limitations and Technical Debt
+
+This section tracks known MVP shortcuts, accepted limitations, and technical debt items that should be revisited in Phase 2 or later. It is a living register — items should be added as they are identified during implementation and reviewed at each milestone checkpoint (see Section 40).
+
+### 38.1 Product Limitations
+
+| ID | Limitation | Impact | Planned Resolution | Target |
+| -- | ---------- | ------ | ------------------ | ------ |
+| LIM-001 | No password recovery for protected nicknames. | Users who forget their nickname password lose access to that nickname permanently, and—because protection is now required to participate—lose the ability to chat, vote, or queue under it until they create a new protected nickname. | Phase 2: optional email-based recovery or trusted-device token flow. Recovery mechanism must not introduce mandatory registration. | Phase 2 |
+| LIM-002 | No public room directory in MVP. | Rooms are only discoverable via direct link. Organic discovery and community growth are limited. | Phase 2: curated public directory with moderation maturity gates. | Phase 2 |
+| LIM-003 | No profanity or content filter for nicknames. | Offensive nicknames are possible until a host manually moderates. | Phase 2: configurable word filter with host override. | Phase 2 |
+| LIM-004 | Playback synchronization is approximate (1–3 second tolerance). | Participants may hear the same song at slightly different points. | Accepted for MVP. Tighter sync would require custom media synchronization infrastructure. | Accepted |
+| LIM-005 | No mobile-native apps. | Mobile experience is browser-only. Push notifications, background audio, and native gestures are unavailable. | Post-MVP: evaluate React Native or PWA. | Post-MVP |
+| LIM-006 | External embed is read-only by default. | Embed viewers cannot vote or add songs directly from the embed UI. All mutations flow through the server-to-server command bridge. | By design for MVP. Interactive embed with identity delegation is a Phase 2 consideration. | Phase 2 |
+| LIM-007 | Mandatory protected nickname adds onboarding friction for native participation. | Users must create a password before chatting or queuing on the native site, which may lower conversion from listening to participating. Listening remains free. | Accepted for v1.4.0 as a deliberate trade for accountability and abuse resistance. Monitor listen-to-participate conversion; revisit one-step flow ergonomics and consider lighter trusted-device continuity in Phase 2. | Accepted |
+
+### 38.2 Technical Debt
+
+| ID | Debt Item | Context | Risk if Unresolved | Planned Resolution | Target |
+| -- | --------- | ------- | ------------------- | ------------------ | ------ |
+| TD-001 | `external_chat_music` JSONB column on `rooms` table. | Stores ~15 configuration sub-fields as an opaque blob. Schema documented in Section 14.2, validated by Zod at application layer. | Difficult to query, index, or migrate individual sub-fields. Cross-room analytics on configuration patterns require full-column scans. | If per-field querying patterns emerge, promote sub-objects (`songRequestPolicy`, `preplayVeto`, `staffPermissions`, `webhook`, `rateLimits`) to dedicated relational tables or PostgreSQL generated columns with indexes. | Phase 2 |
+| TD-002 | Single-process API and WebSocket gateway. | MVP runs REST API and WebSocket gateway in the same Fastify process for simplicity. | Limits independent scaling. A WebSocket-heavy room can saturate the process and degrade REST API latency for other rooms. | Separate WebSocket gateway from REST API workers when scaling demands it (see Section 25.2). | Post-MVP |
+| TD-003 | No dead-letter inspection UI for failed outbound webhooks. | Failed webhook deliveries after 3 retries are queued but not visible to webmasters. | Webmasters cannot diagnose delivery failures without Trackstacc team intervention. | Phase 2: webhook delivery dashboard per integration (DL-017). | Phase 2 |
+| TD-004 | YouTube metadata is not pre-cached or background-refreshed. | Metadata is fetched on demand when a song is added. Stale metadata (title changes, removals) is not detected until the next fetch. | A queued song's title or availability status may be outdated by playback time. | Phase 2: background metadata refresh job for queued items. Consider YouTube push notifications if available. | Phase 2 |
+| TD-005 | No automated database backup verification. | Managed PostgreSQL backups exist, but restore testing is manual. | Backup integrity is unverified until a restore is needed. | Add automated weekly backup restore test to a staging environment. | Milestone 6 |
+| TD-006 | Frontend coverage lighter than backend surface area. | Not every API capability is exposed in the UI (see README). Some moderation and queue mechanic flows are backend-only. | Features exist but are inaccessible to non-technical users. | Close UI coverage gaps during each milestone. Track coverage delta in milestone reviews. | Ongoing |
+
+### 38.3 Maintenance Notes
+
+Items are added to this section when an MVP shortcut is taken. Each item should include a brief context statement explaining why the shortcut was acceptable and what triggers resolution. Items are reviewed and either resolved or re-prioritized at each milestone review (Section 40).
+
+---
+
+## 39. Development Operations
+
+This section covers the CI/CD pipeline, configuration management, environment strategy, and dependency management practices for the trackstacc.live monorepo.
+
+### 39.1 CI/CD Pipeline
+
+#### 39.1.1 Pipeline Stages
+
+The CI/CD pipeline runs on every push to a feature branch and on every merge to `main`. The recommended pipeline tool is GitHub Actions, consistent with the GitHub-hosted monorepo.
+
+**Stage 1 — Install and Validate**
+
+1. Checkout repository.
+2. Enable Corepack for pnpm 9.15.4.
+3. Install dependencies: `pnpm install --config.confirmModulesPurge=false`.
+4. Validate Prisma schema: `pnpm --filter api prisma validate`.
+
+**Stage 2 — Lint and Type Check**
+
+1. Run ESLint across all workspaces: `pnpm lint` (Turborepo-orchestrated).
+2. Run TypeScript type checking: `pnpm typecheck` (Turborepo-orchestrated).
+
+**Stage 3 — Test**
+
+1. Start ephemeral PostgreSQL and Redis services (GitHub Actions service containers).
+2. Apply migrations to ephemeral database: `pnpm --filter api prisma migrate deploy`.
+3. Run unit and integration tests: `pnpm test` (Turborepo-orchestrated).
+4. Collect coverage reports.
+
+**Stage 4 — Build**
+
+1. Build all packages and apps: `pnpm build` (Turborepo-orchestrated).
+2. Build Docker images: `docker compose -f infra/docker-compose.prod.yml build`.
+3. Tag images with commit SHA and branch name.
+
+**Stage 5 — Deploy (main branch only)**
+
+1. Push Docker images to container registry.
+2. Trigger Coolify deployment webhook or use Coolify Git integration for automatic deploy.
+3. Run post-deploy health checks: `curl <api-url>/health/ready`.
+4. Run smoke tests against deployed environment.
+
+#### 39.1.2 Branch Strategy
+
+The project uses a trunk-based development model with short-lived feature branches.
+
+1. `main` is the production-deployable branch. All merges to `main` trigger the full pipeline including deployment.
+2. Feature branches are created from `main` and merged back via pull request after CI passes.
+3. Pull requests require passing CI (stages 1–4) and at least one reviewer approval.
+4. Hotfix branches may be created from `main` and merged directly with expedited review.
+
+### 39.2 Configuration Management
+
+#### 39.2.1 Environment Variables
+
+All runtime configuration is managed through environment variables. No secrets are committed to the repository.
+
+1. **Local development:** `.env` file at the repo root (git-ignored). `.env.example` documents all required and optional variables with safe placeholder values.
+2. **CI:** GitHub Actions secrets and environment variables. Secrets are scoped to the repository and injected at pipeline runtime.
+3. **Production:** Managed through Coolify environment configuration (see `infra/coolify/coolify.env.example`). Secrets are stored in Coolify's encrypted secret store, not in the repository or Docker images.
+
+#### 39.2.2 Configuration Hierarchy
+
+Variable precedence (highest to lowest):
+
+1. Process environment variables (set by Coolify, Docker, or shell).
+2. `.env` file (local development only, loaded by dotenv).
+3. Application defaults (coded in configuration modules with explicit fallbacks).
+
+Required variables (`DATABASE_URL`, `REDIS_URL`, `YOUTUBE_API_KEY`, `SESSION_SECRET`, `HOST_SECRET_SALT`) cause a startup failure with a descriptive error if missing. Optional variables (`CORS_ORIGINS`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`) fall back to documented defaults.
+
+### 39.3 Environment Strategy
+
+| Environment | Purpose | Infrastructure | Data |
+| ----------- | ------- | -------------- | ---- |
+| Local | Developer workstation | Docker Compose services (PostgreSQL 16, Redis 7) on localhost. Apps run via `pnpm dev`. | Seeded with `pnpm db:seed`. Disposable. |
+| CI | Automated pipeline | Ephemeral GitHub Actions service containers. Destroyed after each run. | Migrations applied fresh each run. No persistent data. |
+| Staging | Pre-production validation | Coolify-managed deployment mirroring production topology. Managed PostgreSQL and Redis instances (smaller tier). | Seeded or restored from anonymized production snapshot. Reset periodically. |
+| Production | Live user traffic | Coolify-managed deployment. Managed PostgreSQL with automated backups. Managed Redis with persistence. | Production data with daily automated backups and 14-day retention. |
+
+#### 39.3.1 Environment Parity
+
+Local, CI, staging, and production environments use the same PostgreSQL major version (16), Redis major version (7), Node.js version (20+), and pnpm version (9.15.4). Docker images are identical across staging and production; only environment variables differ.
+
+### 39.4 Dependency Management
+
+#### 39.4.1 Monorepo Tooling
+
+The project uses pnpm workspaces with Turborepo for task orchestration.
+
+1. **pnpm workspaces** manage cross-package dependencies. Internal packages (`packages/types`, `packages/ui`, `packages/config`) are referenced by workspace protocol (`workspace:*`).
+2. **Turborepo** orchestrates build, lint, typecheck, and test tasks with dependency-aware caching and parallel execution.
+3. **Corepack** pins the pnpm version to 9.15.4 across all environments.
+
+#### 39.4.2 Dependency Update Policy
+
+1. **Security patches:** applied immediately. `pnpm audit` runs in CI; critical/high vulnerabilities fail the pipeline.
+2. **Minor/patch updates:** reviewed and applied weekly or biweekly. Turborepo cache invalidation ensures affected packages are rebuilt and retested.
+3. **Major version upgrades:** evaluated individually. Major upgrades to core dependencies (Next.js, Fastify, Prisma, Socket.IO) require a dedicated branch with full regression testing before merge.
+
+#### 39.4.3 Key Dependencies and Constraints
+
+1. Prisma schema lives at the repo root (`prisma/schema.prisma`), not under `apps/api`. Prisma packages are present at the workspace root so generation works from the root schema location.
+2. `packages/types` uses extensionless source imports so the Next.js app can transpile the workspace package via its `transpilePackages` configuration.
+3. `apps/web/next.config.mjs` must remain `.mjs`; Next.js 14 in this repo does not support `next.config.ts`.
+4. The `@prisma/client` import path must be consistent between the root-level generation and the `apps/api` runtime. The `db:generate` script ensures this.
+
+#### 39.4.4 Lock File and Reproducibility
+
+`pnpm-lock.yaml` is committed and CI uses `--frozen-lockfile` to ensure reproducible installs. Lock file updates are committed in dedicated PRs to keep dependency changes visible in code review.
+
+---
+
+## 40. Document Review Schedule
+
+This SDD is a living document. Periodic reviews ensure it stays accurate as the codebase evolves and implementation decisions are made.
+
+### 40.1 Review Cadence
+
+| Trigger | Review Type | Participants | Deliverable |
+| ------- | ----------- | ------------ | ----------- |
+| Milestone completion (Milestones 1–7) | Full document review | Engineering lead, product lead, author(s) | Updated SDD version, review record in Section 40.3 |
+| Significant architecture change | Targeted section review | Affected engineers, engineering lead | Updated affected sections, review record |
+| Quarterly (if no milestone completed in quarter) | Staleness check | Engineering lead, author(s) | Confirmed current or updated sections, review record |
+| Post-incident (production issue traceable to design gap) | Incident-driven review | Incident responders, engineering lead | Updated affected sections, new TD- or LIM- entry in Section 38, review record |
+
+### 40.2 Review Process
+
+1. The reviewer reads the relevant SDD sections alongside the current codebase and identifies discrepancies, stale content, missing coverage, and newly introduced technical debt.
+2. Findings are documented as a list of proposed changes.
+3. Changes are applied to the SDD and the version is bumped (patch for corrections, minor for new sections or significant updates).
+4. The updated SDD is committed to the repository in a dedicated PR, reviewed like code, and merged.
+5. A review record is added to Section 40.3.
+
+### 40.3 Review History
+
+| Date | Version | Reviewer(s) | Trigger | Summary |
+| ---- | ------- | ----------- | ------- | ------- |
+| 2026-06-04 | 1.1.2 | Engineering Lead | Priority 1 audit | Resolved 5 critical/significant findings: error code registry, CORS/CSP, circuit breakers, Fastify decision, external role permissions. |
+| 2026-06-05 | 1.2.0 | Engineering Lead | Priority 2 audit | Resolved 8 design-review findings: architecture diagrams, migration strategy, API conventions, reconnection backoff, security consolidation, decision log, effort estimates, traceability matrix. |
+| 2026-06-06 | 1.3.0 | Engineering Lead | Priority 3 audit | Resolved 6 living-document findings: document metadata, table of contents, known limitations register, DevOps section, JSONB schema documentation, review schedule. |
+| 2026-06-07 | 1.4.0 | Engineering Lead | Feature change | Mandatory native nickname protection for participation; added Listener role and two-tier native access model; reworked permissions, flows, data model, API, WebSocket gating, errors, decisions, and acceptance criteria; scoped explicitly to exclude embeds. |
