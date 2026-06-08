@@ -69,7 +69,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 
 | Command | Duration | Requires `.env` | Requires Docker | Notes |
 |---------|----------|----------------|----------------|-------|
-| `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. |
+| `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
 | `pnpm test` | ~1.5s | No | No | 24 tests (Vitest) across 5 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
@@ -107,6 +107,22 @@ pnpm db:push            # prisma db push
 pnpm db:seed            # prisma db seed
 pnpm db:studio          # prisma studio (opens Prisma Studio in browser)
 ```
+
+---
+
+## CI Pipeline
+
+Workflow: `.github/workflows/ci.yml` — runs on `pull_request` (all branches) and `push` to `main`.
+
+| Stage | Command(s) | Requires DB/Redis | Notes |
+|-------|-----------|-------------------|-------|
+| Setup | `actions/checkout@v4`, `actions/setup-node@v4` (Node 20), Corepack, `pnpm install --frozen-lockfile` | No | Node 20; `--frozen-lockfile` ensures lockfile consistency |
+| Prisma validate | `pnpm --filter api prisma validate` | No | Schema-only; wrapper fallback DATABASE_URL used |
+| Lint + typecheck | `pnpm lint`, `pnpm typecheck` | No | `packages/config` skipped (no scripts) |
+| Test | `pnpm --filter api prisma migrate deploy`, `pnpm test` | Yes — Postgres 16 + Redis 7 | Service containers with health checks; credentials: `trackstacc:trackstacc@localhost:5432/trackstacc` |
+| Build | `pnpm build` | No | `prisma generate` (schema-only) runs before `tsc` for api |
+
+SDD §39.1 Stage 5 (deploy) is not yet implemented.
 
 ---
 
@@ -180,6 +196,11 @@ root $ pnpm db:migrate
 
 ## Local Services and Environment
 
+### Prerequisites
+
+- **Node.js 20+** — enforced via `engines.node: >=20.0.0` in root `package.json` and `actions/setup-node@v4` in CI.
+- **pnpm 9.15.4** — pinned via `packageManager` in root `package.json`; Corepack-enabled.
+
 ### Docker Compose
 
 ```bash
@@ -229,16 +250,16 @@ Expected response:
 
 ### Environment variables
 
-| Variable | Required? | Purpose |
-|----------|-----------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis connection string |
-| `SESSION_SECRET` | Yes | Signing key for session and WS tokens |
-| `HOST_SECRET_SALT` | Yes | Salt for host token hashing |
-| `CORS_ORIGINS` | Yes | Comma-separated allowed CORS origins |
-| `NEXT_PUBLIC_API_URL` | Yes (web build) | Frontend REST base URL |
-| `NEXT_PUBLIC_WS_URL` | Yes (web build) | Frontend Socket.IO base URL |
-| `YOUTUBE_API_KEY` | No | YouTube Data API v3 key. When absent, tracks get partial metadata only (`durationSeconds=null`) and the playback fallback timer is skipped. |
+| Variable | Required? | Purpose | Validated at startup? |
+|----------|-----------|---------|----------------------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string | Yes — startup fails if absent |
+| `REDIS_URL` | Yes | Redis connection string | Yes — startup fails if absent |
+| `SESSION_SECRET` | Yes | Signing key for session and WS tokens | Yes — startup fails if absent |
+| `HOST_SECRET_SALT` | Yes (in .env.example) | Salt for host token hashing | No — not consumed in current code |
+| `CORS_ORIGINS` | Yes | Comma-separated allowed CORS origins | No — defaults to `http://localhost:3000` |
+| `NEXT_PUBLIC_API_URL` | Yes (web build) | Frontend REST base URL | No — build-time only |
+| `NEXT_PUBLIC_WS_URL` | Yes (web build) | Frontend Socket.IO base URL | No — build-time only |
+| `YOUTUBE_API_KEY` | No | YouTube Data API v3 key. When absent, tracks get partial metadata only (`durationSeconds=null`) and the playback fallback timer is skipped. | No — graceful degradation to `metadataStatus: "partial"` |
 
 ### Env loading
 
@@ -281,7 +302,8 @@ or pass them via Docker build args.
 |-----|---------|-------|
 | **SDD says `/api/v1/`, code uses `/api/`** | API conventions | SDD §15.1.1 specifies `/api/v1/` prefix. Actual routes use bare `/api/`. README and `AGENTS.md` correctly document `/api/`. |
 | **Listener tier not implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. None exist yet. **Not in scope of Issue #6.** |
-| **No CI workflow** | CI/CD | Only PR body validation exists (`.github/workflows/pr-validation.yml`). No automated lint/typecheck/test/build/prisma-validate. |
+| **`HOST_SECRET_SALT` unused** | API config | `.env.example` lists it as required, but no code in `apps/api/src/` consumes it. Startup validation deliberately excludes it. Likely reserved for a future host token hashing feature. |
+| **`pnpm audit` not in CI** | CI/CD | SDD §39.4 specifies `pnpm audit` with critical/high failures blocking CI. Not yet implemented. |
 | **`packages/config` has no scripts** | Tooling | Pure config package — intentional, but may surprise agents trying `pnpm --filter @trackstacc/config lint`. |
 | **Root-level files not linted** | Code quality | `prisma/seed.ts`, `scripts/`, and root config files are not covered by any `lint` script. |
 | **Prisma wrapper masks missing env** | Developer experience | `prisma.mjs` fallback `DATABASE_URL` makes `validate`/`generate` work without `.env`, but may mask a missing DB setup. |
