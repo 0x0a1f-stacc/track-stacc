@@ -9,3 +9,4 @@ prisma/migrations/dev/
 coverage/
 *.log
 .DS_Store
+.serena/
