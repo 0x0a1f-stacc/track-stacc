@@ -16,6 +16,7 @@ import prismaPlugin from "./plugins/prisma.js";
 import rateLimitPlugin from "./plugins/rateLimit.js";
 import redisPlugin from "./plugins/redis.js";
 import { AppError, toErrorResponse } from "./lib/errors.js";
+import { validateEnv } from "./lib/env.js";
 import { chatRouter } from "./modules/chat/chat.router.js";
 import { moderationRouter } from "./modules/moderation/moderation.router.js";
 import { nicknamesRouter } from "./modules/nicknames/nicknames.router.js";
@@ -73,6 +74,7 @@ export async function buildApp() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  validateEnv(process.env);
   const app = await buildApp();
   await app.listen({
     host: process.env.API_HOST ?? "0.0.0.0",
