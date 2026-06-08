@@ -7,9 +7,15 @@ export enum PlaylistMechanic {
 }
 
 export enum Role {
+  Listener = "listener",
   Participant = "participant",
   Moderator = "moderator",
   Host = "host",
+}
+
+export enum AccessTier {
+  Listener = "listener",
+  Member = "member",
 }
 
 export enum QueueItemStatus {
@@ -119,8 +125,9 @@ export interface ChatMessage {
 
 export interface Participant {
   roomSessionId: string;
-  displayNickname: string;
-  normalizedNickname: string;
+  displayNickname: string | null;
+  normalizedNickname: string | null;
+  accessTier: AccessTier;
   role: Role;
   protectedNickname: boolean;
   presence: "online" | "idle" | "offline";

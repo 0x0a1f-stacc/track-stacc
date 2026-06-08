@@ -13,8 +13,8 @@ export function ParticipantList() {
             key={participant.roomSessionId}
             className="flex items-center gap-3"
           >
-            <Avatar nickname={participant.displayNickname} />
-            <span className="flex-1">{participant.displayNickname}</span>
+            <Avatar nickname={participant.displayNickname ?? "Listener"} />
+            <span className="flex-1">{participant.displayNickname ?? "Listener"}</span>
             {participant.role !== Role.Participant ? (
               <Badge tone={participant.role === Role.Host ? "host" : "mod"}>
                 {participant.role}
