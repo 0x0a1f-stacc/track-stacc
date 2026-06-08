@@ -35,6 +35,17 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - `apps/api/scripts/prisma.mjs` appends `--schema ../../prisma/schema.prisma`; do not duplicate schema flags before the Prisma subcommand.
 - API readiness (`/health/ready`) requires both PostgreSQL and Redis connections.
 
+## Native Access Tier Schema
+
+- `room_sessions.access_tier` exists (enum `AccessTier`: `listener` | `member`), defaults to `listener`.
+- `rooms.listener_chat_visible` exists (boolean), defaults to `false`.
+- `Role.listener` exists alongside `participant`, `moderator`, `host`.
+- `RoomSession.normalizedNickname` and `RoomSession.displayNickname` are **nullable** — listeners have no nickname.
+- Existing member/host session creation must explicitly set `accessTier: "member"` (the DB default is `listener`).
+- Never auto-generate `guest_1234`-style names for listeners.
+- Listener `/listen` endpoint, read-only API/WebSocket enforcement, and UI are pending follow-up work.
+- `QueueItemStatus.vetoed` and external integration tables (`site_integrations`, `external_participants`, etc.) are out of scope for native MVP — deferred to Issue #32.
+
 ## TypeScript Gotchas
 
 - Shared base TS config enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`; avoid passing explicit `undefined` for optional object properties.
