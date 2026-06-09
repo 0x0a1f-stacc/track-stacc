@@ -74,5 +74,12 @@ export interface ModerationRequest {
   reason?: string;
 }
 export interface ErrorResponse {
-  error: { code: string; message: string; details?: unknown };
+  error: {
+    code: string;
+    message: string;
+    requestId: string;
+    retryable: boolean;
+    retryAfterSeconds: number | null;
+    details?: unknown;
+  };
 }
