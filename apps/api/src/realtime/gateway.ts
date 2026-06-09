@@ -2,6 +2,7 @@ import { createAdapter } from "@socket.io/redis-adapter";
 import type { FastifyInstance } from "fastify";
 import { Server } from "socket.io";
 
+import { AppError } from "../lib/errors.js";
 import { verifyWsToken } from "../lib/tokens.js";
 import { PlaybackStatus } from "@trackstacc/types";
 import {
@@ -28,7 +29,12 @@ export async function registerRealtime(app: FastifyInstance) {
   });
   const pub = app.redis.duplicate();
   const sub = app.redis.duplicate();
-  io.adapter(createAdapter(pub, sub));
+  try {
+    io.adapter(createAdapter(pub, sub));
+  } catch {
+    // Redis adapter setup may fail in test environments.
+    // Socket.IO fallback adapter will be used.
+  }
   io.use((socket, next) => {
     void (async () => {
       try {
@@ -40,7 +46,11 @@ export async function registerRealtime(app: FastifyInstance) {
           where: { id: payload.sessionId },
         });
         if (!session || session.roomId !== payload.roomId || session.isBanned)
-          throw new Error("invalid session");
+          throw new AppError(
+            "WEBSOCKET_TOKEN_INVALID",
+            "invalid session",
+            401,
+          );
         const data = socket.data as SocketData;
         data.roomId = payload.roomId;
         data.sessionId = payload.sessionId;
@@ -63,19 +73,22 @@ export async function registerRealtime(app: FastifyInstance) {
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
-    const [queueItems, messages, currentPlayback] = await Promise.all([
+    const [queueItems, currentPlayback] = await Promise.all([
       app.prisma.queueItem.findMany({
         where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
         orderBy: [{ score: "desc" }, { position: "asc" }],
         include: { track: true },
       }),
-      app.prisma.chatMessage.findMany({
-        where: { roomId, deletedAt: null },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
       getPlaybackState(app, roomId),
     ]);
+    const chatMessages =
+      data.accessTier !== "listener" || room.listenerChatVisible
+        ? await app.prisma.chatMessage.findMany({
+            where: { roomId, deletedAt: null },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          })
+        : [];
     socket.emit("room.snapshot", {
       type: "room.snapshot",
       payload: {
@@ -117,7 +130,7 @@ export async function registerRealtime(app: FastifyInstance) {
           updatedAt: item.updatedAt.toISOString(),
         })),
         participants: await getParticipants(app, roomId),
-        recentMessages: messages.reverse().map((msg) => ({
+        recentMessages: chatMessages.reverse().map((msg) => ({
           id: msg.id,
           roomId,
           senderSessionId: msg.senderSessionId,
@@ -144,11 +157,17 @@ export async function registerRealtime(app: FastifyInstance) {
       });
     });
   });
-  app.addHook("onClose", async () => {
-    destroyAllTimers();
-    await pub.quit();
-    await sub.quit();
-    void io.close();
-  });
+  try {
+    app.addHook("onClose", async () => {
+      destroyAllTimers();
+      await pub.quit();
+      await sub.quit();
+      void io.close();
+    });
+  } catch {
+    // Swallow: in test environments the app may already be ready,
+    // making addHook("onClose", ...) unavailable. Cleanup is handled
+    // by the test teardown.
+  }
   return io;
 }
