@@ -105,6 +105,24 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - `apps/api` build runs `prisma generate` (against the root schema) before `tsc`, because the Prisma client is generated at root but consumed by the API.
 - Turbo `dev` tasks are `persistent: true` (long-running dev servers). Turbo `build` tasks depend on `^build` (package dependencies must build first).
 
+## ESLint Debugging
+
+When `pnpm lint` fails with errors at unexpected line numbers (e.g. lines 100+ in a 60-line file), do NOT assume the errors are pre-existing or belong to a different file. Turbo groups lint output by file — the error line numbers belong to the **last file path** printed before the errors, not files shown earlier without error details.
+
+Root causes to check in order:
+
+1. **Turbo cached stale dist/ output**: Run `rm -rf apps/api/dist .turbo apps/api/.turbo` and re-run lint without cache. ESLint v9 can pick up compiled `.js` files from `dist/` if they exist, reporting line numbers from those files.
+
+2. **Errors are in YOUR file, not a pre-existing one**: When you see file paths grouped followed by errors, the errors belong to the LAST listed file. Read the error line number against YOUR newly created/modified file. Common real errors:
+   - `no-unnecessary-type-assertion`: removing `as Type` casts or non-null `!` assertions that TypeScript already infers.
+   - `no-unsafe-call` / `no-unsafe-member-access`: using `ReturnType<typeof Fastify>` instead of `FastifyInstance` (the former doesn't resolve properly for ESLint). Fix: use `import type { FastifyInstance } from "fastify"`.
+   - `no-floating-promises`: Socket.IO's `Server.close()` returns `Promise<void>` (not `void`), so it must be `await`ed.
+   - `exactOptionalPropertyTypes`: avoid `{ accessTier: overrides.accessTier }` when the value can be `undefined`. Use `...(overrides.accessTier !== undefined && { accessTier: overrides.accessTier })` pattern instead.
+
+3. **Run eslint directly to isolate**: `cd apps/api && npx eslint "src/**/*.ts" --no-cache` runs without Turbo and shows precise errors with correct file attribution.
+
+4. **Clear cache aggressively before trusting output**: `rm -rf .turbo apps/api/.turbo apps/web/.turbo apps/api/dist node_modules/.cache/eslint*` ensures no stale cache masks or misattributes errors.
+
 ## AI Engineering Documentation Protocol
 
 Before implementing a feature, changing an API, modifying schema, changing WebSocket behavior, or altering security/permissions:
