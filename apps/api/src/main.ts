@@ -9,6 +9,7 @@ import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import Fastify from "fastify";
+import { nanoid } from "nanoid";
 import { ZodError } from "zod";
 
 import authPlugin from "./plugins/auth.js";
@@ -16,7 +17,9 @@ import prismaPlugin from "./plugins/prisma.js";
 import rateLimitPlugin from "./plugins/rateLimit.js";
 import redisPlugin from "./plugins/redis.js";
 import { AppError, toErrorResponse } from "./lib/errors.js";
-import { validateEnv } from "./lib/env.js";
+import { loadConfig, createConfigPlugin } from "./lib/config.js";
+import type { ApiConfig } from "./lib/config.js";
+import { setSecret } from "./lib/tokens.js";
 import { chatRouter } from "./modules/chat/chat.router.js";
 import { moderationRouter } from "./modules/moderation/moderation.router.js";
 import { nicknamesRouter } from "./modules/nicknames/nicknames.router.js";
@@ -25,10 +28,17 @@ import { queueRouter } from "./modules/queue/queue.router.js";
 import { roomsRouter } from "./modules/rooms/rooms.router.js";
 import { registerRealtime } from "./realtime/gateway.js";
 
-export async function buildApp() {
-  const app = Fastify({ logger: true });
+export async function buildApp(config: ApiConfig) {
+  const app = Fastify({
+    logger: true,
+    genReqId: () => nanoid(21),
+    requestIdHeader: "X-Request-Id",
+    requestIdLogLabel: "requestId",
+  });
+
+  await app.register(createConfigPlugin(config));
   await app.register(cors, {
-    origin: (process.env.CORS_ORIGINS ?? "http://localhost:3000").split(","),
+    origin: config.corsOrigins,
     credentials: true,
   });
   await app.register(cookie);
@@ -74,10 +84,8 @@ export async function buildApp() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  validateEnv(process.env);
-  const app = await buildApp();
-  await app.listen({
-    host: process.env.API_HOST ?? "0.0.0.0",
-    port: Number(process.env.API_PORT ?? 4000),
-  });
+  const config = loadConfig(process.env);
+  setSecret(config.sessionSecret);
+  const app = await buildApp(config);
+  await app.listen({ host: config.host, port: config.port });
 }
