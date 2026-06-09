@@ -16,7 +16,7 @@ import { registerRoomHandlers } from "./room.gateway.js";
 export async function registerRealtime(app: FastifyInstance) {
   const io = new Server(app.server, {
     cors: {
-      origin: (process.env.CORS_ORIGINS ?? "http://localhost:3000").split(","),
+      origin: app.config.corsOrigins,
       credentials: true,
     },
   });

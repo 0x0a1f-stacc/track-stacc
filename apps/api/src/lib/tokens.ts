@@ -7,8 +7,12 @@ import {
 
 import { AppError } from "./errors.js";
 
-const secret =
-  process.env.SESSION_SECRET ?? "development_secret_change_me_min_32_chars";
+const DEFAULT_SECRET = "development_secret_change_me_min_32_chars";
+let secret: string = DEFAULT_SECRET;
+
+export function setSecret(s: string): void {
+  secret = s;
+}
 
 export function randomToken(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
