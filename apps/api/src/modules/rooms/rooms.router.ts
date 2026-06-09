@@ -21,8 +21,9 @@ export async function roomsRouter(app: FastifyInstance) {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: process.env.NODE_ENV === "production",
+      secure: app.config.nodeEnv === "production",
     });
+    reply.code(201);
     return {
       room: {
         id: result.room.id,
