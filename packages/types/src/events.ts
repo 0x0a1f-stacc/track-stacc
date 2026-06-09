@@ -11,6 +11,26 @@ import type {
   RoomSnapshot,
 } from "./domain";
 
+export interface WsErrorAcknowledgement {
+  ok: false;
+  sourceEvent: string;
+  code: string;
+  message: string;
+  requestId: string;
+  retryable: boolean;
+  retryAfterSeconds: number | null;
+  details?: unknown;
+}
+
+export interface WsSuccessAcknowledgement<T = unknown> {
+  ok: true;
+  result: T;
+}
+
+export type WsAcknowledgement<T = unknown> =
+  | WsSuccessAcknowledgement<T>
+  | WsErrorAcknowledgement;
+
 export type ClientEvent =
   | { type: "chat.send"; body: string; tempId?: string }
   | { type: "queue.add"; youtubeUrl: string }
