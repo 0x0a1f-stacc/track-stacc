@@ -139,7 +139,7 @@ describe("POST /api/rooms", () => {
     });
     const setCookie = response.headers["set-cookie"];
     expect(setCookie).toBeDefined();
-    const cookie = Array.isArray(setCookie) ? (setCookie as string[])[0] : (setCookie as string);
+    const cookie = setCookie as string;
     expect(cookie).toContain("host_token=");
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Lax");
