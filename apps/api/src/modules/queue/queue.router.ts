@@ -14,10 +14,10 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/queue/items", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
-        "Join the room before doing that.",
-        401,
-      );
+      "AUTH_REQUIRED",
+      "Join the room before doing that.",
+      401,
+    );
     const { roomId } = request.params as { roomId: string };
     const body = addQueueItemSchema.parse(request.body);
     const queueItem = await addQueueItem(
@@ -32,7 +32,7 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
   app.get("/api/rooms/:roomId/queue", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
+        "AUTH_REQUIRED",
         "Join the room before doing that.",
         401,
       );
@@ -47,7 +47,7 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
   app.delete("/api/rooms/:roomId/queue/items/:queueItemId", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
+        "AUTH_REQUIRED",
         "Join the room before doing that.",
         401,
       );
@@ -76,7 +76,7 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
     async (request) => {
       if (!request.session)
         throw new AppError(
-          "UNAUTHENTICATED",
+          "AUTH_REQUIRED",
           "Join the room before doing that.",
           401,
         );

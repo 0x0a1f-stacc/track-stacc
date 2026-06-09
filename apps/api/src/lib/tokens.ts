@@ -46,16 +46,16 @@ export function signWsToken(
 export function verifyWsToken(token: string): WsTokenPayload {
   const [body, signature] = token.split(".");
   if (!body || !signature)
-    throw new AppError("INVALID_TOKEN", "Invalid websocket token.", 401);
+    throw new AppError("WEBSOCKET_TOKEN_INVALID", "Invalid websocket token.", 401);
   const expected = createHmac("sha256", secret)
     .update(body)
     .digest("base64url");
   if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
-    throw new AppError("INVALID_TOKEN", "Invalid websocket token.", 401);
+    throw new AppError("WEBSOCKET_TOKEN_INVALID", "Invalid websocket token.", 401);
   const parsed = JSON.parse(
     Buffer.from(body, "base64url").toString("utf8"),
   ) as WsTokenPayload;
   if (parsed.exp < Math.floor(Date.now() / 1000))
-    throw new AppError("TOKEN_EXPIRED", "Websocket token expired.", 401);
+    throw new AppError("WEBSOCKET_TOKEN_INVALID", "Websocket token expired.", 401);
   return parsed;
 }

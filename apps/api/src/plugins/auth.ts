@@ -18,7 +18,7 @@ export default fp(async (app) => {
 export function requireSession(request: { session?: unknown }) {
   if (!request.session)
     throw new AppError(
-      "UNAUTHENTICATED",
+      "AUTH_REQUIRED",
       "Join the room before doing that.",
       401,
     );

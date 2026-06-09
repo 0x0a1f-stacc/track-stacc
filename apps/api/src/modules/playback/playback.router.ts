@@ -50,7 +50,7 @@ export async function playbackRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/playback/skip", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
+        "AUTH_REQUIRED",
         "Join the room before doing that.",
         401,
       );
@@ -60,7 +60,7 @@ export async function playbackRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/playback/skip-vote", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
+        "AUTH_REQUIRED",
         "Join the room before doing that.",
         401,
       );
