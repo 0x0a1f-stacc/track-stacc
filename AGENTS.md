@@ -43,7 +43,8 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - `RoomSession.normalizedNickname` and `RoomSession.displayNickname` are **nullable** — listeners have no nickname.
 - Existing member/host session creation must explicitly set `accessTier: "member"` (the DB default is `listener`).
 - Never auto-generate `guest_1234`-style names for listeners.
-- Listener `/listen` endpoint, read-only API/WebSocket enforcement, and UI are pending follow-up work.
+- `POST /api/rooms/:roomId/listen` is implemented for creating read-only Listener sessions and listener-tier WebSocket tokens.
+- Listener read-only API/WebSocket enforcement across all interactive actions and frontend Listener UI remain pending follow-up work.
 - `QueueItemStatus.vetoed` and external integration tables (`site_integrations`, `external_participants`, etc.) are out of scope for native MVP — deferred to Issue #32.
 
 ## TypeScript Gotchas
