@@ -103,3 +103,24 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 
 - `apps/api` build runs `prisma generate` (against the root schema) before `tsc`, because the Prisma client is generated at root but consumed by the API.
 - Turbo `dev` tasks are `persistent: true` (long-running dev servers). Turbo `build` tasks depend on `^build` (package dependencies must build first).
+
+## AI Engineering Documentation Protocol
+
+Before implementing a feature, changing an API, modifying schema, changing WebSocket behavior, or altering security/permissions:
+
+1. Read `docs/ai/trackstacc-ai-reference.md`.
+2. Read `docs/ai/trackstacc-ai-index.md`.
+3. Use `docs/ai/trackstacc-agent-playbooks.md` to choose task-specific docs.
+4. For implementation-impact questions, read:
+   - `docs/ai/trackstacc-change-impact-matrix.md`
+   - `docs/ai/trackstacc-feature-maps.md`
+   - `docs/ai/trackstacc-integration-matrix.md`
+5. For schema/API/event work, read:
+   - `docs/ai/trackstacc-requirements-graph.md`
+   - `docs/ai/trackstacc-integration-matrix.md`
+6. For auth, permissions, moderation, abuse prevention, or nickname protection, read:
+   - `docs/ai/trackstacc-security-controls.md`
+   - `docs/ai/trackstacc-change-impact-matrix.md`
+7. Read the full `docs/sdd.md` only when the derived AI docs do not answer the question or when exact source wording is required.
+
+Every implementation plan should name the relevant stable IDs, affected files, commands to run, and whether the SDD-derived docs need updating.

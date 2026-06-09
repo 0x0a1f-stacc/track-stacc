@@ -5,7 +5,7 @@
   // Cache: maximize reuse
   "cache_ttl": {
     "default": "5m",
-    "opencode-go/deepseek-v4-pro": "58m"
+    "opencode-go/deepseek-v4-flash": "58m"
   },
   
   // Drop aggressively
@@ -17,13 +17,13 @@
   
   // Background agents: request-priced or free models
   "historian": {
-    "model": "opencode/minimax-m3-free",
+    "model": "opencode/nemotron-3-ultra-free",
     "fallback_models": [
       "opencode/deepseek-v4-flash-free"
     ]
   },
   "dreamer": {
-    "model": "opencode/minimax-m3-free",
+    "model": "opencode/nemotron-3-ultra-free",
     "fallback_models": [
       "opencode/deepseek-v4-flash-free"
     ],
@@ -43,7 +43,7 @@
     }
   },
   "sidekick": {
-    "model": "opencode/minimax-m3-free",
+    "model": "opencode/nemotron-3-ultra-free",
     "fallback_models": [
       "opencode/deepseek-v4-flash-free"
     ]

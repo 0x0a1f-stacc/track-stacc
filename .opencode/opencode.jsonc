@@ -4,8 +4,8 @@
   // Project: trackstacc.live
   // Stack: pnpm workspace, Next.js App Router web, Fastify + Socket.IO API,
   // Prisma/PostgreSQL, Redis, shared TS packages, Docker Compose.
-  "model": "opencode-go/deepseek-v4-pro",
-  "small_model": "opencode-go/deepseek-v4-flash",
+  "model": "opencode-go/deepseek-v4-flash",
+  "small_model": "opencode-go/mimo-v2.5",
 
   // Keep provider policy narrow so ad-hoc model switches do not accidentally use
   // unrelated paid providers. Remove this allowlist if your OpenCode install exposes
@@ -45,16 +45,27 @@
   "instructions": [
     "AGENTS.md",
     "README.md",
+    "docs/dev/repo-map.md",
+    "docs/ai/trackstacc-ai-reference.md",
+    "docs/ai/trackstacc-ai-index.md",
+    "docs/ai/trackstacc-agent-playbooks.md"
+  ],
+  /**
+   * Previous instructions
+  "instructions": [
+    "AGENTS.md",
+    "README.md",
     "docs/sdd.md",
     "infra/coolify/coolify.env.example"
   ],
+  */
 
   "default_agent": "trackstacc-builder",
 
   "agent": {
     "trackstacc-builder": {
       "description": "Default implementation agent for the trackstacc.live pnpm monorepo.",
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-flash",
       // AGENTS.md covers TS strictness, Prisma path, runtime boundaries, and YouTube rules.
       // Prompt stays focused on role identity and tool preference only.
       "prompt": "You are working on trackstacc.live: a no-registration collaborative YouTube music-room app. Treat the API as authoritative for sessions, permissions, queue/playback state, nickname auth, moderation, and rate limits. Prefer MCP semantic/AST tools before broad file reads for symbol-level code work.",
@@ -83,7 +94,7 @@
 
     "api-specialist": {
       "description": "Fastify, Socket.IO, Prisma, Redis, auth, queue, playback, and moderation specialist.",
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-flash",
       // AGENTS.md already covers: Zod validation, rate limits, signed WS tokens, httpOnly
       // cookies, Argon2id, Prisma wrapper, root schema path, and strict TS rules.
       "prompt": "Specialist for apps/api and packages/types. Enforce server-authoritative state — never trust client signals for role, playback, or session.",
@@ -103,7 +114,7 @@
     "web-specialist": {
       "description": "Next.js 14 App Router, React, Tailwind, and shared UI specialist.",
       // UI/component work does not need pro — flash is sufficient and cheaper.
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/mimo-v2.5",
       // AGENTS.md already covers: next.config.mjs constraint, transpilation rules,
       // extensionless imports, and strict TS settings.
       "prompt": "Specialist for apps/web, packages/ui, and packages/types. Preserve .mjs config and workspace transpilation for @trackstacc/ui and @trackstacc/types.",
@@ -118,7 +129,7 @@
 
     "schema-guardian": {
       "description": "Database, Prisma schema, migrations, data retention, and audit-history reviewer.",
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-flash",
       // AGENTS.md covers Prisma root path and wrapper command requirements.
       "prompt": "Review root prisma/schema.prisma, migrations, and seed scripts. Maintain room/session/queue/chat/moderation invariants. Protect secrets, tokens, and password hashes from logs and outputs.",
       "permission": {
@@ -142,7 +153,7 @@
     "security-reviewer": {
       "description": "Read-only reviewer for auth, session, XSS, YouTube compliance, MCP safety, and secret leakage.",
       // Pattern recognition and read-only review — flash is sufficient and cheaper.
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/mimo-v2.5",
       "prompt": "Read-only security reviewer. Identify trust-boundary violations, XSS, token/secret leakage, improper password handling, unsafe YouTube handling, missing rate limits, and authorization bypasses. Produce findings with file paths and suggested fixes. Do not edit files.",
       "permission": {
         "edit": "deny",
@@ -159,6 +170,21 @@
   },
 
   "command": {
+    "impact": {
+      "description": "Analyze implementation impact before editing.",
+      "agent": "trackstacc-builder",
+      "template": "Using docs/ai/trackstacc-change-impact-matrix.md, docs/ai/trackstacc-feature-maps.md, docs/ai/trackstacc-integration-matrix.md, and docs/ai/trackstacc-requirements-graph.md, analyze the impact of: $ARGUMENTS. Return affected requirements, features, data models, APIs, WebSockets, security controls, tests, and files. Do not edit."
+    },
+    "implement-feature": {
+      "description": "Implement a feature using the AI engineering docs first.",
+      "agent": "trackstacc-builder",
+      "template": "Implement: $ARGUMENTS. First read the AI reference, index, feature maps, requirements graph, integration matrix, and change-impact matrix. Produce a short plan naming stable IDs and affected files before editing. Then apply minimal changes and run focused checks."
+    },
+    "test-plan": {
+      "description": "Generate or update tests from requirements and acceptance criteria.",
+      "agent": "api-specialist",
+      "template": "Using docs/ai/trackstacc-requirements-graph.md and docs/ai/trackstacc-integration-matrix.md, create or update tests for: $ARGUMENTS. Map tests to requirements, APIs, data models, error codes, and acceptance criteria."
+    },
     "verify": {
       "description": "Run full repo verification and triage failures.",
       // No model override — inherits from trackstacc-builder.
