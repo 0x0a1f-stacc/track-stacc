@@ -13,6 +13,12 @@ import { roomChannel } from "./broadcast.js";
 import { getParticipants } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
 
+interface SocketData {
+  roomId: string;
+  sessionId: string;
+  accessTier: string;
+}
+
 export async function registerRealtime(app: FastifyInstance) {
   const io = new Server(app.server, {
     cors: {
@@ -35,10 +41,10 @@ export async function registerRealtime(app: FastifyInstance) {
         });
         if (!session || session.roomId !== payload.roomId || session.isBanned)
           throw new Error("invalid session");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        socket.data.roomId = payload.roomId;
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        socket.data.sessionId = payload.sessionId;
+        const data = socket.data as SocketData;
+        data.roomId = payload.roomId;
+        data.sessionId = payload.sessionId;
+        data.accessTier = payload.accessTier ?? session.accessTier;
         next();
       } catch (error) {
         next(error instanceof Error ? error : new Error("unauthorized"));
@@ -46,10 +52,9 @@ export async function registerRealtime(app: FastifyInstance) {
     })();
   });
   io.on("connection", async (socket) => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const roomId = String(socket.data.roomId);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const sessionId = String(socket.data.sessionId);
+    const data = socket.data as SocketData;
+    const roomId = data.roomId;
+    const sessionId = data.sessionId;
     await socket.join(roomChannel(roomId));
     await app.prisma.roomSession.update({
       where: { id: sessionId },

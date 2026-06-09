@@ -6,7 +6,7 @@ import {
   type ClientEvent,
 } from "@trackstacc/types";
 
-import { AppError } from "../lib/errors.js";
+import { AppError, toWsErrorAcknowledgement } from "../lib/errors.js";
 import { chatSendSchema } from "../modules/chat/chat.schema.js";
 import { sendChatMessage } from "../modules/chat/chat.service.js";
 import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
@@ -23,6 +23,7 @@ import {
 import { addQueueItem, voteQueueItem } from "../modules/queue/queue.service.js";
 import { getParticipants } from "./presence.manager.js";
 import { broadcast } from "./broadcast.js";
+import { generateEventRequestId } from "./request-id.js";
 
 export function registerRoomHandlers(
   app: FastifyInstance,
@@ -32,7 +33,17 @@ export function registerRoomHandlers(
   sessionId: string,
 ) {
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  socket.onAny(async (_eventName: string, event: ClientEvent) => {
+  socket.onAny(async (eventName: string, event: ClientEvent) => {
+    const requestId = generateEventRequestId();
+    const sendError = (error: Error) => {
+      const appError =
+        error instanceof AppError
+          ? error
+          : new AppError("INTERNAL_ERROR", "Action failed.");
+      const ack = toWsErrorAcknowledgement(appError, eventName, requestId);
+      socket.emit("error", { type: "error" as const, ...ack });
+    };
+
     try {
       if (event.type === "presence.heartbeat") {
         await app.prisma.roomSession.update({
@@ -125,16 +136,7 @@ export function registerRoomHandlers(
         if (body.status === "playing") clearClientBuffering(roomId);
       }
     } catch (error) {
-      const appError =
-        error instanceof AppError
-          ? error
-          : new AppError("INTERNAL_ERROR", "Action failed.");
-      socket.emit("error", {
-        type: "error",
-        code: appError.code,
-        message: appError.message,
-        details: appError.details,
-      });
+      sendError(error as Error);
     }
   });
 }
