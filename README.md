@@ -27,7 +27,7 @@ Implemented and exercised locally:
 - Socket.IO room snapshot on connect (includes access tier and nullable listener nicknames)
 - health and readiness endpoints
 - Docker builds for both API and web
-- **Schema support for native Listener/member access tiers** (`room_sessions.access_tier`, `rooms.listener_chat_visible`) — runtime listener endpoints and UI pending follow-up
+- **Schema and endpoint support for native Listener/member access tiers** (`room_sessions.access_tier`, `rooms.listener_chat_visible`, `POST /api/rooms/:roomId/listen`) — Listener UI, access-tier enforcement, and member upgrade pending follow-up
 
 Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
 
