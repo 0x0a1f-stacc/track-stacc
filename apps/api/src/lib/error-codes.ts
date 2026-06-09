@@ -238,6 +238,20 @@ export const ERROR_REGISTRY: Record<string, ErrorDefinition> = {
     retryable: true,
     retryAfterSeconds: null,
   },
+  LISTENER_READ_ONLY: {
+    code: "LISTENER_READ_ONLY",
+    statusCode: 403,
+    message: "Join with a protected nickname to do that.",
+    retryable: false,
+    retryAfterSeconds: null,
+  },
+  NICKNAME_PROTECTION_REQUIRED: {
+    code: "NICKNAME_PROTECTION_REQUIRED",
+    statusCode: 409,
+    message: "A protected nickname is required to participate in this room.",
+    retryable: false,
+    retryAfterSeconds: null,
+  },
   RATE_LIMITED: {
     code: "RATE_LIMITED",
     statusCode: 429,
