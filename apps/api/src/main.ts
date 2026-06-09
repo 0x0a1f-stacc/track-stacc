@@ -48,20 +48,35 @@ export async function buildApp(config: ApiConfig) {
   await app.register(rateLimitPlugin);
   await app.register(authPlugin);
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    const requestId = request.id;
+
     if (error instanceof AppError)
-      return reply.status(error.statusCode).send(toErrorResponse(error));
+      return reply
+        .status(error.statusCode)
+        .send(toErrorResponse(error, requestId));
+
     if (error instanceof ZodError)
       return reply.status(400).send({
         error: {
-          code: "VALIDATION_ERROR",
+          code: "VALIDATION_FAILED",
           message: "Invalid request.",
+          requestId,
+          retryable: false,
+          retryAfterSeconds: null,
           details: error.flatten(),
         },
       });
+
     app.log.error(error);
     return reply.status(500).send({
-      error: { code: "INTERNAL_ERROR", message: "Something went wrong." },
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Something went wrong.",
+        requestId,
+        retryable: true,
+        retryAfterSeconds: null,
+      },
     });
   });
 
