@@ -11,7 +11,15 @@ export default fp(async (app) => {
     const session = await app.prisma.roomSession.findUnique({
       where: { sessionTokenHash: hashToken(token) },
     });
-    if (session && !session.isBanned) request.session = session;
+    if (!session) {
+      request.log.warn({ sessionTokenHash: hashToken(token) }, "session not found");
+      return;
+    }
+    if (session.isBanned) {
+      request.log.warn({ sessionId: session.id }, "banned session attempted access");
+      return;
+    }
+    request.session = session;
   });
 });
 
