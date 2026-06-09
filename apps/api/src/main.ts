@@ -26,6 +26,7 @@ import { nicknamesRouter } from "./modules/nicknames/nicknames.router.js";
 import { playbackRouter } from "./modules/playback/playback.router.js";
 import { queueRouter } from "./modules/queue/queue.router.js";
 import { roomsRouter } from "./modules/rooms/rooms.router.js";
+import { sessionsRouter } from "./modules/sessions/sessions.router.js";
 import { registerRealtime } from "./realtime/gateway.js";
 
 export async function buildApp(config: ApiConfig) {
@@ -88,6 +89,7 @@ export async function buildApp(config: ApiConfig) {
   });
 
   await app.register(roomsRouter);
+  await app.register(sessionsRouter);
   await app.register(nicknamesRouter);
   await app.register(chatRouter);
   await app.register(moderationRouter);

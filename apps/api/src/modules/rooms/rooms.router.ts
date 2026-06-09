@@ -35,17 +35,6 @@ export async function roomsRouter(app: FastifyInstance) {
     };
   });
 
-  app.get("/api/rooms/:roomId", async (request) => {
-    const { roomId } = request.params as { roomId: string };
-    const room = await app.prisma.room.findFirst({
-      where: uuidPattern.test(roomId)
-        ? { OR: [{ id: roomId }, { slug: roomId }] }
-        : { slug: roomId },
-    });
-    if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found.", 404);
-    return { room };
-  });
-
   app.patch("/api/rooms/:roomId/settings", async (request) => {
     if (
       !request.session ||
