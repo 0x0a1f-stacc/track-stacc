@@ -2284,6 +2284,8 @@ Rate limit windows vary by action (see Section 13.9 for per-action limits). When
 
 Every API request is assigned a unique request ID. If the client sends an `X-Request-Id` header, the server uses it; otherwise, the server generates one. The request ID is returned in the `X-Request-Id` response header and included in structured logs, error responses, and audit entries. External command results also include the request ID for cross-system correlation.
 
+> **Implementation note:** Request ID middleware is registered in `apps/api/src/main.ts` via Fastify's `genReqId` option (using `nanoid(21)`) and `requestIdHeader: "X-Request-Id"`. The ID is available as `request.id` and propagated in the `X-Request-Id` response header. Socket.IO events generate a `ws_`-prefixed request ID via `generateEventRequestId()` in `apps/api/src/realtime/request-id.ts`.
+
 #### 15.1.6 Naming Conventions
 
 | Context | Convention | Examples |
@@ -2812,6 +2814,8 @@ Recommended:
 3. Rotate tokens on privilege escalation, such as becoming host/mod.
 4. Store token hashes server-side if revocation is required.
 
+> **Implementation note:** The `WsTokenPayload` interface in `apps/api/src/lib/tokens.ts` includes an optional `accessTier` field for encoding listener/member tier in signed WS tokens. Existing tokens without this field still verify successfully. When the field is absent, the system falls back to a database lookup for tier determination. Session tokens are signed using `SESSION_SECRET` from config.
+
 ### 19.5 External Integration Security
 
 **This section is the single authoritative source for external integration security requirements.** Sections 12.4 (Authority Constraints), 13.11 (External Command Service), 20.3 (External Integration Abuse Controls), 31.7 (External Site Integration acceptance criteria), and 31.9 (External Staff Commands acceptance criteria) reference this section rather than restating these constraints independently. If a conflict exists between this section and a downstream reference, this section takes precedence.
@@ -3153,6 +3157,8 @@ Before production launch:
 
 REST responses must set the corresponding HTTP status from Section 23.4. `429` responses must include `Retry-After` when a retry time is known. `503` responses should include `Retry-After` only when the service can make a bounded recovery estimate.
 
+> **Implementation note:** The `ErrorResponse` type matching this envelope is defined in `packages/types/src/api.ts`. The `AppError` class and `toErrorResponse()` helper are in `apps/api/src/lib/errors.ts`. The error handler in `apps/api/src/main.ts` includes `requestId` from `request.id` in all error responses.
+
 #### 23.2.2 WebSocket Error Acknowledgement
 
 Client-to-server Socket.IO events that can fail must acknowledge with the same registry code:
@@ -3171,6 +3177,8 @@ Client-to-server Socket.IO events that can fail must acknowledge with the same r
 ```
 
 Unsolicited server-side errors should use `error` or a domain-specific failure event with the same fields. WebSocket errors must not disconnect the client unless the error is authentication, authorization, protocol abuse, or unrecoverable server degradation.
+
+> **Implementation note:** The `WsErrorAcknowledgement` type is defined in `packages/types/src/events.ts`. The `toWsErrorAcknowledgement()` helper in `apps/api/src/lib/errors.ts` constructs the error envelope with `requestId` (from `generateEventRequestId()` in `apps/api/src/realtime/request-id.ts`) and `sourceEvent`. The Socket.IO `onAny` handler in `apps/api/src/realtime/room.gateway.ts` catches errors and sends them via `socket.emit("error", ...)` with this envelope.
 
 #### 23.2.3 External Command Result Envelope
 
@@ -3205,6 +3213,8 @@ Accepted duplicate external commands must return the original result where avail
 | `500` | Unexpected server error. | Retry with backoff only for idempotent reads or idempotent writes. |
 
 ### 23.4 Formal Error Code Registry
+
+> **Implementation note:** The error code registry is implemented in `apps/api/src/lib/error-codes.ts` (`ERROR_REGISTRY` + `getErrorDefinition()`). When adding a new error code, add it to both this table and the `ERROR_REGISTRY` in that file.
 
 | Code | HTTP | Applies to | User-facing message direction | Retry guidance |
 | ---- | ---- | ---------- | ----------------------------- | -------------- |
