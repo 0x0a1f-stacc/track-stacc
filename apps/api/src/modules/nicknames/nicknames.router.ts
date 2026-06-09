@@ -82,7 +82,7 @@ export async function nicknamesRouter(app: FastifyInstance) {
   app.post("/api/rooms/:roomId/nickname/change", async (request) => {
     if (!request.session)
       throw new AppError(
-        "UNAUTHENTICATED",
+        "AUTH_REQUIRED",
         "Join the room before doing that.",
         401,
       );

@@ -69,7 +69,7 @@ export async function joinRoom(
   });
   if (existingActive)
     throw new AppError(
-      "NICKNAME_UNAVAILABLE",
+      "NICKNAME_TAKEN",
       "Someone is already using that nickname in this room.",
       409,
     );

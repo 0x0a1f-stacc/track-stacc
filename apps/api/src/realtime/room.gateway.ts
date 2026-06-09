@@ -128,7 +128,7 @@ export function registerRoomHandlers(
       const appError =
         error instanceof AppError
           ? error
-          : new AppError("EVENT_FAILED", "Action failed.");
+          : new AppError("INTERNAL_ERROR", "Action failed.");
       socket.emit("error", {
         type: "error",
         code: appError.code,
