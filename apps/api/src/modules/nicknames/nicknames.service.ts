@@ -117,6 +117,10 @@ export async function joinRoom(
   return {
     session,
     sessionToken,
-    websocketToken: signWsToken({ roomId: room.id, sessionId: session.id }),
+    websocketToken: signWsToken({
+      roomId: room.id,
+      sessionId: session.id,
+      accessTier: session.accessTier,
+    }),
   };
 }

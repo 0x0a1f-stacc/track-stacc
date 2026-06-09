@@ -25,6 +25,7 @@ export function hashToken(token: string) {
 export interface WsTokenPayload {
   roomId: string;
   sessionId: string;
+  accessTier?: string;
   exp: number;
 }
 
@@ -50,7 +51,10 @@ export function verifyWsToken(token: string): WsTokenPayload {
   const expected = createHmac("sha256", secret)
     .update(body)
     .digest("base64url");
-  if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected)))
+  if (
+    Buffer.from(signature).length !== Buffer.from(expected).length ||
+    !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+  )
     throw new AppError("WEBSOCKET_TOKEN_INVALID", "Invalid websocket token.", 401);
   const parsed = JSON.parse(
     Buffer.from(body, "base64url").toString("utf8"),
