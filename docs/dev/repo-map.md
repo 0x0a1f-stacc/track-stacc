@@ -37,6 +37,17 @@ No `.env`, Docker, or secrets needed — all four verification commands run offl
 | `docs/` | Product and engineering documentation |
 | `.github/` | PR template and validation workflow |
 
+### Key infrastructure files
+
+| Path | Purpose |
+|------|---------|
+| `apps/api/src/lib/config.ts` | Typed config loader — `ApiConfig` interface, `loadConfig()`, `createConfigPlugin()` |
+| `apps/api/src/lib/error-codes.ts` | Formal error code registry aligned with SDD §23.4 |
+| `apps/api/src/lib/errors.ts` | Error envelope helpers — `AppError`, `toErrorResponse()`, `toWsErrorAcknowledgement()` |
+| `apps/api/src/types/config.d.ts` | Fastify type augmentation for `app.config` |
+| `apps/api/src/types/session.d.ts` | Fastify type augmentation for `request.session` |
+| `apps/api/src/realtime/request-id.ts` | WebSocket event request ID generation (`ws_`-prefixed) |
+
 ---
 
 ## Package Graph
@@ -72,7 +83,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 | `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
-| `pnpm test` | ~1.5s | No | No | 24 tests (Vitest) across 5 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
+| `pnpm test` | ~1.5s | No | No | 31 tests (Vitest) across 6 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
 | `pnpm build` | ~16s (cached) | No | No | Prisma generate → `tsc` for `api`; `next build` for `web`; `tsc` for `types` and `ui`. |
 | `pnpm --filter api prisma validate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Validates root schema via `apps/api/scripts/prisma.mjs`. |
 | `pnpm --filter api prisma generate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Generates Prisma Client from root schema. |
@@ -83,7 +94,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 |---------|--------|
 | `pnpm lint` | ✓ All 5 packages clean |
 | `pnpm typecheck` | ✓ 4 packages clean |
-| `pnpm test` | ✓ 24 tests (5 files), all pass |
+| `pnpm test` | ✓ 31 tests (6 files), all pass |
 | `pnpm build` | ✓ 4 packages, Next.js generates 6 static + 2 dynamic routes |
 | `pnpm --filter api prisma validate` | ✓ Schema valid |
 | `pnpm --filter api prisma generate` | ✓ Prisma Client generated |
@@ -302,7 +313,8 @@ or pass them via Docker build args.
 |-----|---------|-------|
 | **SDD says `/api/v1/`, code uses `/api/`** | API conventions | SDD §15.1.1 specifies `/api/v1/` prefix. Actual routes use bare `/api/`. README and `AGENTS.md` correctly document `/api/`. |
 | **Listener tier not implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. **Schema and shared contracts are implemented** (`AccessTier` enum, `room_sessions.access_tier`, `rooms.listener_chat_visible`, nullable nickname fields, `Role.listener`). Runtime listener session creation, read-only API enforcement, and UI are pending follow-up work. |
-| **`HOST_SECRET_SALT` unused** | API config | `.env.example` lists it as required, but no code in `apps/api/src/` consumes it. Startup validation deliberately excludes it. Likely reserved for a future host token hashing feature. |
+| **`HOST_SECRET_SALT` unused** | API config | `.env.example` lists it as required. Config loader surfaces it but no code consumes it yet. Likely reserved for future host token hashing. |
+| **Error code migration** | API contracts | Several error codes were renamed to match SDD §23.4: `VALIDATION_ERROR` → `VALIDATION_FAILED`, `UNAUTHENTICATED` → `AUTH_REQUIRED`, `NICKNAME_UNAVAILABLE` → `NICKNAME_TAKEN`, `EVENT_FAILED` → `INTERNAL_ERROR`, `INVALID_TOKEN`/`TOKEN_EXPIRED` → `WEBSOCKET_TOKEN_INVALID`. Consumers expecting old codes must update. |
 | **`pnpm audit` not in CI** | CI/CD | SDD §39.4 specifies `pnpm audit` with critical/high failures blocking CI. Not yet implemented. |
 | **`packages/config` has no scripts** | Tooling | Pure config package — intentional, but may surprise agents trying `pnpm --filter @trackstacc/config lint`. |
 | **Root-level files not linted** | Code quality | `prisma/seed.ts`, `scripts/`, and root config files are not covered by any `lint` script. |
