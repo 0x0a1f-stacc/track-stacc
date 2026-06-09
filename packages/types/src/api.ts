@@ -73,6 +73,20 @@ export interface ModerationRequest {
   targetSessionId: string;
   reason?: string;
 }
+
+export interface ListenRequest {
+  roomPassword?: string;
+}
+
+export interface ListenResponse {
+  session: {
+    roomSessionId: string;
+    accessTier: "listener";
+    role: "listener";
+  };
+  websocketToken: string;
+}
+
 export interface ErrorResponse {
   error: {
     code: string;
