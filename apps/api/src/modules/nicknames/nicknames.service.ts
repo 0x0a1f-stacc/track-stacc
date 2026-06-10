@@ -29,10 +29,39 @@ export async function protectNickname(
   password: string,
 ) {
   const normalized = normalizeNickname(displayNickname);
-  const passwordHash = await hashPassword(password);
-  return app.prisma.nicknameClaim.create({
-    data: { ...normalized, passwordHash, status: "active" },
+  const existing = await app.prisma.nicknameClaim.findFirst({
+    where: {
+      normalizedNickname: normalized.normalizedNickname,
+      status: "active",
+    },
   });
+  if (existing) {
+    throw new AppError(
+      "NICKNAME_TAKEN",
+      "That nickname is already protected.",
+      409,
+    );
+  }
+  const passwordHash = await hashPassword(password);
+  try {
+    return await app.prisma.nicknameClaim.create({
+      data: { ...normalized, passwordHash, status: "active" },
+    });
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code: string }).code === "P2002"
+    ) {
+      throw new AppError(
+        "NICKNAME_TAKEN",
+        "That nickname is already protected.",
+        409,
+      );
+    }
+    throw error;
+  }
 }
 
 export async function joinRoom(
