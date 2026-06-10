@@ -7,11 +7,11 @@ import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
 
 export function AddSongInput({
   emit,
-  isListener,
+  canParticipate,
   roomSlug,
 }: {
   emit: (event: ClientEvent) => void;
-  isListener: boolean;
+  canParticipate: boolean;
   roomSlug: string;
 }) {
   const [youtubeUrl, setUrl] = React.useState("");
@@ -25,7 +25,7 @@ export function AddSongInput({
     return () => window.clearTimeout(timer);
   }, [lastError]);
 
-  if (isListener) {
+  if (!canParticipate) {
     return (
       <ListenerUpgradePrompt
         roomSlug={roomSlug}

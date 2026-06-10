@@ -8,7 +8,6 @@ import { useRoomStore } from "@/stores/room.store";
 import { api } from "@/lib/api";
 import { AddSongInput } from "./AddSongInput";
 import { ChatPanel } from "./ChatPanel";
-import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
 import { ParticipantList } from "./ParticipantList";
 import { PlaybackControls } from "./PlaybackControls";
 import { QueuePanel } from "./QueuePanel";
@@ -37,6 +36,10 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       localStorage.getItem(`ws:${roomSlug}`);
     if (stored) {
       useRoomStore.getState().setToken(stored);
+      const storedTier = sessionStorage.getItem(`ws:${roomSlug}:tier`);
+      if (storedTier === "listener" || storedTier === "member") {
+        useRoomStore.getState().setOwnAccessTier(storedTier as AccessTier);
+      }
       return;
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -50,6 +53,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
           .getState()
           .setOwnAccessTier(response.session.accessTier as AccessTier);
         sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
+        sessionStorage.setItem(`ws:${roomSlug}:tier`, response.session.accessTier);
         setListenerState({ status: "ok" });
       })
       .catch((caught: unknown) => {
@@ -132,7 +136,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
     return null;
   }
 
-  const isListener = ownAccessTier === AccessTier.Listener;
+  const canParticipate = ownAccessTier === AccessTier.Member;
 
   return (
     <main className="grid min-h-screen gap-4 p-4 lg:grid-cols-[1.2fr_420px]">
@@ -151,29 +155,21 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
           <PlaybackControls
             {...(room?.id !== undefined && { roomId: room.id })}
             roomSlug={roomSlug}
-            isListener={isListener}
+            canParticipate={canParticipate}
           />
         </div>
-        {isListener ? (
-          <ListenerUpgradePrompt
-            roomSlug={roomSlug}
-            message="Get a nickname to add songs or participate."
-          />
-        ) : (
-          <AddSongInput
-            {...(room?.id !== undefined && { roomId: room.id })}
-            emit={emit}
-            isListener={false}
-            roomSlug={roomSlug}
-          />
-        )}
+        <AddSongInput
+          emit={emit}
+          canParticipate={canParticipate}
+          roomSlug={roomSlug}
+        />
         <QueuePanel />
         <RoomSettings />
       </section>
       <aside className="grid gap-4 lg:grid-rows-[1fr_260px]">
         <ChatPanel
           emit={emit}
-          isListener={isListener}
+          canParticipate={canParticipate}
           roomSlug={roomSlug}
         />
         <ParticipantList />

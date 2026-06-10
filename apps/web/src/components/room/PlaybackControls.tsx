@@ -6,14 +6,14 @@ import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
 export function PlaybackControls({
   roomId,
   roomSlug,
-  isListener,
+  canParticipate,
 }: {
   roomId?: string;
   roomSlug: string;
-  isListener: boolean;
+  canParticipate: boolean;
 }) {
   const playback = useRoomStore((state) => state.playback);
-  if (isListener) {
+  if (!canParticipate) {
     return (
       <div className="mt-3">
         <p className="mb-2 text-sm text-zinc-300">
