@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import { verifyPassword } from "../../lib/argon2.js";
 import { AppError } from "../../lib/errors.js";
+import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
 import { hashToken } from "../../lib/tokens.js";
 import { normalizeNickname } from "../identity/nickname.normalizer.js";
 import {
@@ -44,13 +45,42 @@ export async function nicknamesRouter(app: FastifyInstance) {
         status: "active",
       },
     });
-    if (!claim || !(await verifyPassword(claim.passwordHash, body.password)))
+    if (!claim) {
       throw new AppError(
-        "NICKNAME_PROTECTED",
+        "NICKNAME_PASSWORD_INCORRECT",
         "That nickname is protected. The password was incorrect.",
-        401,
+        403,
       );
-    return { authenticated: true };
+    }
+    try {
+      await assertRateLimit(
+        app.redis,
+        `rl:nickname-auth:${normalized.normalizedNickname}`,
+        rateLimits.nicknameAuth.max,
+        rateLimits.nicknameAuth.windowMs,
+      );
+    } catch (error) {
+      if (error instanceof AppError && error.code === "RATE_LIMITED") {
+        throw new AppError(
+          "NICKNAME_PASSWORD_RATE_LIMITED",
+          "Too many incorrect attempts. Try again later.",
+          429,
+        );
+      }
+      throw error;
+    }
+    if (!(await verifyPassword(claim.passwordHash, body.password))) {
+      throw new AppError(
+        "NICKNAME_PASSWORD_INCORRECT",
+        "That nickname is protected. The password was incorrect.",
+        403,
+      );
+    }
+    return {
+      authenticated: true,
+      id: claim.id,
+      displayNickname: claim.displayNickname,
+    };
   });
   app.post("/api/rooms/:roomId/join", async (request, reply) => {
     const { roomId } = request.params as { roomId: string };
