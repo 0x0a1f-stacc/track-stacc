@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import { AppError } from "../../lib/errors.js";
+import { requireModerator } from "../../auth/guards.js";
 
 export async function chatRouter(app: FastifyInstance) {
   app.get("/api/rooms/:roomId/chat/messages", async (request) => {
@@ -14,20 +14,12 @@ export async function chatRouter(app: FastifyInstance) {
     };
   });
   app.delete("/api/rooms/:roomId/chat/messages/:messageId", async (request) => {
-    if (
-      !request.session ||
-      !["host", "moderator"].includes(request.session.role)
-    )
-      throw new AppError(
-        "FORBIDDEN",
-        "Only hosts and moderators can delete chat.",
-        403,
-      );
+    const session = requireModerator(request.session);
     const { messageId } = request.params as { messageId: string };
     return {
       message: await app.prisma.chatMessage.update({
         where: { id: messageId },
-        data: { deletedAt: new Date(), deletedBySessionId: request.session.id },
+        data: { deletedAt: new Date(), deletedBySessionId: session.id },
       }),
     };
   });

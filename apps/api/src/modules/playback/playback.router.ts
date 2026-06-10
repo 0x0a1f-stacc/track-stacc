@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
 
+import { requireMember } from "../../auth/guards.js";
 import { AppError } from "../../lib/errors.js";
 import {
   autoSkipTrack,
@@ -15,8 +16,7 @@ async function evaluateSkipVote(
   queueItemId: string,
 ): Promise<{ skipped: boolean; votesNeeded: number; currentVotes: number }> {
   const room = await app.prisma.room.findUnique({ where: { id: roomId } });
-  if (!room)
-    throw new AppError("ROOM_NOT_FOUND", "Room not found.", 404);
+  if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found.", 404);
 
   const [voteCount, activeCount] = await Promise.all([
     app.prisma.skipVote.count({
@@ -48,22 +48,12 @@ async function evaluateSkipVote(
 
 export async function playbackRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/playback/skip", async (request) => {
-    if (!request.session)
-      throw new AppError(
-        "AUTH_REQUIRED",
-        "Join the room before doing that.",
-        401,
-      );
+    const session = requireMember(request.session);
     const { roomId } = request.params as { roomId: string };
-    return { state: await skipTrack(app, io, roomId, request.session.id) };
+    return { state: await skipTrack(app, io, roomId, session.id) };
   });
   app.post("/api/rooms/:roomId/playback/skip-vote", async (request) => {
-    if (!request.session)
-      throw new AppError(
-        "AUTH_REQUIRED",
-        "Join the room before doing that.",
-        401,
-      );
+    const session = requireMember(request.session);
     const { roomId } = request.params as { roomId: string };
     const state = await getPlaybackState(app, roomId);
     if (!state.queueItemId)
@@ -72,12 +62,12 @@ export async function playbackRouter(app: FastifyInstance, io: Server) {
       where: {
         queueItemId_roomSessionId: {
           queueItemId: state.queueItemId,
-          roomSessionId: request.session.id,
+          roomSessionId: session.id,
         },
       },
       create: {
         queueItemId: state.queueItemId,
-        roomSessionId: request.session.id,
+        roomSessionId: session.id,
       },
       update: {},
     });
