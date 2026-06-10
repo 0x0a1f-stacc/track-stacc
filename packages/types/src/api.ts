@@ -51,8 +51,18 @@ export interface NicknameProtectRequest {
   displayNickname: string;
   password: string;
 }
+export interface NicknameProtectResponse {
+  id: string;
+  displayNickname: string;
+}
+export interface NicknameAuthenticateRequest {
+  displayNickname: string;
+  password: string;
+}
 export interface NicknameAuthenticateResponse {
   authenticated: boolean;
+  id?: string;
+  displayNickname?: string;
 }
 export interface UpdateRoomSettingsRequest {
   settings: Partial<RoomSettings>;
