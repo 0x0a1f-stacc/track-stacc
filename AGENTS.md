@@ -96,6 +96,16 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - `/api/rooms/:roomId/join` and `/api/rooms/:roomId/password/verify` accept room slug **or** UUID.
 - All other room routes (queue, playback, chat, moderation, settings) accept **UUID only**. Do not pass slugs to these routes.
 
+## Realtime / Snapshot Notes
+
+- `room.snapshot` is a server-to-client event typed in `packages/types/src/domain.ts` (`RoomSnapshot`). Emitted on every WebSocket connect after token validation.
+- Socket.IO auth uses signed tokens from `apps/api/src/lib/tokens.ts`. The token is passed via `socket.handshake.auth.token` and validated in `apps/api/src/realtime/gateway.ts`.
+- Invalid/missing/expired tokens are rejected with `WEBSOCKET_TOKEN_INVALID` (registered in `apps/api/src/lib/error-codes.ts`).
+- WS event request IDs use `generateEventRequestId()` from `apps/api/src/realtime/request-id.ts` (`ws_`-prefixed).
+- Listener snapshots respect `rooms.listener_chat_visible`: if false, `recentMessages` is `[]` for listener-tier sockets.
+- Do not trust client role/access tier — the server re-derives the tier from the signed token on every connection.
+- C2S interactive tier enforcement (chat.send, queue.add, etc.) is separate from snapshot delivery; do not mix unrelated enforcement into snapshot PRs.
+
 ## Migration First-Run
 
 - `pnpm db:migrate` runs `prisma migrate dev`, which prompts for a migration name on first creation. For non-interactive first runs use: `pnpm --filter api prisma migrate dev --name init`.

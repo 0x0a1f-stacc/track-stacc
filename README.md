@@ -24,10 +24,10 @@ Implemented and exercised locally:
 - shared queue add/remove/vote flows
 - suggestions flow with approve/reject endpoints
 - room settings persistence for queue/chat lock and other room options
-- Socket.IO room snapshot on connect (includes access tier and nullable listener nicknames)
+- Socket.IO room snapshot on connect (includes access tier, nullable listener nicknames, and listener chat visibility filtering)
 - health and readiness endpoints
 - Docker builds for both API and web
-- **Schema and endpoint support for native Listener/member access tiers** (`room_sessions.access_tier`, `rooms.listener_chat_visible`, `POST /api/rooms/:roomId/listen`) — Listener UI, access-tier enforcement, and member upgrade pending follow-up
+- Schema and endpoint support for native Listener/member access tiers (`room_sessions.access_tier`, `rooms.listener_chat_visible`, `POST /api/rooms/:roomId/listen`) — Listener UI, access-tier enforcement, and member upgrade pending follow-up
 
 Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
 
@@ -167,7 +167,8 @@ Also verified locally:
 
 - `POST /api/rooms` creates a room
 - `POST /api/rooms/:slug/join` returns a session payload and `websocketToken`
-- Socket.IO connection receives `room.snapshot`
+- `POST /api/rooms/:roomId/listen` returns a listener session and `websocketToken`
+- Socket.IO connection receives `room.snapshot` (includes room metadata, playback, queue, participants, and recent messages filtered by access tier)
 
 ## Environment Variables
 
@@ -201,6 +202,8 @@ Important endpoints:
 - `GET /api/rooms/:roomId`
 - `PATCH /api/rooms/:roomId/settings`
 - `POST /api/rooms/:roomId/join`
+- `POST /api/rooms/:roomId/listen`
+- `POST /api/rooms/:roomId/password/verify`
 - `POST /api/rooms/:roomId/queue/items`
 - `POST /api/rooms/:roomId/queue/items/:queueItemId/vote`
 - `POST /api/rooms/:roomId/queue/items/:queueItemId/approve`
@@ -209,7 +212,7 @@ Important endpoints:
 - `GET /health`
 - `GET /health/ready`
 
-Most write routes require the `session_token` cookie set during room join.
+Most write routes require the `session_token` cookie set during room join or listen. After obtaining a `websocketToken` from join or listen, clients connect to the Socket.IO gateway which validates the token, joins the room channel, and emits `room.snapshot` with room metadata, current playback, queue, participants, and recent messages allowed for the access tier.
 
 ## Queue Mechanics
 

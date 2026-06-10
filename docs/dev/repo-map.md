@@ -46,7 +46,11 @@ No `.env`, Docker, or secrets needed — all four verification commands run offl
 | `apps/api/src/lib/errors.ts` | Error envelope helpers — `AppError`, `toErrorResponse()`, `toWsErrorAcknowledgement()` |
 | `apps/api/src/types/config.d.ts` | Fastify type augmentation for `app.config` |
 | `apps/api/src/types/session.d.ts` | Fastify type augmentation for `request.session` |
-| `apps/api/src/realtime/request-id.ts` | WebSocket event request ID generation (`ws_`-prefixed) |
+| `apps/api/src/realtime/request-id.ts` | WebSocket event request ID generation (`ws_`-prefixed)
+`apps/api/src/realtime/gateway.ts` | Socket.IO connection handler — token validation, room join, snapshot emission
+`apps/api/src/realtime/room.gateway.ts` | Client-to-server event handlers (chat, queue, playback, moderation)
+`apps/api/src/realtime/broadcast.ts` | Socket.IO room channel helpers and broadcast utilities
+`apps/api/src/realtime/presence.manager.ts` | Presence tracking and participant snapshot assembly |
 
 ---
 
@@ -83,7 +87,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 | `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
-| `pnpm test` | ~1.5s | No | No | 31 tests (Vitest) across 6 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
+| `pnpm test` | ~1.5s | No | No | 30+ tests (Vitest) across 16 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
 | `pnpm build` | ~16s (cached) | No | No | Prisma generate → `tsc` for `api`; `next build` for `web`; `tsc` for `types` and `ui`. |
 | `pnpm --filter api prisma validate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Validates root schema via `apps/api/scripts/prisma.mjs`. |
 | `pnpm --filter api prisma generate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Generates Prisma Client from root schema. |
@@ -94,7 +98,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 |---------|--------|
 | `pnpm lint` | ✓ All 5 packages clean |
 | `pnpm typecheck` | ✓ 4 packages clean |
-| `pnpm test` | ✓ 31 tests (6 files), all pass |
+| `pnpm test` | ✓ 30+ tests (16 files), all pass |
 | `pnpm build` | ✓ 4 packages, Next.js generates 6 static + 2 dynamic routes |
 | `pnpm --filter api prisma validate` | ✓ Schema valid |
 | `pnpm --filter api prisma generate` | ✓ Prisma Client generated |
@@ -331,7 +335,7 @@ All commands verified on 2026-06-08 against commit at `apps/api/src/main.ts:81`,
 
 - `pnpm lint`: 5 packages, all clean
 - `pnpm typecheck`: 4 packages with TS, all clean (`packages/config` skipped)
-- `pnpm test`: 31 tests across 6 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
+- `pnpm test`: 30+ tests across 16 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
 - `pnpm build`: 4 packages, Next.js output includes 6 static + 2 dynamic routes
 - `pnpm --filter api prisma validate`: schema valid (warns about deprecated `package.json#prisma` property — non-blocking)
 - `pnpm --filter api prisma generate`: Prisma Client generated to `node_modules/.pnpm/`
