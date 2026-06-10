@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
 
+import { requireModerator } from "../../auth/guards.js";
 import { verifyPassword } from "../../lib/argon2.js";
-import { AppError } from "../../lib/errors.js";
 import {
   createRoomSchema,
   passwordVerifySchema,
@@ -36,15 +36,7 @@ export async function roomsRouter(app: FastifyInstance) {
   });
 
   app.patch("/api/rooms/:roomId/settings", async (request) => {
-    if (
-      !request.session ||
-      !["host", "moderator"].includes(request.session.role)
-    )
-      throw new AppError(
-        "FORBIDDEN",
-        "Only hosts and moderators can update settings.",
-        403,
-      );
+    const session = requireModerator(request.session);
     const { roomId } = request.params as { roomId: string };
     const { settings } = settingsSchema.parse(request.body);
     const data = Object.fromEntries(
@@ -57,7 +49,7 @@ export async function roomsRouter(app: FastifyInstance) {
     await app.prisma.roomSettingsHistory.create({
       data: {
         roomId,
-        actorSessionId: request.session.id,
+        actorSessionId: session.id,
         settingKey: "settings",
         oldValue: {},
         newValue: settings,

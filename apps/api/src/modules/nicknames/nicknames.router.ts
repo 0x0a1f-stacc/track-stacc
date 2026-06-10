@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
+import { requireMember } from "../../auth/guards.js";
 import { verifyPassword } from "../../lib/argon2.js";
 import { AppError } from "../../lib/errors.js";
 import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
@@ -91,11 +92,21 @@ export async function nicknamesRouter(app: FastifyInstance) {
     const body = joinRoomSchema.parse(request.body);
     const result = await joinRoomService(app, {
       roomIdOrSlug: roomId,
-      ...(body.displayNickname !== undefined && { displayNickname: body.displayNickname }),
-      ...(body.nicknamePassword !== undefined && { nicknamePassword: body.nicknamePassword }),
-      ...(body.roomPassword !== undefined && { roomPassword: body.roomPassword }),
-      ...(request.cookies.host_token !== undefined && { hostToken: request.cookies.host_token }),
-      ...(body.listenerSessionId !== undefined && { listenerSessionId: body.listenerSessionId }),
+      ...(body.displayNickname !== undefined && {
+        displayNickname: body.displayNickname,
+      }),
+      ...(body.nicknamePassword !== undefined && {
+        nicknamePassword: body.nicknamePassword,
+      }),
+      ...(body.roomPassword !== undefined && {
+        roomPassword: body.roomPassword,
+      }),
+      ...(request.cookies.host_token !== undefined && {
+        hostToken: request.cookies.host_token,
+      }),
+      ...(body.listenerSessionId !== undefined && {
+        listenerSessionId: body.listenerSessionId,
+      }),
     });
     reply.setCookie("session_token", result.sessionToken, {
       httpOnly: true,
@@ -120,18 +131,20 @@ export async function nicknamesRouter(app: FastifyInstance) {
     };
   });
   app.post("/api/rooms/:roomId/nickname/change", async (request) => {
-    if (!request.session)
-      throw new AppError(
-        "AUTH_REQUIRED",
-        "Join the room before doing that.",
-        401,
-      );
-    const body = request.body as { displayNickname?: string; nicknamePassword?: string };
+    const session = requireMember(request.session);
+    const body = request.body as {
+      displayNickname?: string;
+      nicknamePassword?: string;
+    };
     if (!body.displayNickname)
-      throw new AppError("VALIDATION_FAILED", "Display nickname is required.", 400);
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "Display nickname is required.",
+        400,
+      );
     const normalized = normalizeNickname(body.displayNickname);
     const updated = await app.prisma.roomSession.update({
-      where: { id: request.session.id },
+      where: { id: session.id },
       data: {
         ...normalized,
         sessionTokenHash: hashToken(request.cookies.session_token ?? ""),

@@ -6,6 +6,7 @@ const HOST_REQUIRED_MESSAGE = "Only the host can do that.";
 const MODERATOR_REQUIRED_MESSAGE = "Only a host or moderator can do that.";
 
 export interface SessionGuard {
+  id: string;
   accessTier: string;
   role: string;
 }

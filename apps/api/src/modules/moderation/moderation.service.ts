@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { requireModerator } from "../../auth/guards.js";
 
 export function assertModerator(
-  session: { accessTier: string; role: string } | undefined,
+  session: { id: string; accessTier: string; role: string } | undefined,
 ) {
   requireModerator(session);
 }
