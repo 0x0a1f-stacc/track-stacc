@@ -27,7 +27,8 @@ Implemented and exercised locally:
 - Socket.IO room snapshot on connect (includes access tier, nullable listener nicknames, and listener chat visibility filtering)
 - health and readiness endpoints
 - Docker builds for both API and web
-- Schema and endpoint support for native Listener/member access tiers (`room_sessions.access_tier`, `rooms.listener_chat_visible`, `POST /api/rooms/:roomId/listen`) — Listener UI for read-only room shell implemented, access-tier enforcement and member upgrade pending follow-up
+- Listener-to-member join upgrade via `POST /api/rooms/:roomId/join` with `listenerSessionId` — upgrades a Listener session to `member` in place with a replacement WebSocket token carrying `accessTier: "member"`
+- Listener UI for read-only room shell implemented; WebSocket C2S access-tier enforcement still pending follow-up
 
 Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
 
@@ -166,8 +167,8 @@ Expected response:
 Also verified locally:
 
 - `POST /api/rooms` creates a room
-- `POST /api/rooms/:slug/join` returns a session payload and `websocketToken`
-- `POST /api/rooms/:roomId/listen` returns a listener session and `websocketToken`
+- `POST /api/rooms/:slug/join` returns a session payload and `websocketToken`; accepts optional `listenerSessionId` to upgrade a listener session in place to `member`, returning a replacement `websocketToken` with `accessTier: "member"`
+- `POST /api/rooms/:roomId/listen` returns a listener session (`accessTier: "listener"`) and a listener-tier `websocketToken`
 - Socket.IO connection receives `room.snapshot` (includes room metadata, playback, queue, participants, and recent messages filtered by access tier)
 
 ## Environment Variables
@@ -204,7 +205,7 @@ Important endpoints:
 - `POST /api/rooms`
 - `GET /api/rooms/:roomId`
 - `PATCH /api/rooms/:roomId/settings`
-- `POST /api/rooms/:roomId/join` — room join with optional protect-and-join; separate from the standalone nickname endpoints above
+- `POST /api/rooms/:roomId/join` — room join with optional protect-and-join; accepts optional `listenerSessionId` to upgrade an existing Listener session to `member` in place; returns a replacement `websocketToken` with `accessTier: "member"`; separate from the standalone nickname endpoints above
 - `POST /api/rooms/:roomId/listen`
 - `POST /api/rooms/:roomId/password/verify`
 - `POST /api/rooms/:roomId/queue/items`
