@@ -65,6 +65,8 @@ export async function nicknamesRouter(app: FastifyInstance) {
           "NICKNAME_PASSWORD_RATE_LIMITED",
           "Too many incorrect attempts. Try again later.",
           429,
+          undefined,
+          true,
         );
       }
       throw error;
