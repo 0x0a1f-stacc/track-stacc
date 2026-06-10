@@ -91,7 +91,7 @@ Standalone protected-nickname endpoints (`POST /api/nicknames/check`, `/protect`
 | `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
-| `pnpm test` | ~1.5s | No | No | 40+ tests (Vitest) across 17 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
+| `pnpm test` | ~1.5s | No | No | 220+ tests (Vitest) across 18 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
 | `pnpm build` | ~16s (cached) | No | No | Prisma generate → `tsc` for `api`; `next build` for `web`; `tsc` for `types` and `ui`. |
 | `pnpm --filter api prisma validate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Validates root schema via `apps/api/scripts/prisma.mjs`. |
 | `pnpm --filter api prisma generate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Generates Prisma Client from root schema. |
@@ -320,7 +320,7 @@ or pass them via Docker build args.
 | Gap | Affects | Notes |
 |-----|---------|-------|
 | **SDD says `/api/v1/`, code uses `/api/`** | API conventions | SDD §15.1.1 specifies `/api/v1/` prefix. Actual routes use bare `/api/`. README and `AGENTS.md` correctly document `/api/`. |
-| **Listener tier not fully implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. **Schema and shared contracts are implemented** (`AccessTier` enum, `room_sessions.access_tier`, `rooms.listener_chat_visible`, nullable nickname fields, `Role.listener`). `POST /api/rooms/:roomId/listen` creates read-only listener sessions. Listener read-only API enforcement, member upgrade, and frontend Listener UI remain pending follow-up work. |
+| **Listener tier not fully implemented** | Product scope | SDD v1.4.0 specifies two-tier native access (`listener`/`member`), `/listen` endpoint, `access_tier` field, and `listener_chat_visible`. **Schema and shared contracts are implemented** (`AccessTier` enum, `room_sessions.access_tier`, `rooms.listener_chat_visible`, nullable nickname fields, `Role.listener`). `POST /api/rooms/:roomId/listen` creates read-only listener sessions. `POST /api/rooms/:roomId/join` now accepts optional `listenerSessionId` to upgrade a Listener session to `member` in place with a replacement member-tier WebSocket token. Listener read-only API (WebSocket C2S) enforcement and frontend Listener UI remain pending follow-up work. |
 | **`HOST_SECRET_SALT` unused** | API config | `.env.example` lists it as required. Config loader surfaces it but no code consumes it yet. Likely reserved for future host token hashing. |
 | **Error code migration** | API contracts | Several error codes were renamed to match SDD §23.4: `VALIDATION_ERROR` → `VALIDATION_FAILED`, `UNAUTHENTICATED` → `AUTH_REQUIRED`, `NICKNAME_UNAVAILABLE` → `NICKNAME_TAKEN`, `EVENT_FAILED` → `INTERNAL_ERROR`, `INVALID_TOKEN`/`TOKEN_EXPIRED` → `WEBSOCKET_TOKEN_INVALID`. Consumers expecting old codes must update. |
 | **`pnpm audit` not in CI** | CI/CD | SDD §39.4 specifies `pnpm audit` with critical/high failures blocking CI. Not yet implemented. |
@@ -335,11 +335,11 @@ or pass them via Docker build args.
 
 ## Verification Notes
 
-All commands verified on 2026-06-08 against commit at `apps/api/src/main.ts:81`, `turbo: 2.9.16`, `prisma: 6.19.3`.
+All commands verified on 2026-06-10 against commit at `apps/api/src/main.ts:81`, `turbo: 2.9.16`, `prisma: 6.19.3`.
 
 - `pnpm lint`: 5 packages, all clean
 - `pnpm typecheck`: 4 packages with TS, all clean (`packages/config` skipped)
-- `pnpm test`: 40+ tests across 17 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
+- `pnpm test`: 220+ tests across 18 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
 - `pnpm build`: 4 packages, Next.js output includes 6 static + 2 dynamic routes
 - `pnpm --filter api prisma validate`: schema valid (warns about deprecated `package.json#prisma` property — non-blocking)
 - `pnpm --filter api prisma generate`: Prisma Client generated to `node_modules/.pnpm/`
