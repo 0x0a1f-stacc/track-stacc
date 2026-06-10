@@ -115,7 +115,7 @@ export const ERROR_REGISTRY: Record<string, ErrorDefinition> = {
   NICKNAME_TAKEN: {
     code: "NICKNAME_TAKEN",
     statusCode: 409,
-    message: "Someone is already using that nickname in this room.",
+    message: "That nickname is already protected.",
     retryable: false,
     retryAfterSeconds: null,
   },
