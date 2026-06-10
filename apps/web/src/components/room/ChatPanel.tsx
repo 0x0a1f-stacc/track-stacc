@@ -7,11 +7,11 @@ import { ChatMessage } from "./ChatMessage";
 import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
 export function ChatPanel({
   emit,
-  isListener,
+  canParticipate,
   roomSlug,
 }: {
   emit: (event: ClientEvent) => void;
-  isListener: boolean;
+  canParticipate: boolean;
   roomSlug: string;
 }) {
   const chat = useChat();
@@ -28,7 +28,7 @@ export function ChatPanel({
           ),
         )}
       </div>
-      {isListener ? (
+      {!canParticipate ? (
         <div className="mt-3">
           <ListenerUpgradePrompt
             roomSlug={roomSlug}
