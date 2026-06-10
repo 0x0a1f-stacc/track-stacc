@@ -4,7 +4,16 @@ import { ChatMessageType, type ClientEvent } from "@trackstacc/types";
 import { Button, Input, SystemMessage } from "@trackstacc/ui";
 import { useChat } from "@/hooks/useChat";
 import { ChatMessage } from "./ChatMessage";
-export function ChatPanel({ emit }: { emit: (event: ClientEvent) => void }) {
+import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
+export function ChatPanel({
+  emit,
+  isListener,
+  roomSlug,
+}: {
+  emit: (event: ClientEvent) => void;
+  isListener: boolean;
+  roomSlug: string;
+}) {
   const chat = useChat();
   const [body, setBody] = React.useState("");
   return (
@@ -19,22 +28,31 @@ export function ChatPanel({ emit }: { emit: (event: ClientEvent) => void }) {
           ),
         )}
       </div>
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!body.trim()) return;
-          emit({ type: "chat.send", body, tempId: crypto.randomUUID() });
-          setBody("");
-        }}
-      >
-        <Input
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="Say something"
-        />
-        <Button>Send</Button>
-      </form>
+      {isListener ? (
+        <div className="mt-3">
+          <ListenerUpgradePrompt
+            roomSlug={roomSlug}
+            message="Get a nickname to chat."
+          />
+        </div>
+      ) : (
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!body.trim()) return;
+            emit({ type: "chat.send", body, tempId: crypto.randomUUID() });
+            setBody("");
+          }}
+        >
+          <Input
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="Say something"
+          />
+          <Button>Send</Button>
+        </form>
+      )}
     </section>
   );
 }

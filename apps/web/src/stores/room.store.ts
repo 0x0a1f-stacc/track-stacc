@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AccessTier,
   ChatMessage,
   Participant,
   PlaybackState,
@@ -18,7 +19,9 @@ interface RoomState {
   playback: PlaybackState | null;
   websocketToken: string | null;
   lastError: string | null;
+  ownAccessTier: AccessTier | null;
   setToken: (token: string) => void;
+  setOwnAccessTier: (tier: AccessTier | null) => void;
   applyEvent: (event: ServerEvent) => void;
 }
 
@@ -30,7 +33,9 @@ export const useRoomStore = create<RoomState>((set) => ({
   playback: null,
   websocketToken: null,
   lastError: null,
+  ownAccessTier: null,
   setToken: (token) => set({ websocketToken: token }),
+  setOwnAccessTier: (tier) => set({ ownAccessTier: tier }),
   applyEvent: (event) =>
     set((state) => {
       if (event.type === "room.snapshot")

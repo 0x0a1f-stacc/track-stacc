@@ -3,12 +3,16 @@ import * as React from "react";
 import type { ClientEvent } from "@trackstacc/types";
 import { Button, Input } from "@trackstacc/ui";
 import { useRoomStore } from "@/stores/room.store";
+import { ListenerUpgradePrompt } from "./ListenerUpgradePrompt";
 
 export function AddSongInput({
   emit,
+  isListener,
+  roomSlug,
 }: {
-  roomId?: string;
   emit: (event: ClientEvent) => void;
+  isListener: boolean;
+  roomSlug: string;
 }) {
   const [youtubeUrl, setUrl] = React.useState("");
   const lastError = useRoomStore((state) => state.lastError);
@@ -20,6 +24,15 @@ export function AddSongInput({
     }, 5000);
     return () => window.clearTimeout(timer);
   }, [lastError]);
+
+  if (isListener) {
+    return (
+      <ListenerUpgradePrompt
+        roomSlug={roomSlug}
+        message="Get a nickname to add songs or participate."
+      />
+    );
+  }
 
   return (
     <form
