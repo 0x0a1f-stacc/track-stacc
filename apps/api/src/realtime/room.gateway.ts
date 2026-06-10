@@ -7,6 +7,7 @@ import {
 } from "@trackstacc/types";
 
 import { AppError, toWsErrorAcknowledgement } from "../lib/errors.js";
+import { requireMemberWs } from "./guards.js";
 import { chatSendSchema } from "../modules/chat/chat.schema.js";
 import { sendChatMessage } from "../modules/chat/chat.service.js";
 import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
@@ -24,6 +25,16 @@ import { addQueueItem, voteQueueItem } from "../modules/queue/queue.service.js";
 import { getParticipants } from "./presence.manager.js";
 import { broadcast } from "./broadcast.js";
 import { generateEventRequestId } from "./request-id.js";
+
+const memberRequiredEventTypes = new Set([
+  "chat.send",
+  "queue.add",
+  "queue.vote",
+  "playback.skipVote",
+  "room.settings.update",
+  "room.mechanic.change",
+  "moderation.action",
+]);
 
 export function registerRoomHandlers(
   app: FastifyInstance,
@@ -45,6 +56,13 @@ export function registerRoomHandlers(
     };
 
     try {
+      // Tier gate — enforce member tier for interactive events before
+      // reading any event payload fields for authorization.
+      if (memberRequiredEventTypes.has(event.type)) {
+        const sd = socket.data as { accessTier?: string };
+        requireMemberWs(sd);
+      }
+
       if (event.type === "presence.heartbeat") {
         await app.prisma.roomSession.update({
           where: { id: sessionId },
