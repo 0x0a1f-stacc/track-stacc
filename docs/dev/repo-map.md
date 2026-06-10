@@ -76,6 +76,10 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 **Edge:** `apps/web` depends on both `@trackstacc/types` (runtime) and `@trackstacc/ui` (runtime).
 `apps/api` depends only on `@trackstacc/types` (runtime).
 
+### Key file: standalone nickname endpoints
+
+Standalone protected-nickname endpoints (`POST /api/nicknames/check`, `/protect`, `/authenticate`) are implemented in `apps/api/src/modules/nicknames/` and consumed by the room join flow in `apps/api/src/modules/identity/`. Tests cover normalization, hash-only password storage, reserved-name blocking, wrong-password denial, and failed-attempt rate limiting. Test file: `apps/api/src/__tests__/nicknames.test.ts`.
+
 ---
 
 ## Command Reference
@@ -87,7 +91,7 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 | `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
-| `pnpm test` | ~1.5s | No | No | 30+ tests (Vitest) across 16 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
+| `pnpm test` | ~1.5s | No | No | 40+ tests (Vitest) across 17 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
 | `pnpm build` | ~16s (cached) | No | No | Prisma generate → `tsc` for `api`; `next build` for `web`; `tsc` for `types` and `ui`. |
 | `pnpm --filter api prisma validate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Validates root schema via `apps/api/scripts/prisma.mjs`. |
 | `pnpm --filter api prisma generate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Generates Prisma Client from root schema. |
@@ -335,7 +339,7 @@ All commands verified on 2026-06-08 against commit at `apps/api/src/main.ts:81`,
 
 - `pnpm lint`: 5 packages, all clean
 - `pnpm typecheck`: 4 packages with TS, all clean (`packages/config` skipped)
-- `pnpm test`: 30+ tests across 16 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
+- `pnpm test`: 40+ tests across 17 files in `apps/api`, all pass; `web`/`types`/`ui` have no test files
 - `pnpm build`: 4 packages, Next.js output includes 6 static + 2 dynamic routes
 - `pnpm --filter api prisma validate`: schema valid (warns about deprecated `package.json#prisma` property — non-blocking)
 - `pnpm --filter api prisma generate`: Prisma Client generated to `node_modules/.pnpm/`
