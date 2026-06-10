@@ -84,6 +84,8 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - Tests live in `apps/api/src/__tests__/` and use Vitest; web has `--passWithNoTests` (no tests yet).
 - API tests mock external dependencies (DB, Redis, Socket.IO broadcast) — no local services needed to run them.
 - Run focused: `pnpm --filter api test`, `pnpm --filter web test`.
+- Standalone nickname endpoint tests are in `apps/api/src/__tests__/nicknames.test.ts` (40+ tests covering check, protect, authenticate).
+- Nickname auth rate limiting uses `assertRateLimit()` from `apps/api/src/lib/rateLimit.ts` with the `rateLimits.nicknameAuth` config.
 
 ## Environment & Services
 
