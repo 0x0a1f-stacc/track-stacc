@@ -198,10 +198,13 @@ The API is authoritative for:
 
 Important endpoints:
 
+- `POST /api/nicknames/check` — check nickname availability and protection status; returns normalized nickname, whether it is protected, and availability. Passwords and hashes are never returned.
+- `POST /api/nicknames/protect` — claim a protected nickname with a password; stores only an Argon2id password hash, never plaintext. Returns the claim `id` and `displayNickname`.
+- `POST /api/nicknames/authenticate` — authenticate against an existing protected nickname. Failed attempts are rate-limited (Redis-backed, configurable). Returns `NICKNAME_PASSWORD_INCORRECT` for unknown or wrong passwords (no user enumeration).
 - `POST /api/rooms`
 - `GET /api/rooms/:roomId`
 - `PATCH /api/rooms/:roomId/settings`
-- `POST /api/rooms/:roomId/join`
+- `POST /api/rooms/:roomId/join` — room join with optional protect-and-join; separate from the standalone nickname endpoints above
 - `POST /api/rooms/:roomId/listen`
 - `POST /api/rooms/:roomId/password/verify`
 - `POST /api/rooms/:roomId/queue/items`
