@@ -24,15 +24,17 @@ export interface CreateRoomResponse {
 }
 
 export interface JoinRoomRequest {
-  displayNickname: string;
+  displayNickname?: string;
   nicknamePassword?: string;
   roomPassword?: string;
+  listenerSessionId?: string;
 }
 
 export interface JoinRoomResponse {
   session: {
     roomSessionId: string;
-    displayNickname: string;
+    displayNickname: string | null;
+    accessTier: "member";
     role: Role;
     protectedNickname: boolean;
   };

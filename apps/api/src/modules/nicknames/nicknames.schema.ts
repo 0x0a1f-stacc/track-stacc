@@ -9,7 +9,8 @@ export const nicknameProtectSchema = z.object({
 });
 export const nicknameAuthSchema = nicknameProtectSchema;
 export const joinRoomSchema = z.object({
-  displayNickname: z.string().min(1).max(80),
+  displayNickname: z.string().min(1).max(80).optional(),
   nicknamePassword: z.string().max(200).optional(),
   roomPassword: z.string().max(200).optional(),
+  listenerSessionId: z.string().uuid().optional(),
 });
