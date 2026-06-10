@@ -1,14 +1,11 @@
 import type { FastifyInstance } from "fastify";
 
-import { AppError } from "../../lib/errors.js";
+import { requireModerator } from "../../auth/guards.js";
 
-export function assertModerator(session: { role: string } | undefined) {
-  if (!session || !["host", "moderator"].includes(session.role))
-    throw new AppError(
-      "FORBIDDEN",
-      "Only hosts and moderators can do that.",
-      403,
-    );
+export function assertModerator(
+  session: { accessTier: string; role: string } | undefined,
+) {
+  requireModerator(session);
 }
 
 export async function applyModeration(
