@@ -4,6 +4,8 @@ import { verifyPassword } from "../../lib/argon2.js";
 import { AppError } from "../../lib/errors.js";
 import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
 import { hashToken } from "../../lib/tokens.js";
+import { broadcast } from "../../realtime/broadcast.js";
+import { getParticipants } from "../../realtime/presence.manager.js";
 import { normalizeNickname } from "../identity/nickname.normalizer.js";
 import {
   joinRoomSchema,
@@ -13,7 +15,7 @@ import {
 } from "./nicknames.schema.js";
 import {
   checkNickname,
-  joinRoom,
+  joinRoom as joinRoomService,
   protectNickname,
 } from "./nicknames.service.js";
 
@@ -87,25 +89,31 @@ export async function nicknamesRouter(app: FastifyInstance) {
   app.post("/api/rooms/:roomId/join", async (request, reply) => {
     const { roomId } = request.params as { roomId: string };
     const body = joinRoomSchema.parse(request.body);
-    const result = await joinRoom(
-      app,
-      roomId,
-      body.displayNickname,
-      body.nicknamePassword,
-      body.roomPassword,
-      request.cookies.host_token,
-    );
+    const result = await joinRoomService(app, {
+      roomIdOrSlug: roomId,
+      ...(body.displayNickname !== undefined && { displayNickname: body.displayNickname }),
+      ...(body.nicknamePassword !== undefined && { nicknamePassword: body.nicknamePassword }),
+      ...(body.roomPassword !== undefined && { roomPassword: body.roomPassword }),
+      ...(request.cookies.host_token !== undefined && { hostToken: request.cookies.host_token }),
+      ...(body.listenerSessionId !== undefined && { listenerSessionId: body.listenerSessionId }),
+    });
     reply.setCookie("session_token", result.sessionToken, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
       secure: process.env.NODE_ENV === "production",
     });
+    // Broadcast presence update after successful join/upgrade
+    broadcast(app.io, result.session.roomId, {
+      type: "presence.updated",
+      participants: await getParticipants(app, result.session.roomId),
+    });
     return {
       session: {
         roomSessionId: result.session.id,
         displayNickname: result.session.displayNickname,
-        role: result.session.role,
+        accessTier: "member" as const,
+        role: result.session.role as "participant" | "moderator" | "host",
         protectedNickname: Boolean(result.session.nicknameClaimId),
       },
       websocketToken: result.websocketToken,
@@ -118,9 +126,9 @@ export async function nicknamesRouter(app: FastifyInstance) {
         "Join the room before doing that.",
         401,
       );
-    const body = joinRoomSchema
-      .pick({ displayNickname: true, nicknamePassword: true })
-      .parse(request.body);
+    const body = request.body as { displayNickname?: string; nicknamePassword?: string };
+    if (!body.displayNickname)
+      throw new AppError("VALIDATION_FAILED", "Display nickname is required.", 400);
     const normalized = normalizeNickname(body.displayNickname);
     const updated = await app.prisma.roomSession.update({
       where: { id: request.session.id },
