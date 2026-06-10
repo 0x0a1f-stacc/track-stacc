@@ -5,6 +5,8 @@ import type {
   CreateRoomResponse,
   JoinRoomRequest,
   JoinRoomResponse,
+  ListenRequest,
+  ListenResponse,
 } from "@trackstacc/types";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -45,6 +47,11 @@ export const api = {
     request<JoinRoomResponse>(`/api/rooms/${roomSlug}/join`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  listenRoom: (roomSlug: string, body?: ListenRequest) =>
+    request<ListenResponse>(`/api/rooms/${roomSlug}/listen`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
     }),
   addQueueItem: (roomId: string, body: AddQueueItemRequest) =>
     request<AddQueueItemResponse>(`/api/rooms/${roomId}/queue/items`, {
