@@ -13,7 +13,7 @@ type ProtectNicknameModalProps = {
   onUpgrade: (response: JoinRoomResponse) => void;
 };
 
-type Mode = "new" | "auth";
+type Mode = "auth" | "new";
 
 interface FieldErrors {
   nickname?: string;
@@ -27,21 +27,28 @@ const MODE_LABELS: Record<
   Mode,
   {
     title: string;
+    subtitle: string;
     submitLabel: string;
     toggleLabel: string;
   }
 > = {
-  new: {
-    title: "Protect your nickname",
-    submitLabel: "Protect & join",
-    toggleLabel: "I already have a protected nickname",
-  },
   auth: {
-    title: "Authenticate your nickname",
-    submitLabel: "Authenticate & join",
-    toggleLabel: "I need a new protected nickname",
+    title: "Sign in with your nickname",
+    subtitle: "Use your protected nickname to chat, vote, and add tracks.",
+    submitLabel: "Sign in and join",
+    toggleLabel: "New here? Create a protected nickname",
+  },
+  new: {
+    title: "Create a protected nickname",
+    subtitle:
+      "Pick a nickname and protect it with a password. No email required.",
+    submitLabel: "Create nickname and join",
+    toggleLabel: "Already have one? Sign in",
   },
 };
+
+const NO_RECOVERY_WARNING =
+  "No password recovery exists yet. If you forget this password, you cannot recover this nickname.";
 
 export function parseErrorCode(caught: unknown): string | null {
   if (!(caught instanceof Error)) return null;
@@ -102,19 +109,25 @@ export function ProtectNicknameModal({
   onClose,
   onUpgrade,
 }: ProtectNicknameModalProps) {
-  const [mode, setMode] = React.useState<Mode>("new");
+  const [mode, setMode] = React.useState<Mode>("auth");
   const [displayNickname, setDisplayNickname] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
   const [apiError, setApiError] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
+  const [suggestion, setSuggestion] = React.useState<{
+    message: string;
+    targetMode: Mode;
+    prefilledNickname: string;
+  } | null>(null);
 
   // Reset form state when modal opens
   React.useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setMode("new");
+      setMode("auth");
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayNickname("");
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -124,19 +137,35 @@ export function ProtectNicknameModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setChecking(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setApiError(null);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFieldErrors({});
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSuggestion(null);
     }
   }, [open]);
 
   function handleClose() {
-    if (!loading) onClose();
+    if (!loading && !checking) onClose();
+  }
+
+  function followSuggestion() {
+    if (!suggestion) return;
+    setMode(suggestion.targetMode);
+    setDisplayNickname(suggestion.prefilledNickname);
+    setPassword("");
+    setConfirm("");
+    setApiError(null);
+    setFieldErrors({});
+    setSuggestion(null);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setApiError(null);
+    setSuggestion(null);
 
     const errors = getFieldErrors(displayNickname, password, confirm, mode);
     setFieldErrors(errors);
@@ -145,6 +174,43 @@ export function ProtectNicknameModal({
     setLoading(true);
 
     try {
+      // Check nickname status before committing to join
+      let protectedStatus: boolean | null = null;
+      try {
+        setChecking(true);
+        const check = await api.checkNickname({
+          displayNickname: displayNickname.trim(),
+        });
+        protectedStatus = check.protected;
+        setChecking(false);
+      } catch {
+        // If check fails, proceed to /join — the backend will enforce
+        setChecking(false);
+      }
+
+      if (mode === "auth" && protectedStatus === false) {
+        // Sign-in mode: nickname is not protected, offer to create
+        setSuggestion({
+          message:
+            "No protected nickname found for this name. Create it instead?",
+          targetMode: "new",
+          prefilledNickname: displayNickname.trim(),
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (mode === "new" && protectedStatus === true) {
+        // Create mode: nickname is already protected, offer to sign in
+        setSuggestion({
+          message: "That nickname is already protected. Sign in instead.",
+          targetMode: "auth",
+          prefilledNickname: displayNickname.trim(),
+        });
+        setLoading(false);
+        return;
+      }
+
       const requestBody: Record<string, string> = {
         displayNickname: displayNickname.trim(),
         nicknamePassword: password,
@@ -157,34 +223,26 @@ export function ProtectNicknameModal({
       onUpgrade(response);
     } catch (caught) {
       const code = parseErrorCode(caught);
-
-      if (code === "NICKNAME_PROTECTED") {
-        // Switch to auth mode if the nickname is protected
-        setMode("auth");
-        setApiError(errorMessageFromCode(code));
-      } else if (code === "NICKNAME_TAKEN") {
-        setApiError(errorMessageFromCode(code));
-      } else {
-        setApiError(
-          code
-            ? errorMessageFromCode(code)
-            : "Something went wrong. Try again.",
-        );
-      }
+      setApiError(
+        code ? errorMessageFromCode(code) : "Something went wrong. Try again.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
   function toggleMode() {
-    setMode(mode === "new" ? "auth" : "new");
+    const newMode = mode === "auth" ? "new" : "auth";
+    setMode(newMode);
     setApiError(null);
     setFieldErrors({});
+    setSuggestion(null);
     setPassword("");
     setConfirm("");
   }
 
   const labels = MODE_LABELS[mode];
+  const showSuggestion = suggestion !== null;
 
   return (
     <Modal open={open} title={labels.title} onClose={handleClose}>
@@ -194,85 +252,99 @@ export function ProtectNicknameModal({
         }}
         className="space-y-4"
       >
-        <div className="space-y-2 text-sm text-zinc-300">
-          <p>
-            You need a protected nickname to chat, add songs, vote, and
-            participate.
-          </p>
-          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-200">
-            Protected nicknames cannot be recovered if you forget the password.
-          </p>
-        </div>
-
-        <Input
-          label="Nickname"
-          value={displayNickname}
-          onChange={(event) => {
-            setDisplayNickname(event.target.value);
-            if (fieldErrors.nickname) {
-              setFieldErrors((prev) => ({ ...prev }));
-            }
-          }}
-          {...(fieldErrors.nickname !== undefined
-            ? { error: fieldErrors.nickname }
-            : {})}
-          required
-          autoFocus
-        />
-
-        <Input
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(event) => {
-            setPassword(event.target.value);
-            if (fieldErrors.password) {
-              setFieldErrors((prev) => ({ ...prev }));
-            }
-          }}
-          {...(fieldErrors.password !== undefined
-            ? { error: fieldErrors.password }
-            : {})}
-          required
-        />
+        <p className="text-sm text-zinc-300">{labels.subtitle}</p>
 
         {mode === "new" ? (
-          <Input
-            label="Confirm password"
-            type="password"
-            value={confirm}
-            onChange={(event) => {
-              setConfirm(event.target.value);
-              if (fieldErrors.confirm) {
-                setFieldErrors((prev) => ({ ...prev }));
-              }
-            }}
-            {...(fieldErrors.confirm !== undefined
-              ? { error: fieldErrors.confirm }
-              : {})}
-            required
-          />
+          <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            {NO_RECOVERY_WARNING}
+          </p>
         ) : null}
 
-        {apiError ? <p className="text-sm text-red-400">{apiError}</p> : null}
+        {showSuggestion ? (
+          <div className="space-y-2 rounded-xl border border-brand-500/30 bg-brand-500/10 p-3">
+            <p className="text-sm text-brand-200">{suggestion.message}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={followSuggestion}
+            >
+              {suggestion.targetMode === "new"
+                ? "Create a protected nickname"
+                : "Sign in instead"}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Input
+              label="Nickname"
+              value={displayNickname}
+              onChange={(event) => {
+                setDisplayNickname(event.target.value);
+                setApiError(null);
+              }}
+              {...(fieldErrors.nickname !== undefined
+                ? { error: fieldErrors.nickname }
+                : {})}
+              required
+              autoFocus
+            />
 
-        <Button className="w-full" disabled={loading}>
-          {loading ? (
-            <span className="inline-flex items-center gap-2">
-              <Spinner /> {labels.submitLabel}…
-            </span>
-          ) : (
-            labels.submitLabel
-          )}
-        </Button>
+            <Input
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setApiError(null);
+              }}
+              {...(fieldErrors.password !== undefined
+                ? { error: fieldErrors.password }
+                : {})}
+              required
+            />
 
-        <button
-          type="button"
-          className="w-full text-center text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
-          onClick={toggleMode}
-        >
-          {labels.toggleLabel}
-        </button>
+            {mode === "new" ? (
+              <Input
+                label="Confirm password"
+                type="password"
+                value={confirm}
+                onChange={(event) => {
+                  setConfirm(event.target.value);
+                  setApiError(null);
+                }}
+                {...(fieldErrors.confirm !== undefined
+                  ? { error: fieldErrors.confirm }
+                  : {})}
+                required
+              />
+            ) : null}
+
+            {apiError ? (
+              <p className="text-sm text-red-400">{apiError}</p>
+            ) : null}
+
+            <Button className="w-full" disabled={loading || checking}>
+              {loading || checking ? (
+                <span className="inline-flex items-center gap-2">
+                  <Spinner /> {loading ? "Joining…" : "Checking…"}
+                </span>
+              ) : (
+                labels.submitLabel
+              )}
+            </Button>
+          </>
+        )}
+
+        {!showSuggestion ? (
+          <button
+            type="button"
+            className="w-full text-center text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+            onClick={toggleMode}
+          >
+            {labels.toggleLabel}
+          </button>
+        ) : null}
       </form>
     </Modal>
   );

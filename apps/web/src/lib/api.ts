@@ -7,6 +7,8 @@ import type {
   JoinRoomResponse,
   ListenRequest,
   ListenResponse,
+  NicknameCheckRequest,
+  NicknameCheckResponse,
 } from "@trackstacc/types";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -52,6 +54,11 @@ export const api = {
     request<ListenResponse>(`/api/rooms/${roomSlug}/listen`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
+    }),
+  checkNickname: (body: NicknameCheckRequest) =>
+    request<NicknameCheckResponse>("/api/nicknames/check", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   addQueueItem: (roomId: string, body: AddQueueItemRequest) =>
     request<AddQueueItemResponse>(`/api/rooms/${roomId}/queue/items`, {
