@@ -9,10 +9,12 @@ export function ChatPanel({
   emit,
   canParticipate,
   roomSlug,
+  onUpgrade,
 }: {
   emit: (event: ClientEvent) => void;
   canParticipate: boolean;
   roomSlug: string;
+  onUpgrade?: () => void;
 }) {
   const chat = useChat();
   const [body, setBody] = React.useState("");
@@ -33,6 +35,7 @@ export function ChatPanel({
           <ListenerUpgradePrompt
             roomSlug={roomSlug}
             message="Get a nickname to chat."
+            {...(onUpgrade !== undefined ? { onUpgrade } : {})}
           />
         </div>
       ) : (
