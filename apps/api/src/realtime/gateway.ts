@@ -46,11 +46,7 @@ export async function registerRealtime(app: FastifyInstance) {
           where: { id: payload.sessionId },
         });
         if (!session || session.roomId !== payload.roomId || session.isBanned)
-          throw new AppError(
-            "WEBSOCKET_TOKEN_INVALID",
-            "invalid session",
-            401,
-          );
+          throw new AppError("WEBSOCKET_TOKEN_INVALID", "invalid session", 401);
         const data = socket.data as SocketData;
         data.roomId = payload.roomId;
         data.sessionId = payload.sessionId;
@@ -65,6 +61,12 @@ export async function registerRealtime(app: FastifyInstance) {
     const data = socket.data as SocketData;
     const roomId = data.roomId;
     const sessionId = data.sessionId;
+
+    // Register event handlers before any async work so the client's early
+    // messages (e.g. chat.send on connect) are caught by the tier guard
+    // instead of being silently dropped.
+    registerRoomHandlers(app, io, socket, roomId, sessionId);
+
     await socket.join(roomChannel(roomId));
     await app.prisma.roomSession.update({
       where: { id: sessionId },
@@ -146,7 +148,6 @@ export async function registerRealtime(app: FastifyInstance) {
     if (currentPlayback.status === PlaybackStatus.Playing) {
       emitResync(io, roomId, currentPlayback);
     }
-    registerRoomHandlers(app, io, socket, roomId, sessionId);
     socket.on("disconnect", async () => {
       await app.prisma.roomSession
         .update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } })

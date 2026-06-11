@@ -7,7 +7,6 @@ import {
 } from "@trackstacc/types";
 
 import { AppError, toWsErrorAcknowledgement } from "../lib/errors.js";
-import { requireMemberWs } from "./guards.js";
 import { chatSendSchema } from "../modules/chat/chat.schema.js";
 import { sendChatMessage } from "../modules/chat/chat.service.js";
 import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
@@ -57,10 +56,25 @@ export function registerRoomHandlers(
 
     try {
       // Tier gate — enforce member tier for interactive events before
-      // reading any event payload fields for authorization.
-      if (memberRequiredEventTypes.has(event.type)) {
+      // reading any event payload fields for authorization. Emit
+      // synchronously from inside the handler (don't delegate to sendError
+      // which lives in the catch block — Socket.IO swallows the error when
+      // thrown inside an onAny callback and caught via the async catch).
+      if (memberRequiredEventTypes.has(eventName)) {
         const sd = socket.data as { accessTier?: string };
-        requireMemberWs(sd);
+        if (sd.accessTier !== "member") {
+          const ack = toWsErrorAcknowledgement(
+            new AppError(
+              "LISTENER_READ_ONLY",
+              "Join with a protected nickname to do that.",
+              403,
+            ),
+            eventName,
+            requestId,
+          );
+          socket.emit("error", { type: "error" as const, ...ack });
+          return;
+        }
       }
 
       if (event.type === "presence.heartbeat") {
