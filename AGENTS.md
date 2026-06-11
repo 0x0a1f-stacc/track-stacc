@@ -45,7 +45,7 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - Never auto-generate `guest_1234`-style names for listeners.
 - `POST /api/rooms/:roomId/listen` is implemented for creating read-only Listener sessions and listener-tier WebSocket tokens.
 - Listener read-only enforcement for mutating REST routes and WebSocket C2S interactive events is implemented server-side via shared guard utilities (`apps/api/src/auth/guards.ts`, `apps/api/src/realtime/guards.ts`). Listener-tier writes return `403 LISTENER_READ_ONLY`. See Issue #41.
-- Frontend Listener UI remains pending follow-up work.
+- Frontend Listener UI with in-room protect-and-join upgrade prompts is implemented (Issue #42). Listeners see inline gated-control prompts on chat/add/vote/skip-vote controls. Clicking a prompt opens an in-room modal for sign-in (existing protected nickname) or creation (new nickname). Successful upgrade calls `POST /api/rooms/:roomId/join` with `listenerSessionId`, returns a replacement `websocketToken` with `accessTier: "member"`, and the Socket.IO connection is re-established with the member token — all without a full page reload. Playback state is preserved during upgrade. No password recovery exists in MVP.
 - `QueueItemStatus.vetoed` and external integration tables (`site_integrations`, `external_participants`, etc.) are out of scope for native MVP — deferred to Issue #32.
 
 ## TypeScript Gotchas
