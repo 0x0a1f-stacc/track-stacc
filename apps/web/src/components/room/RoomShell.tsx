@@ -37,8 +37,20 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
     React.useState<ListenerState | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
   const listenInFlightRef = React.useRef(false);
+  const prevRoomSlugRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
+    // When the room slug changes (client-side navigation between rooms),
+    // reset room-scoped state from the previous room. The Zustand store is a
+    // module-level singleton and persists across route transitions.
+    if (
+      prevRoomSlugRef.current !== null &&
+      prevRoomSlugRef.current !== roomSlug
+    ) {
+      useRoomStore.getState().resetRoomState();
+    }
+    prevRoomSlugRef.current = roomSlug;
+
     if (token) return;
     const stored =
       sessionStorage.getItem(`ws:${roomSlug}`) ??
