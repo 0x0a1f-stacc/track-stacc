@@ -38,8 +38,8 @@
 - **Area ID:** `SEC-TIER`
 - **Threat Addressed:** Listener-tier privilege escalation (§19.1 #16)
 - **Components Protected:** Auth Middleware, every domain service handling a native mutation; all `WS-C2S` events
-- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2)
-- **Verification Method:** Unit: tier middleware; Integration: listener-escalation attempt rejected (§37.1 FR-028, NFR-038)
+- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2). Shared guard primitives in `apps/api/src/auth/guards.ts` (REST) and `apps/api/src/realtime/guards.ts` (WebSocket). REST guards integrated into all mutating route handlers. WebSocket guard in `apps/api/src/realtime/room.gateway.ts` `onAny` dispatch.
+- **Verification Method:** Unit: `apps/api/src/__tests__/tier-guards.test.ts` (18 tests); REST integration: `apps/api/src/__tests__/tier-gate-rest.test.ts` (19 tests); WebSocket integration: `apps/api/src/__tests__/tier-gate-realtime.test.ts` (16 tests); acceptance: `apps/api/src/__tests__/tier-gate-acceptance.test.ts` (34 tests). See Issue #41.
 - **Related Requirements:** FR-010, FR-019, FR-028, NFR-038
 - **Related Acceptance:** `AC-V140-2`, `AC-V140-5`
 - **Related Risks:** Listener privilege escalation (§32)

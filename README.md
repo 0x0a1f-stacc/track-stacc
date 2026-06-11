@@ -28,7 +28,7 @@ Implemented and exercised locally:
 - health and readiness endpoints
 - Docker builds for both API and web
 - Listener-to-member join upgrade via `POST /api/rooms/:roomId/join` with `listenerSessionId` — upgrades a Listener session to `member` in place with a replacement WebSocket token carrying `accessTier: "member"`
-- Listener UI for read-only room shell implemented; WebSocket C2S access-tier enforcement still pending follow-up
+- Listener UI for read-only room shell implemented; WebSocket C2S and REST access-tier enforcement implemented server-side (Issue #41) — Listener-tier interactive writes return `403 LISTENER_READ_ONLY`
 
 Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
 
