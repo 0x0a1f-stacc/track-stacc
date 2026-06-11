@@ -59,20 +59,21 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       return;
     }
 
-    // Guard against duplicate in-flight requests (e.g. React 18 StrictMode
-    // double-mount, or rapid re-renders before the async response arrives).
+    // Prevent duplicate in-flight requests — the ref is set to true on the
+    // first effect run and is NOT reset in the cleanup. React 18 StrictMode
+    // double-mount preserves the ref across unmount → remount, so the second
+    // effect run finds ref=true and returns early. Only one fetch reaches the
+    // server. The ref is released in the success/error handler for subsequent
+    // navigation.
     if (listenInFlightRef.current) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     listenInFlightRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setListenerState({ status: "listening" });
 
-    let cancelled = false;
-
     api
       .listenRoom(roomSlug)
       .then((response) => {
-        if (cancelled) return;
         listenInFlightRef.current = false;
         useRoomStore.getState().setToken(response.websocketToken);
         useRoomStore
@@ -93,7 +94,6 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         setListenerState({ status: "ok" });
       })
       .catch((caught: unknown) => {
-        if (cancelled) return;
         listenInFlightRef.current = false;
         const msg =
           caught instanceof Error ? caught.message : "Failed to open room";
@@ -110,7 +110,8 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       });
 
     return () => {
-      cancelled = true;
+      // Do NOT reset listenInFlightRef here. StrictMode calls cleanup before
+      // the second mount; resetting the ref would allow a duplicate request.
     };
   }, [roomSlug, token]);
 
