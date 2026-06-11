@@ -36,6 +36,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
   const [listenerState, setListenerState] =
     React.useState<ListenerState | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
+  const listenInFlightRef = React.useRef(false);
 
   React.useEffect(() => {
     if (token) return;
@@ -57,12 +58,22 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       }
       return;
     }
+
+    // Guard against duplicate in-flight requests (e.g. React 18 StrictMode
+    // double-mount, or rapid re-renders before the async response arrives).
+    if (listenInFlightRef.current) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    listenInFlightRef.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setListenerState({ status: "listening" });
+
+    let cancelled = false;
+
     api
       .listenRoom(roomSlug)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       .then((response) => {
+        if (cancelled) return;
+        listenInFlightRef.current = false;
         useRoomStore.getState().setToken(response.websocketToken);
         useRoomStore
           .getState()
@@ -82,6 +93,8 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         setListenerState({ status: "ok" });
       })
       .catch((caught: unknown) => {
+        if (cancelled) return;
+        listenInFlightRef.current = false;
         const msg =
           caught instanceof Error ? caught.message : "Failed to open room";
         if (msg.includes("ROOM_PASSWORD_REQUIRED")) {
@@ -95,6 +108,10 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
           });
         }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [roomSlug, token]);
 
   React.useEffect(() => {
