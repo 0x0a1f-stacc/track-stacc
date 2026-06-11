@@ -188,7 +188,12 @@ async function checkPerRoomNicknameUniqueness(
   normalizedNickname: string,
   excludeSessionId?: string,
 ) {
-  const where: { roomId: string; normalizedNickname: string; leftAt: null; id?: { not: string } } = {
+  const where: {
+    roomId: string;
+    normalizedNickname: string;
+    leftAt: null;
+    id?: { not: string };
+  } = {
     roomId,
     normalizedNickname,
     leftAt: null,
@@ -209,7 +214,7 @@ function determineRole(
 ) {
   if (hostToken) {
     return verifyPassword(room.hostSecretHash, hostToken).then(
-      (valid) => (valid ? "host" as const : "participant" as const),
+      (valid) => (valid ? ("host" as const) : ("participant" as const)),
       () => "participant" as const,
     );
   }
@@ -342,9 +347,13 @@ export async function joinRoom(
     };
   }
 
-  // -- Non-upgrade path: no listenerSessionId (backward-compatible with existing behavior) --
+  // -- Non-upgrade path: no listenerSessionId --
   // Check per-room nickname uniqueness
-  await checkPerRoomNicknameUniqueness(app, room.id, normalized.normalizedNickname);
+  await checkPerRoomNicknameUniqueness(
+    app,
+    room.id,
+    normalized.normalizedNickname,
+  );
 
   const existingClaim = await app.prisma.nicknameClaim.findFirst({
     where: {
@@ -353,7 +362,10 @@ export async function joinRoom(
     },
   });
 
+  let claimId: string | null = null;
+
   if (existingClaim) {
+    // Authenticate against existing protected nickname
     if (!nicknamePassword)
       throw new AppError(
         "NICKNAME_PROTECTED",
@@ -366,6 +378,40 @@ export async function joinRoom(
       nicknamePassword,
       normalized.normalizedNickname,
     );
+    claimId = existingClaim.id;
+  } else {
+    // Protect-and-join: new protected nickname
+    if (!nicknamePassword)
+      throw new AppError(
+        "NICKNAME_PROTECTION_REQUIRED",
+        "A password is required to protect a new nickname.",
+        409,
+      );
+    const passwordHash = await hashPassword(nicknamePassword);
+    try {
+      const newClaim = await app.prisma.nicknameClaim.create({
+        data: {
+          ...normalized,
+          passwordHash,
+          status: "active",
+        },
+      });
+      claimId = newClaim.id;
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        (error as { code: string }).code === "P2002"
+      ) {
+        throw new AppError(
+          "NICKNAME_TAKEN",
+          "That nickname is already protected.",
+          409,
+        );
+      }
+      throw error;
+    }
   }
 
   const role = await determineRole(hostToken, room);
@@ -373,7 +419,7 @@ export async function joinRoom(
   const session = await app.prisma.roomSession.create({
     data: {
       roomId: room.id,
-      nicknameClaimId: existingClaim?.id ?? null,
+      nicknameClaimId: claimId,
       ...normalized,
       accessTier: "member",
       role,

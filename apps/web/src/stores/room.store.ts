@@ -25,6 +25,8 @@ interface RoomState {
   setListenerSessionId: (id: string | null) => void;
   setOwnAccessTier: (tier: AccessTier | null) => void;
   applyEvent: (event: ServerEvent) => void;
+  /** Reset all room-scoped state when navigating between rooms. */
+  resetRoomState: () => void;
 }
 
 export const useRoomStore = create<RoomState>((set) => ({
@@ -40,6 +42,18 @@ export const useRoomStore = create<RoomState>((set) => ({
   setToken: (token) => set({ websocketToken: token }),
   setListenerSessionId: (id) => set({ listenerSessionId: id }),
   setOwnAccessTier: (tier) => set({ ownAccessTier: tier }),
+  resetRoomState: () =>
+    set({
+      room: null,
+      queue: [],
+      chat: [],
+      participants: [],
+      playback: null,
+      websocketToken: null,
+      listenerSessionId: null,
+      lastError: null,
+      ownAccessTier: null,
+    }),
   applyEvent: (event) =>
     set((state) => {
       if (event.type === "room.snapshot")

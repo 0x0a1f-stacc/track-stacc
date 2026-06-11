@@ -14,13 +14,14 @@ const MOCK_SECRET = "test-secret-for-join-upgrade-tests-32chars!";
 setSecret(MOCK_SECRET);
 
 vi.mock("../lib/argon2.js", () => ({
-  hashPassword: vi.fn().mockResolvedValue(
-    "$argon2id$v=19$m=65536,t=3,p=1$salt$mockedhash",
-  ),
-  verifyPassword: vi.fn().mockImplementation(
-    (_hash: string, password: string) =>
+  hashPassword: vi
+    .fn()
+    .mockResolvedValue("$argon2id$v=19$m=65536,t=3,p=1$salt$mockedhash"),
+  verifyPassword: vi
+    .fn()
+    .mockImplementation((_hash: string, password: string) =>
       Promise.resolve(password === "correct-password"),
-  ),
+    ),
 }));
 
 import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
@@ -126,17 +127,30 @@ function buildTestApp(
 
   // Mock prisma
   const claimToReturn = overrides?.existingClaim ?? null;
-  const mockClaimFindFirst = vi.fn().mockImplementation(
-    (args: { where: { normalizedNickname: string; status: string } }) => {
-      if (claimToReturn && args.where.normalizedNickname === claimToReturn.normalizedNickname && args.where.status === "active") {
-        return Promise.resolve(claimToReturn);
-      }
-      return Promise.resolve(null);
-    },
-  );
+  const mockClaimFindFirst = vi
+    .fn()
+    .mockImplementation(
+      (args: { where: { normalizedNickname: string; status: string } }) => {
+        if (
+          claimToReturn &&
+          args.where.normalizedNickname === claimToReturn.normalizedNickname &&
+          args.where.status === "active"
+        ) {
+          return Promise.resolve(claimToReturn);
+        }
+        return Promise.resolve(null);
+      },
+    );
 
   const mockSessionFindFirst = vi.fn().mockImplementation(
-    (args: { where: { roomId?: string; normalizedNickname?: string; leftAt?: null; id?: { not: string } } }) => {
+    (args: {
+      where: {
+        roomId?: string;
+        normalizedNickname?: string;
+        leftAt?: null;
+        id?: { not: string };
+      };
+    }) => {
       // Check for per-room nickname uniqueness
       if (args.where?.normalizedNickname) {
         // Simulate that "alice" is already taken in this room
@@ -151,41 +165,58 @@ function buildTestApp(
     },
   );
 
-  const mockSessionFindUnique = vi.fn().mockImplementation(
-    (args: { where: { id: string } }) => {
+  const mockSessionFindUnique = vi
+    .fn()
+    .mockImplementation((args: { where: { id: string } }) => {
       if (args.where.id === LISTENER_SESSION_ID) {
         return Promise.resolve(ROOM_SESSION);
       }
       if (args.where.id === DIFFERENT_ROOM_SESSION_ID) {
-        return Promise.resolve({ ...ROOM_SESSION, id: DIFFERENT_ROOM_SESSION_ID, roomId: "room-other" });
+        return Promise.resolve({
+          ...ROOM_SESSION,
+          id: DIFFERENT_ROOM_SESSION_ID,
+          roomId: "room-other",
+        });
       }
       if (args.where.id === ALREADY_MEMBER_SESSION_ID) {
-        return Promise.resolve({ ...ROOM_SESSION, id: ALREADY_MEMBER_SESSION_ID, accessTier: "member", role: "participant" });
+        return Promise.resolve({
+          ...ROOM_SESSION,
+          id: ALREADY_MEMBER_SESSION_ID,
+          accessTier: "member",
+          role: "participant",
+        });
       }
       if (args.where.id === EXPIRED_SESSION_ID) {
-        return Promise.resolve({ ...ROOM_SESSION, id: EXPIRED_SESSION_ID, leftAt: new Date() });
+        return Promise.resolve({
+          ...ROOM_SESSION,
+          id: EXPIRED_SESSION_ID,
+          leftAt: new Date(),
+        });
       }
       return Promise.resolve(null);
-    },
-  );
+    });
 
-  const mockSessionUpdate = vi.fn().mockImplementation(
-    (args: { where: { id: string }; data: Record<string, unknown> }) =>
-      Promise.resolve({
-        ...ROOM_SESSION,
-        id: args.where.id,
-        ...args.data,
-        updatedAt: new Date(),
-      }),
-  );
+  const mockSessionUpdate = vi
+    .fn()
+    .mockImplementation(
+      (args: { where: { id: string }; data: Record<string, unknown> }) =>
+        Promise.resolve({
+          ...ROOM_SESSION,
+          id: args.where.id,
+          ...args.data,
+          updatedAt: new Date(),
+        }),
+    );
 
-  const mockSessionCreate = vi.fn().mockImplementation(
-    (args: { data: Record<string, unknown> }) =>
+  const mockSessionCreate = vi
+    .fn()
+    .mockImplementation((args: { data: Record<string, unknown> }) =>
       Promise.resolve({
         id: "new-member-session-789",
         roomId: "room-abc-123",
         nicknameClaimId: (args.data.nicknameClaimId as string | null) ?? null,
-        normalizedNickname: (args.data.normalizedNickname as string | null) ?? null,
+        normalizedNickname:
+          (args.data.normalizedNickname as string | null) ?? null,
         displayNickname: (args.data.displayNickname as string | null) ?? null,
         accessTier: "member",
         role: "participant",
@@ -193,7 +224,7 @@ function buildTestApp(
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
-  );
+    );
 
   const mockClaimCreate = vi.fn().mockResolvedValue({
     id: "new-claim-999",
@@ -206,15 +237,19 @@ function buildTestApp(
     lastUsedAt: null,
   });
 
-  const mockSessionFindMany = vi.fn().mockImplementation(
-    (args: { where: { roomId: string; leftAt: null } }) =>
+  const mockSessionFindMany = vi
+    .fn()
+    .mockImplementation((args: { where: { roomId: string; leftAt: null } }) =>
       Promise.resolve([
         {
           ...ROOM_SESSION,
-          id: args.where.roomId === "room-abc-123" ? LISTENER_SESSION_ID : "other-id",
+          id:
+            args.where.roomId === "room-abc-123"
+              ? LISTENER_SESSION_ID
+              : "other-id",
         },
       ]),
-  );
+    );
 
   app.decorate("prisma", {
     roomSession: {
@@ -427,7 +462,10 @@ describe("POST /api/rooms/:roomId/join — upgrade path", () => {
   });
 
   it("returns NICKNAME_PASSWORD_RATE_LIMITED after too many failed attempts", async () => {
-    const app = buildTestApp({ existingClaim: CLAIM_ALICE, rateLimitExceeded: true });
+    const app = buildTestApp({
+      existingClaim: CLAIM_ALICE,
+      rateLimitExceeded: true,
+    });
     const response = await app.inject({
       method: "POST",
       url: "/api/rooms/test-room/join",
@@ -489,7 +527,7 @@ describe("POST /api/rooms/:roomId/join — upgrade path", () => {
       method: "POST",
       url: "/api/rooms/test-room/join",
       payload: {
-        listenerSessionId: "00000000-0000-0000-0000-000000000000",  // Valid UUID format for nonexistent session
+        listenerSessionId: "00000000-0000-0000-0000-000000000000", // Valid UUID format for nonexistent session
         displayNickname: "NewUser",
         nicknamePassword: "long-enough-pw",
       },
@@ -619,15 +657,41 @@ describe("POST /api/rooms/:roomId/join — non-upgrade path (backward compat)", 
     expect(session.roomSessionId).toBe("new-member-session-789");
     expect(session.accessTier).toBe("member");
     expect(session.displayNickname).toBe("NewUser");
-    expect(session.protectedNickname).toBe(false); // No nickname_claim created
+    expect(session.protectedNickname).toBe(true); // Nickname claim was created
 
     // Session was CREATED, not updated
     const prisma = getMockPrisma(app);
     expect(prisma.roomSession.create).toHaveBeenCalled();
     expect(prisma.roomSession.update).not.toHaveBeenCalled();
 
+    // Nickname claim was also created
+    expect(prisma.nicknameClaim.create).toHaveBeenCalled();
+
     const decoded = verifyWsToken(body.websocketToken as string);
     expect(decoded.accessTier).toBe("member");
+
+    await app.close();
+  });
+
+  it("returns NICKNAME_PROTECTION_REQUIRED when joining with new nickname without password (non-upgrade)", async () => {
+    const app = buildTestApp({ existingClaim: null });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      payload: {
+        displayNickname: "NewUser",
+        // no nicknamePassword
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    const body = JSON.parse(response.body) as { error?: { code: string } };
+    expect(body.error?.code).toBe("NICKNAME_PROTECTION_REQUIRED");
+
+    // No session was created
+    const prisma = getMockPrisma(app);
+    expect(prisma.roomSession.create).not.toHaveBeenCalled();
+    expect(prisma.nicknameClaim.create).not.toHaveBeenCalled();
 
     await app.close();
   });
