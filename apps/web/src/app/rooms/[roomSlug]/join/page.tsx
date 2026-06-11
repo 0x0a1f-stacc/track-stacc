@@ -10,6 +10,8 @@ import { useRoomStore } from "@/stores/room.store";
 const listenerSessionKey = (slug: string) => `ws:${slug}:listenerSessionId`;
 const MIN_PASSWORD_LENGTH = 10;
 
+type Mode = "auth" | "new";
+
 function parseErrorCode(caught: unknown): string | null {
   if (!(caught instanceof Error)) return null;
   try {
@@ -49,11 +51,17 @@ export default function JoinPage() {
   const setListenerSessionId = useRoomStore(
     (state) => state.setListenerSessionId,
   );
-  const [displayNickname, setNickname] = React.useState("");
+  const [mode, setMode] = React.useState<Mode>("auth");
+  const [displayNickname, setDisplayNickname] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const [fieldError, setFieldError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
+  const [suggestion, setSuggestion] = React.useState<{
+    message: string;
+    targetMode: Mode;
+  } | null>(null);
 
   // Read listenerSessionId from sessionStorage (set by RoomShell on /listen)
   const listenerSessionId =
@@ -64,29 +72,66 @@ export default function JoinPage() {
   async function join(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    setFieldError(null);
+    setSuggestion(null);
 
     // Client-side validation
     if (!displayNickname.trim()) {
-      setFieldError("Nickname is required.");
+      setError("Nickname is required.");
       return;
     }
     if (!password) {
-      setFieldError("Password is required.");
+      setError("Password is required.");
       return;
     }
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setFieldError(
-        `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
-      );
-      return;
-    }
-    if (password !== confirm) {
-      setFieldError("Passwords do not match.");
-      return;
+    if (mode === "new") {
+      if (password.length < MIN_PASSWORD_LENGTH) {
+        setError(
+          `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        );
+        return;
+      }
+      if (password !== confirm) {
+        setError("Passwords do not match.");
+        return;
+      }
     }
 
+    setLoading(true);
+
     try {
+      // Check nickname status before committing
+      let protectedStatus: boolean | null = null;
+      try {
+        setChecking(true);
+        const check = await api.checkNickname({
+          displayNickname: displayNickname.trim(),
+        });
+        protectedStatus = check.protected;
+        setChecking(false);
+      } catch {
+        setChecking(false);
+      }
+
+      if (mode === "auth" && protectedStatus === false) {
+        setSuggestion({
+          message:
+            "No protected nickname found for this name. Would you like to create it instead?",
+          targetMode: "new",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (mode === "new" && protectedStatus === true) {
+        setSuggestion({
+          message:
+            "That nickname is already protected. Would you like to sign in instead?",
+          targetMode: "auth",
+        });
+        setLoading(false);
+        return;
+      }
+
       const response = await api.joinRoom(roomSlug, {
         displayNickname: displayNickname.trim(),
         nicknamePassword: password,
@@ -112,8 +157,46 @@ export default function JoinPage() {
       } else {
         setError(code ? errorMessageFromCode(code) : "Join failed. Try again.");
       }
+    } finally {
+      setLoading(false);
     }
   }
+
+  function switchToAuth() {
+    setMode("auth");
+    setPassword("");
+    setConfirm("");
+    setError(null);
+    setSuggestion(null);
+  }
+
+  function switchToNew() {
+    setMode("new");
+    setPassword("");
+    setConfirm("");
+    setError(null);
+    setSuggestion(null);
+  }
+
+  const labels = {
+    auth: {
+      title: "Sign in with your nickname",
+      subtitle: "Use your protected nickname to participate.",
+      submitLabel: "Sign in and join",
+      toggle: "New here? Create a protected nickname",
+      toggleAction: switchToNew,
+    },
+    new: {
+      title: "Create a protected nickname",
+      subtitle:
+        "Pick a nickname and protect it with a password. No email required.",
+      submitLabel: "Create nickname and join",
+      toggle: "Already have one? Sign in",
+      toggleAction: switchToAuth,
+    },
+  };
+
+  const l = labels[mode];
 
   return (
     <main className="mx-auto grid min-h-screen max-w-lg place-items-center px-6">
@@ -123,48 +206,90 @@ export default function JoinPage() {
         }}
         className="w-full rounded-3xl border border-white/10 bg-zinc-950/85 p-8"
       >
-        <h1 className="text-3xl font-black">Choose your nickname</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Protected nicknames cannot be recovered if you forget the password.
-        </p>
+        <h1 className="text-3xl font-black">{l.title}</h1>
+        <p className="mt-2 text-sm text-zinc-400">{l.subtitle}</p>
+        {mode === "new" ? (
+          <p className="mt-2 text-sm text-amber-300">
+            No password recovery exists yet. If you forget this password, you
+            cannot recover this nickname.
+          </p>
+        ) : null}
         <div className="mt-6 space-y-4">
           <Input
             label="Nickname"
             value={displayNickname}
             onChange={(event) => {
-              setNickname(event.target.value);
-              setFieldError(null);
+              setDisplayNickname(event.target.value);
               setError(null);
+              setSuggestion(null);
             }}
             required
           />
+
           <Input
             label="Password"
             type="password"
             value={password}
             onChange={(event) => {
               setPassword(event.target.value);
-              setFieldError(null);
               setError(null);
+              setSuggestion(null);
             }}
             required
           />
-          <Input
-            label="Confirm password"
-            type="password"
-            value={confirm}
-            onChange={(event) => {
-              setConfirm(event.target.value);
-              setFieldError(null);
-              setError(null);
-            }}
-            required
-          />
-          {fieldError ? (
-            <p className="text-sm text-red-300">{fieldError}</p>
+
+          {mode === "new" ? (
+            <Input
+              label="Confirm password"
+              type="password"
+              value={confirm}
+              onChange={(event) => {
+                setConfirm(event.target.value);
+                setError(null);
+                setSuggestion(null);
+              }}
+              required
+            />
           ) : null}
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
-          <Button className="w-full">Join room</Button>
+
+          {suggestion ? (
+            <div className="space-y-2 rounded-xl border border-brand-500/30 bg-brand-500/10 p-3">
+              <p className="text-sm text-brand-200">{suggestion.message}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => {
+                  if (suggestion.targetMode === "new") {
+                    switchToNew();
+                  } else {
+                    switchToAuth();
+                  }
+                }}
+              >
+                {suggestion.targetMode === "new"
+                  ? "Create a protected nickname"
+                  : "Sign in instead"}
+              </Button>
+            </div>
+          ) : error ? (
+            <p className="text-sm text-red-300">{error}</p>
+          ) : null}
+
+          {!suggestion ? (
+            <>
+              <Button className="w-full" disabled={loading || checking}>
+                {loading || checking ? "Please wait…" : l.submitLabel}
+              </Button>
+              <button
+                type="button"
+                className="w-full text-center text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+                onClick={l.toggleAction}
+              >
+                {l.toggle}
+              </button>
+            </>
+          ) : null}
         </div>
       </form>
     </main>
