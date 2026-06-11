@@ -18,9 +18,11 @@ interface RoomState {
   participants: Participant[];
   playback: PlaybackState | null;
   websocketToken: string | null;
+  listenerSessionId: string | null;
   lastError: string | null;
   ownAccessTier: AccessTier | null;
   setToken: (token: string) => void;
+  setListenerSessionId: (id: string | null) => void;
   setOwnAccessTier: (tier: AccessTier | null) => void;
   applyEvent: (event: ServerEvent) => void;
 }
@@ -32,9 +34,11 @@ export const useRoomStore = create<RoomState>((set) => ({
   participants: [],
   playback: null,
   websocketToken: null,
+  listenerSessionId: null,
   lastError: null,
   ownAccessTier: null,
   setToken: (token) => set({ websocketToken: token }),
+  setListenerSessionId: (id) => set({ listenerSessionId: id }),
   setOwnAccessTier: (tier) => set({ ownAccessTier: tier }),
   applyEvent: (event) =>
     set((state) => {

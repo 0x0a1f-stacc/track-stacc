@@ -9,10 +9,12 @@ export function AddSongInput({
   emit,
   canParticipate,
   roomSlug,
+  onUpgrade,
 }: {
   emit: (event: ClientEvent) => void;
   canParticipate: boolean;
   roomSlug: string;
+  onUpgrade?: () => void;
 }) {
   const [youtubeUrl, setUrl] = React.useState("");
   const lastError = useRoomStore((state) => state.lastError);
@@ -30,6 +32,7 @@ export function AddSongInput({
       <ListenerUpgradePrompt
         roomSlug={roomSlug}
         message="Get a nickname to add songs or participate."
+        {...(onUpgrade !== undefined ? { onUpgrade } : {})}
       />
     );
   }

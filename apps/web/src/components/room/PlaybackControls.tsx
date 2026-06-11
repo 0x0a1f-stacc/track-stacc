@@ -7,10 +7,12 @@ export function PlaybackControls({
   roomId,
   roomSlug,
   canParticipate,
+  onUpgrade,
 }: {
   roomId?: string;
   roomSlug: string;
   canParticipate: boolean;
+  onUpgrade?: () => void;
 }) {
   const playback = useRoomStore((state) => state.playback);
   if (!canParticipate) {
@@ -22,6 +24,7 @@ export function PlaybackControls({
         <ListenerUpgradePrompt
           roomSlug={roomSlug}
           message="Get a nickname to skip or participate."
+          {...(onUpgrade !== undefined ? { onUpgrade } : {})}
         />
       </div>
     );
@@ -34,7 +37,9 @@ export function PlaybackControls({
       <Button
         variant="secondary"
         disabled={!roomId}
-        onClick={() => { if (roomId) void api.skip(roomId); }}
+        onClick={() => {
+          if (roomId) void api.skip(roomId);
+        }}
       >
         Skip
       </Button>

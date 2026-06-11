@@ -13,6 +13,7 @@ import { PlaybackControls } from "./PlaybackControls";
 import { QueuePanel } from "./QueuePanel";
 import { RoomSettings } from "./RoomSettings";
 import { YoutubePlayer } from "./YoutubePlayer";
+import { ProtectNicknameModal } from "../nickname/ProtectNicknameModal";
 
 type ListenerState =
   | { status: "listening" }
@@ -20,15 +21,22 @@ type ListenerState =
   | { status: "password-required" }
   | { status: "ok" };
 
+const listenerSessionKey = (roomSlug: string) =>
+  `ws:${roomSlug}:listenerSessionId`;
+
 export function RoomShell({ roomSlug }: { roomSlug: string }) {
   const router = useRouter();
   const token = useRoomStore((state) => state.websocketToken);
   const ownAccessTier = useRoomStore((state) => state.ownAccessTier);
+  const listenerSessionId = useRoomStore((state) => state.listenerSessionId);
   const playback = useRoomStore((state) => state.playback);
   const room = useRoomStore((state) => state.room);
   const queue = useRoomStore((state) => state.queue);
   const { emit } = useSocket(token);
-  const [listenerState, setListenerState] = React.useState<ListenerState | null>(null);
+  const [listenerState, setListenerState] =
+    React.useState<ListenerState | null>(null);
+  const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
+
   React.useEffect(() => {
     if (token) return;
     const stored =
@@ -39,6 +47,13 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       const storedTier = sessionStorage.getItem(`ws:${roomSlug}:tier`);
       if (storedTier === "listener" || storedTier === "member") {
         useRoomStore.getState().setOwnAccessTier(storedTier as AccessTier);
+      }
+      // Recover listenerSessionId if still needed (e.g. listener tier on refresh)
+      const storedListenerId = sessionStorage.getItem(
+        listenerSessionKey(roomSlug),
+      );
+      if (storedListenerId) {
+        useRoomStore.getState().setListenerSessionId(storedListenerId);
       }
       return;
     }
@@ -52,8 +67,18 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         useRoomStore
           .getState()
           .setOwnAccessTier(response.session.accessTier as AccessTier);
+        useRoomStore
+          .getState()
+          .setListenerSessionId(response.session.roomSessionId);
         sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
-        sessionStorage.setItem(`ws:${roomSlug}:tier`, response.session.accessTier);
+        sessionStorage.setItem(
+          `ws:${roomSlug}:tier`,
+          response.session.accessTier,
+        );
+        sessionStorage.setItem(
+          listenerSessionKey(roomSlug),
+          response.session.roomSessionId,
+        );
         setListenerState({ status: "ok" });
       })
       .catch((caught: unknown) => {
@@ -71,24 +96,55 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         }
       });
   }, [roomSlug, token]);
+
   React.useEffect(() => {
-    if (
-      listenerState?.status === "password-required"
-    ) {
+    if (listenerState?.status === "password-required") {
       router.replace(`/rooms/${roomSlug}/join`);
     }
   }, [listenerState, roomSlug, router]);
 
+  const handleUpgrade = React.useCallback(
+    (response: { websocketToken: string; session: { accessTier: string } }) => {
+      // Replace the WebSocket token with the member-tier token
+      useRoomStore.getState().setToken(response.websocketToken);
+      useRoomStore
+        .getState()
+        .setOwnAccessTier(response.session.accessTier as AccessTier);
+      // Listener session is no longer needed after upgrade; clear it
+      useRoomStore.getState().setListenerSessionId(null);
+
+      // Persist to sessionStorage
+      sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
+      sessionStorage.setItem(
+        `ws:${roomSlug}:tier`,
+        response.session.accessTier,
+      );
+      sessionStorage.removeItem(listenerSessionKey(roomSlug));
+
+      // Close the modal
+      setUpgradeModalOpen(false);
+    },
+    [roomSlug],
+  );
+
+  const openUpgradeModal = React.useCallback(() => {
+    setUpgradeModalOpen(true);
+  }, []);
+
+  const closeUpgradeModal = React.useCallback(() => {
+    setUpgradeModalOpen(false);
+  }, []);
+
   const nextQueuedItem = React.useMemo(() => {
     return queue.find(
-      (item) => item.status === QueueItemStatus.Queued && item.track.provider === "youtube",
+      (item) =>
+        item.status === QueueItemStatus.Queued &&
+        item.track.provider === "youtube",
     );
   }, [queue]);
   const nextVideoId = nextQueuedItem?.track.videoId ?? null;
 
-  if (
-    listenerState?.status === "listening"
-  ) {
+  if (listenerState?.status === "listening") {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <p className="text-zinc-400">Opening room…</p>
@@ -107,12 +163,23 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
             setListenerState({ status: "listening" });
             api
               .listenRoom(roomSlug)
-              .then((response) => {
-                useRoomStore.getState().setToken(response.websocketToken);
+              .then((res) => {
+                useRoomStore.getState().setToken(res.websocketToken);
                 useRoomStore
                   .getState()
-                  .setOwnAccessTier(response.session.accessTier as AccessTier);
-                sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
+                  .setOwnAccessTier(res.session.accessTier as AccessTier);
+                useRoomStore
+                  .getState()
+                  .setListenerSessionId(res.session.roomSessionId);
+                sessionStorage.setItem(`ws:${roomSlug}`, res.websocketToken);
+                sessionStorage.setItem(
+                  `ws:${roomSlug}:tier`,
+                  res.session.accessTier,
+                );
+                sessionStorage.setItem(
+                  listenerSessionKey(roomSlug),
+                  res.session.roomSessionId,
+                );
                 setListenerState({ status: "ok" });
               })
               .catch(() => {
@@ -129,10 +196,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
     );
   }
 
-  if (
-    !token &&
-    listenerState?.status !== "ok"
-  ) {
+  if (!token && listenerState?.status !== "ok") {
     return null;
   }
 
@@ -156,12 +220,14 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
             {...(room?.id !== undefined && { roomId: room.id })}
             roomSlug={roomSlug}
             canParticipate={canParticipate}
+            onUpgrade={openUpgradeModal}
           />
         </div>
         <AddSongInput
           emit={emit}
           canParticipate={canParticipate}
           roomSlug={roomSlug}
+          onUpgrade={openUpgradeModal}
         />
         <QueuePanel />
         <RoomSettings />
@@ -171,9 +237,18 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
           emit={emit}
           canParticipate={canParticipate}
           roomSlug={roomSlug}
+          onUpgrade={openUpgradeModal}
         />
         <ParticipantList />
       </aside>
+
+      <ProtectNicknameModal
+        open={upgradeModalOpen}
+        roomSlug={roomSlug}
+        listenerSessionId={listenerSessionId}
+        onClose={closeUpgradeModal}
+        onUpgrade={handleUpgrade}
+      />
     </main>
   );
 }
