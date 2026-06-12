@@ -1,13 +1,13 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import * as React from "react";
 import { AccessTier } from "@trackstacc/types";
 import { Button, Input } from "@trackstacc/ui";
-import { api } from "@/lib/api";
-import { useRoomStore } from "@/stores/room.store";
+import { useParams, useRouter } from "next/navigation";
+import * as React from "react";
 
-const listenerSessionKey = (slug: string) => `ws:${slug}:listenerSessionId`;
+import { api } from "@/lib/api";
+import { getRoomCredentials, persistMemberCredentials } from "@/lib/storage";
+import { useRoomStore } from "@/stores/room.store";
 const MIN_PASSWORD_LENGTH = 10;
 
 type Mode = "auth" | "new";
@@ -66,7 +66,7 @@ export default function JoinPage() {
   // Read listenerSessionId from sessionStorage (set by RoomShell on /listen)
   const listenerSessionId =
     typeof window !== "undefined"
-      ? sessionStorage.getItem(listenerSessionKey(roomSlug))
+      ? (getRoomCredentials(roomSlug)?.listenerSessionId ?? null)
       : null;
 
   async function join(event: React.FormEvent) {
@@ -140,13 +140,11 @@ export default function JoinPage() {
       setToken(response.websocketToken);
       setOwnAccessTier(response.session.accessTier as AccessTier);
       setListenerSessionId(null);
-      sessionStorage.removeItem(listenerSessionKey(roomSlug));
-      sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
-      sessionStorage.setItem(
-        `ws:${roomSlug}:tier`,
+      persistMemberCredentials(
+        roomSlug,
+        response.websocketToken,
         response.session.accessTier,
       );
-      localStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
       router.push(`/rooms/${roomSlug}`);
     } catch (caught) {
       const code = parseErrorCode(caught);
