@@ -101,6 +101,7 @@ export function YoutubePlayer({
             },
             onStateChange: (event) => {
               if (destroyed) return;
+              if (event.target !== playerRef.current) return;
               const qid = queueItemRef.current;
               const idPayload = qid ? { queueItemId: qid } : {};
 
@@ -137,8 +138,11 @@ export function YoutubePlayer({
                 });
               }
               if (event.data === api.PlayerState.PAUSED) {
-                if (loadPendingRef.current || !everPlayedRef.current)
+                setLoading(false);
+                loadPendingRef.current = false;
+                if (!everPlayedRef.current) {
                   setAutoplayBlocked(true);
+                }
               }
             },
             onError: () => {

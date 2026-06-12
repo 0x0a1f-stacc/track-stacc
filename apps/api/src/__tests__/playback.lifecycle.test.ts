@@ -275,24 +275,16 @@ describe("playback coordinator", () => {
   });
 
   describe("handleClientEnd", () => {
-    it("advances when queueItemId matches current playback", async () => {
+    it("emits resync when track is not near the end", async () => {
       const app = mockApp({
         prisma: {
           ...mockApp().prisma,
           queueItem: {
             ...mockApp().prisma.queueItem,
-            findFirst: vi
-              .fn()
-              .mockResolvedValue({ id: "qi-2", track: sampleTrack }),
-            update: vi
-              .fn()
-              .mockResolvedValueOnce(undefined)
-              .mockResolvedValueOnce({ track: sampleTrack }),
-          },
-          room: {
-            findUnique: vi
-              .fn()
-              .mockResolvedValue({ id: roomId, playlistMechanic: "fifo" }),
+            findUnique: vi.fn().mockResolvedValue({
+              id: queueItemId,
+              track: sampleTrack,
+            }),
           },
         },
         redis: {
@@ -301,7 +293,7 @@ describe("playback coordinator", () => {
         },
       });
       const state = await handleClientEnd(app, ioMock, roomId, queueItemId);
-      expect(state.queueItemId).toBe("qi-2");
+      expect(state.queueItemId).toBe(queueItemId);
     });
 
     it("does nothing when queueItemId does not match", async () => {

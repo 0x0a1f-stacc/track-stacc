@@ -258,6 +258,10 @@ export async function handleClientEnd(
         emitResync(io, roomId, state);
         return state;
       }
+    } else {
+      // Unknown duration: do not advance based on a single client signal
+      emitResync(io, roomId, state);
+      return state;
     }
   }
 
@@ -281,6 +285,27 @@ export async function handleClientBuffering(
     void (async () => {
       const current = await getPlaybackState(app, roomId);
       if (current.queueItemId !== queueItemId) return;
+
+      if (current.status === PlaybackStatus.Playing && current.startedAt) {
+        const item = await app.prisma.queueItem
+          .findUnique({
+            where: { id: queueItemId },
+            include: { track: true },
+          })
+          .catch(() => null);
+        if (item?.track?.durationSeconds != null) {
+          const elapsed =
+            (Date.now() - new Date(current.startedAt).getTime()) / 1000;
+          if (elapsed < item.track.durationSeconds - 3) {
+            emitResync(io, roomId, current);
+            return;
+          }
+        } else {
+          emitResync(io, roomId, current);
+          return;
+        }
+      }
+
       await app.prisma.queueItem
         .update({
           where: { id: queueItemId },
