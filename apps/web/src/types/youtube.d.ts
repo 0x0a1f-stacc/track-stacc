@@ -20,7 +20,7 @@ declare global {
       origin?: string;
       events?: {
         onReady?: () => void;
-        onStateChange?: (event: { data: number }) => void;
+        onStateChange?: (event: { data: number; target: YT.Player }) => void;
         onError?: (event: { data: number }) => void;
       };
     }
