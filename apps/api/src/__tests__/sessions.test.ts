@@ -8,7 +8,10 @@ import type { FastifyInstance } from "fastify";
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
 import { sessionsRouter } from "../modules/sessions/sessions.router.js";
-import { verifyWsToken } from "../lib/tokens.js";
+import { verifyWsToken, hashToken, setSecret } from "../lib/tokens.js";
+import authPlugin from "../plugins/auth.js";
+
+setSecret("test-secret-for-testing-only-1234567890");
 
 function buildTestApp(overrides?: {
   nodeEnv?: string;
@@ -29,6 +32,7 @@ function buildTestApp(overrides?: {
   };
   app.register(createConfigPlugin(config));
   app.register(cookie);
+  app.register(authPlugin);
 
   const mockRedis = {
     incr: vi.fn().mockResolvedValue(1),
@@ -75,6 +79,109 @@ function buildTestApp(overrides?: {
         sessionTokenHash: "hashed-token",
         createdAt: new Date(),
         updatedAt: new Date(),
+        leftAt: null,
+        isBanned: false,
+      }),
+      findUnique: vi.fn().mockImplementation((args: { where: { sessionTokenHash: string } }) => {
+        const hash = args.where.sessionTokenHash;
+        if (hash === hashToken("valid-member-token")) {
+          return Promise.resolve({
+            id: "session-member-123",
+            roomId: "room-abc-123",
+            accessTier: "member",
+            role: "participant",
+            normalizedNickname: "alice",
+            displayNickname: "Alice",
+            nicknameClaimId: "claim-alice",
+            sessionTokenHash: hash,
+            isBanned: false,
+            leftAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        if (hash === hashToken("valid-host-token")) {
+          return Promise.resolve({
+            id: "session-host-123",
+            roomId: "room-abc-123",
+            accessTier: "member",
+            role: "host",
+            normalizedNickname: "host",
+            displayNickname: "Host",
+            nicknameClaimId: "claim-host",
+            sessionTokenHash: hash,
+            isBanned: false,
+            leftAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        if (hash === hashToken("banned-token")) {
+          return Promise.resolve({
+            id: "session-banned-123",
+            roomId: "room-abc-123",
+            accessTier: "member",
+            role: "participant",
+            normalizedNickname: "banned",
+            displayNickname: "Banned",
+            nicknameClaimId: "claim-banned",
+            sessionTokenHash: hash,
+            isBanned: true,
+            leftAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        if (hash === hashToken("expired-token")) {
+          return Promise.resolve({
+            id: "session-expired-123",
+            roomId: "room-abc-123",
+            accessTier: "member",
+            role: "participant",
+            normalizedNickname: "expired",
+            displayNickname: "Expired",
+            nicknameClaimId: "claim-expired",
+            sessionTokenHash: hash,
+            isBanned: false,
+            leftAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        if (hash === hashToken("other-room-token")) {
+          return Promise.resolve({
+            id: "session-other-123",
+            roomId: "other-room-abc",
+            accessTier: "member",
+            role: "participant",
+            normalizedNickname: "other",
+            displayNickname: "Other",
+            nicknameClaimId: "claim-other",
+            sessionTokenHash: hash,
+            isBanned: false,
+            leftAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        return Promise.resolve(null);
+      }),
+      update: vi.fn().mockImplementation((args: { where: { id: string }; data: Record<string, unknown> }) => {
+        return Promise.resolve({
+          id: args.where.id,
+          roomId: "room-abc-123",
+          accessTier: "member",
+          role: args.where.id === "session-host-123" ? "host" : "participant",
+          normalizedNickname: "rehydrated",
+          displayNickname: "Rehydrated",
+          nicknameClaimId: "claim-rehydrated",
+          sessionTokenHash: "hashed-token",
+          isBanned: false,
+          leftAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...args.data,
+        });
       }),
     },
   };
@@ -244,6 +351,180 @@ describe("POST /api/rooms/:roomId/listen", () => {
     expect(response.statusCode).toBe(404);
     const body = JSON.parse(response.body) as { error?: { code: string } };
     expect(body.error?.code).toBe("ROOM_NOT_FOUND");
+    await app.close();
+  });
+
+  it("returns 200 and rehydrates existing valid member session without creating a new session or rotating cookie", async () => {
+    const app = buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/listen",
+      headers: {
+        cookie: "session_token=valid-member-token",
+      },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      session: {
+        roomSessionId: string;
+        accessTier: string;
+        role: string;
+      };
+      websocketToken: string;
+    };
+    expect(body.session.roomSessionId).toBe("session-member-123");
+    expect(body.session.accessTier).toBe("member");
+    expect(body.session.role).toBe("participant");
+    expect(body.websocketToken).toBeDefined();
+
+    // Verify WebSocket token contains member tier
+    const decoded = verifyWsToken(body.websocketToken);
+    expect(decoded.accessTier).toBe("member");
+    expect(decoded.sessionId).toBe("session-member-123");
+
+    // Cookie should NOT be rotated (no set-cookie header)
+    expect(response.headers["set-cookie"]).toBeUndefined();
+
+    // Prisma update should be called, but not create
+    const prismaClient = (
+      app as unknown as {
+        prisma: {
+          roomSession: {
+            create: ReturnType<typeof vi.fn>;
+            update: ReturnType<typeof vi.fn>;
+          };
+        };
+      }
+    ).prisma;
+    expect(prismaClient.roomSession.create).not.toHaveBeenCalled();
+    expect(prismaClient.roomSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "session-member-123" },
+      })
+    );
+    await app.close();
+  });
+
+  it("returns 200 and preserves host authority when rehydrating a valid host session", async () => {
+    const app = buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/listen",
+      headers: {
+        cookie: "session_token=valid-host-token",
+      },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as {
+      session: {
+        roomSessionId: string;
+        accessTier: string;
+        role: string;
+      };
+      websocketToken: string;
+    };
+    expect(body.session.roomSessionId).toBe("session-host-123");
+    expect(body.session.accessTier).toBe("member");
+    expect(body.session.role).toBe("host");
+    
+    // Cookie should NOT be rotated
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    await app.close();
+  });
+
+  it("falls back to creating a new Listener session and sets cookie if existing session is banned", async () => {
+    const app = buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/listen",
+      headers: {
+        cookie: "session_token=banned-token",
+      },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.body) as {
+      session: {
+        roomSessionId: string;
+        accessTier: string;
+        role: string;
+      };
+      websocketToken: string;
+    };
+    expect(body.session.roomSessionId).toBe("session-xyz-789");
+    expect(body.session.accessTier).toBe("listener");
+
+    // Cookie SHOULD be rotated/set
+    expect(response.headers["set-cookie"]).toBeDefined();
+    
+    // Prisma create SHOULD be called
+    const prismaClient = (
+      app as unknown as {
+        prisma: {
+          roomSession: {
+            create: ReturnType<typeof vi.fn>;
+            update: ReturnType<typeof vi.fn>;
+          };
+        };
+      }
+    ).prisma;
+    expect(prismaClient.roomSession.create).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("falls back to creating a new Listener session and sets cookie if existing session has left (expired)", async () => {
+    const app = buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/listen",
+      payload: {},
+      headers: {
+        cookie: "session_token=expired-token",
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.body) as {
+      session: {
+        roomSessionId: string;
+        accessTier: string;
+        role: string;
+      };
+      websocketToken: string;
+    };
+    expect(body.session.roomSessionId).toBe("session-xyz-789");
+    expect(body.session.accessTier).toBe("listener");
+
+    // Cookie SHOULD be rotated/set
+    expect(response.headers["set-cookie"]).toBeDefined();
+    await app.close();
+  });
+
+  it("falls back to creating a new Listener session and sets cookie if existing session belongs to another room", async () => {
+    const app = buildTestApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/listen",
+      payload: {},
+      headers: {
+        cookie: "session_token=other-room-token",
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const body = JSON.parse(response.body) as {
+      session: {
+        roomSessionId: string;
+        accessTier: string;
+        role: string;
+      };
+      websocketToken: string;
+    };
+    expect(body.session.roomSessionId).toBe("session-xyz-789");
+    expect(body.session.accessTier).toBe("listener");
+
+    // Cookie SHOULD be rotated/set
+    expect(response.headers["set-cookie"]).toBeDefined();
     await app.close();
   });
 });
