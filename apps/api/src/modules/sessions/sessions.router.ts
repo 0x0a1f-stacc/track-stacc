@@ -8,14 +8,23 @@ export async function sessionsRouter(app: FastifyInstance) {
   app.post("/api/rooms/:roomId/listen", async (request, reply) => {
     const { roomId } = request.params as { roomId: string };
     const body = listenRoomSchema.parse(request.body);
-    const result = await listenToRoom(app, roomId, body.roomPassword);
-    reply.setCookie("session_token", result.sessionToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: app.config.nodeEnv === "production",
-    });
-    reply.code(201);
+    const result = await listenToRoom(
+      app,
+      roomId,
+      body.roomPassword,
+      request.session,
+    );
+    if (result.sessionToken !== undefined) {
+      reply.setCookie("session_token", result.sessionToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: app.config.nodeEnv === "production",
+      });
+      reply.code(201);
+    } else {
+      reply.code(200);
+    }
     return {
       session: {
         roomSessionId: result.session.id,
