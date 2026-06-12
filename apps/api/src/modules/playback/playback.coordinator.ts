@@ -244,6 +244,23 @@ export async function handleClientEnd(
 ) {
   const state = await getPlaybackState(app, roomId);
   if (state.queueItemId !== queueItemId) return state;
+
+  if (state.status === PlaybackStatus.Playing && state.startedAt) {
+    const item = await app.prisma.queueItem
+      .findUnique({
+        where: { id: queueItemId },
+        include: { track: true },
+      })
+      .catch(() => null);
+    if (item?.track?.durationSeconds != null) {
+      const elapsed = (Date.now() - new Date(state.startedAt).getTime()) / 1000;
+      if (elapsed < item.track.durationSeconds - 3) {
+        emitResync(io, roomId, state);
+        return state;
+      }
+    }
+  }
+
   return advanceQueue(app, io, roomId);
 }
 
