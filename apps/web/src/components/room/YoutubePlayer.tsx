@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ClientEvent } from "@trackstacc/types";
 import { Button, Spinner } from "@trackstacc/ui";
+import { useRoomStore } from "@/stores/room.store";
 import { loadYouTubeApi } from "@/lib/youtube";
 
 export function YoutubePlayer({
@@ -23,6 +24,20 @@ export function YoutubePlayer({
   const [autoplayBlocked, setAutoplayBlocked] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
 
+  const playback = useRoomStore((state) => state.playback);
+  const lastSeekVideoRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const p = playerRef.current;
+    if (!p || !playerReady || !playback?.startedAt || !playback.videoId) return;
+    const vid = playback.videoId;
+    if (lastSeekVideoRef.current === vid) return;
+    lastSeekVideoRef.current = vid;
+    const target = (Date.now() - new Date(playback.startedAt).getTime()) / 1000;
+    if (target > 1 && Math.abs(p.getCurrentTime() - target) > 3)
+      p.seekTo(target, true);
+  }, [playback, player, playerReady]);
+
   const emitRef = React.useRef(emit);
   const queueItemRef = React.useRef(queueItemId);
   const nextVideoRef = React.useRef(nextVideoId);
@@ -31,6 +46,7 @@ export function YoutubePlayer({
   const loadedVideoRef = React.useRef<string | null>(null);
   const playerRef = React.useRef<YT.Player | null>(null);
   const everPlayedRef = React.useRef(false);
+  const loadPendingRef = React.useRef(false);
 
   React.useEffect(() => {
     emitRef.current = emit;
@@ -50,7 +66,7 @@ export function YoutubePlayer({
 
   function loadVideo(player: YT.Player, id: string, offset: number) {
     loadedVideoRef.current = id;
-    everPlayedRef.current = true;
+    loadPendingRef.current = true;
     setAutoplayBlocked(false);
     setLoading(true);
     player.loadVideoById({
@@ -109,6 +125,7 @@ export function YoutubePlayer({
                   ...idPayload,
                 });
               if (event.data === api.PlayerState.PLAYING) {
+                loadPendingRef.current = false;
                 setLoading(false);
                 everPlayedRef.current = true;
                 setAutoplayBlocked(false);
@@ -120,11 +137,13 @@ export function YoutubePlayer({
                 });
               }
               if (event.data === api.PlayerState.PAUSED) {
-                if (!everPlayedRef.current) setAutoplayBlocked(true);
+                if (loadPendingRef.current || !everPlayedRef.current)
+                  setAutoplayBlocked(true);
               }
             },
             onError: () => {
               if (destroyed) return;
+              loadPendingRef.current = false;
               setLoading(false);
             },
           },
@@ -142,6 +161,7 @@ export function YoutubePlayer({
       setLoading(true);
       setAutoplayBlocked(false);
       loadedVideoRef.current = null;
+      loadPendingRef.current = false;
       everPlayedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,7 +204,7 @@ export function YoutubePlayer({
                 if (loadedVideoRef.current !== videoId) {
                   loadVideo(player, videoId, startSeconds);
                 } else {
-                  everPlayedRef.current = true;
+                  loadPendingRef.current = false;
                   setLoading(false);
                   player.playVideo();
                 }
