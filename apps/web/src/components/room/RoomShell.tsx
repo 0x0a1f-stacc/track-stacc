@@ -1,11 +1,11 @@
 "use client";
 
+import { AccessTier, QueueItemStatus } from "@trackstacc/types";
 import { useRouter } from "next/navigation";
 import * as React from "react";
-import { AccessTier, QueueItemStatus } from "@trackstacc/types";
-import { useSocket } from "@/hooks/useSocket";
-import { useRoomStore } from "@/stores/room.store";
-import { api } from "@/lib/api";
+
+import { ProtectNicknameModal } from "../nickname/ProtectNicknameModal";
+
 import { AddSongInput } from "./AddSongInput";
 import { ChatPanel } from "./ChatPanel";
 import { ParticipantList } from "./ParticipantList";
@@ -13,7 +13,16 @@ import { PlaybackControls } from "./PlaybackControls";
 import { QueuePanel } from "./QueuePanel";
 import { RoomSettings } from "./RoomSettings";
 import { YoutubePlayer } from "./YoutubePlayer";
-import { ProtectNicknameModal } from "../nickname/ProtectNicknameModal";
+
+import { useSocket } from "@/hooks/useSocket";
+import { api } from "@/lib/api";
+import {
+  getRoomCredentials,
+  persistMemberCredentials,
+  persistListenerCredentials,
+} from "@/lib/storage";
+import { useRoomStore } from "@/stores/room.store";
+
 
 type ListenerState =
   | { status: "listening" }
@@ -21,8 +30,7 @@ type ListenerState =
   | { status: "password-required" }
   | { status: "ok" };
 
-const listenerSessionKey = (roomSlug: string) =>
-  `ws:${roomSlug}:listenerSessionId`;
+
 
 export function RoomShell({ roomSlug }: { roomSlug: string }) {
   const router = useRouter();
@@ -52,22 +60,11 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
     prevRoomSlugRef.current = roomSlug;
 
     if (token) return;
-    const stored =
-      sessionStorage.getItem(`ws:${roomSlug}`) ??
-      localStorage.getItem(`ws:${roomSlug}`);
-    if (stored) {
-      useRoomStore.getState().setToken(stored);
-      const storedTier = sessionStorage.getItem(`ws:${roomSlug}:tier`);
-      if (storedTier === "listener" || storedTier === "member") {
-        useRoomStore.getState().setOwnAccessTier(storedTier as AccessTier);
-      }
-      // Recover listenerSessionId if still needed (e.g. listener tier on refresh)
-      const storedListenerId = sessionStorage.getItem(
-        listenerSessionKey(roomSlug),
-      );
-      if (storedListenerId) {
-        useRoomStore.getState().setListenerSessionId(storedListenerId);
-      }
+    const credentials = getRoomCredentials(roomSlug);
+    if (credentials) {
+      useRoomStore.getState().setToken(credentials.token);
+      useRoomStore.getState().setOwnAccessTier(credentials.tier);
+      useRoomStore.getState().setListenerSessionId(credentials.listenerSessionId);
       return;
     }
 
@@ -78,9 +75,9 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
     // server. The ref is released in the success/error handler for subsequent
     // navigation.
     if (listenInFlightRef.current) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     listenInFlightRef.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setListenerState({ status: "listening" });
 
     api
@@ -94,13 +91,10 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
         useRoomStore
           .getState()
           .setListenerSessionId(response.session.roomSessionId);
-        sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
-        sessionStorage.setItem(
-          `ws:${roomSlug}:tier`,
+        persistListenerCredentials(
+          roomSlug,
+          response.websocketToken,
           response.session.accessTier,
-        );
-        sessionStorage.setItem(
-          listenerSessionKey(roomSlug),
           response.session.roomSessionId,
         );
         setListenerState({ status: "ok" });
@@ -143,13 +137,11 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
       // Listener session is no longer needed after upgrade; clear it
       useRoomStore.getState().setListenerSessionId(null);
 
-      // Persist to sessionStorage
-      sessionStorage.setItem(`ws:${roomSlug}`, response.websocketToken);
-      sessionStorage.setItem(
-        `ws:${roomSlug}:tier`,
+      persistMemberCredentials(
+        roomSlug,
+        response.websocketToken,
         response.session.accessTier,
       );
-      sessionStorage.removeItem(listenerSessionKey(roomSlug));
 
       // Close the modal
       setUpgradeModalOpen(false);
@@ -201,13 +193,10 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
                 useRoomStore
                   .getState()
                   .setListenerSessionId(res.session.roomSessionId);
-                sessionStorage.setItem(`ws:${roomSlug}`, res.websocketToken);
-                sessionStorage.setItem(
-                  `ws:${roomSlug}:tier`,
+                persistListenerCredentials(
+                  roomSlug,
+                  res.websocketToken,
                   res.session.accessTier,
-                );
-                sessionStorage.setItem(
-                  listenerSessionKey(roomSlug),
                   res.session.roomSessionId,
                 );
                 setListenerState({ status: "ok" });
