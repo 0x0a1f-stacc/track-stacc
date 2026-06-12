@@ -1,3 +1,4 @@
+import type { RoomSession } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 
 import { verifyPassword } from "../../lib/argon2.js";
@@ -11,6 +12,7 @@ export async function listenToRoom(
   app: FastifyInstance,
   roomIdOrSlug: string,
   roomPassword: string | undefined,
+  existingSession?: RoomSession,
 ) {
   const room = await app.prisma.room.findFirst({
     where: uuidPattern.test(roomIdOrSlug)
@@ -18,6 +20,31 @@ export async function listenToRoom(
       : { slug: roomIdOrSlug },
   });
   if (!room) throw new AppError("ROOM_NOT_FOUND", "Room not found.", 404);
+
+  // If there's an existing valid session for this room, rehydrate it
+  if (
+    existingSession &&
+    existingSession.roomId === room.id &&
+    !existingSession.isBanned &&
+    existingSession.leftAt === null
+  ) {
+    const session = await app.prisma.roomSession.update({
+      where: { id: existingSession.id },
+      data: { lastSeenAt: new Date() },
+    });
+
+    const websocketToken = signWsToken({
+      roomId: room.id,
+      sessionId: session.id,
+      accessTier: session.accessTier,
+    });
+
+    return {
+      session,
+      sessionToken: undefined,
+      websocketToken,
+    };
+  }
 
   if (room.roomPasswordHash) {
     if (!roomPassword)
@@ -58,3 +85,4 @@ export async function listenToRoom(
 
   return { session, sessionToken, websocketToken };
 }
+
