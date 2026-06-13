@@ -40,7 +40,7 @@ export function RoomShell({ roomSlug }: { roomSlug: string }) {
   const playback = useRoomStore((state) => state.playback);
   const room = useRoomStore((state) => state.room);
   const queue = useRoomStore((state) => state.queue);
-  const { emit } = useSocket(token);
+  const { emit } = useSocket(token, roomSlug);
   const [listenerState, setListenerState] =
     React.useState<ListenerState | null>(null);
   const [upgradeModalOpen, setUpgradeModalOpen] = React.useState(false);
