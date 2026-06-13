@@ -314,7 +314,7 @@ Client→server interactive events (`WS-C2S`) are gated by minimum tier `member`
 | `moderation.applied` (S2C) | `WS-MOD` | — | — | — |
 | `integration.command.*` / `external.bot_message.created` / `room.external_settings.changed` (S2C) | `WS-INTEG` | R/W external tables | — | (errors surfaced via command result envelope, §23.2.3) |
 
-**Connection (`WS-CONN`, §16.1):** token validated on connect; `WEBSOCKET_TOKEN_INVALID` (401) on failure; reconnection uses exponential backoff + jitter (§16.1.1, NFR-022); token refresh via `POST /api/v1/rooms/:roomId/session/refresh`. WS errors must **not** disconnect the client unless auth/authorization/protocol-abuse/unrecoverable degradation (§23.2.2).
+**Connection (`WS-CONN`, §16.1):** token validated on connect; `WEBSOCKET_TOKEN_INVALID` (401) on failure; reconnection uses exponential backoff + jitter (§16.1.1, NFR-022); token refresh/rehydration via room bootstrap endpoint `POST /api/rooms/:roomId/listen`. WS errors must **not** disconnect the client unless auth/authorization/protocol-abuse/unrecoverable degradation (§23.2.2).
 
 ---
 

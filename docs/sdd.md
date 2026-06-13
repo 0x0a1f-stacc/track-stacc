@@ -2346,7 +2346,9 @@ POST /api/rooms/:roomId/join
 POST /api/rooms/:roomId/nickname/change
 ```
 
-`POST /api/rooms/:roomId/listen` establishes a read-only **Listener** session (native access tier `listener`). It requires no nickname or password; it requires the room password only if the room is password-protected.
+`POST /api/rooms/:roomId/listen` serves as the primary room bootstrap and same-session rehydration path:
+1. **Bootstrap / Listener Entry:** If no active session exists in the browser cookies, it establishes a read-only **Listener** session (native access tier `listener`). It requires no nickname or password; it requires the room password only if the room is password-protected.
+2. **Session Rehydration:** If a valid HttpOnly `session_token` cookie representing an existing active session (such as a host or member) is present, the endpoint rehydrates that session and returns its existing tier (`member` or `listener`), role, and a fresh WebSocket token. It does not overwrite the existing cookie. This preserves member/host authority across page refreshes, reopened tabs, and temporary socket drops.
 
 ```json
 {
@@ -2360,10 +2362,10 @@ Listen response:
 {
   "session": {
     "roomSessionId": "uuid",
-    "accessTier": "listener",
-    "role": "listener"
+    "accessTier": "listener | member",
+    "role": "listener | participant | moderator | host"
   },
-  "websocketToken": "signed-listener-token"
+  "websocketToken": "signed-websocket-token"
 }
 ```
 
@@ -2541,7 +2543,7 @@ Reconnection behavior by phase:
 On successful reconnection:
 
 1. Client sends the existing WebSocket token.
-2. If the token has expired, client requests a new token via `POST /api/v1/rooms/:roomId/session/refresh` (or equivalent) and reconnects with the fresh token.
+2. If the token has expired or is invalid, the client requests a new token via the room bootstrap path `POST /api/rooms/:roomId/listen` (which rehydrates the existing cookie-backed session and returns a fresh WebSocket token) and reconnects with the fresh token. If client-side token verification fails during connection or receives a connection error (`WEBSOCKET_TOKEN_INVALID`), the client clears stale stored tokens and falls back to this bootstrap rehydration path.
 3. Server sends a full `room.snapshot` event containing current room state, playback, queue, participants, recent messages, and any active veto window.
 4. Client reconciles the snapshot with its local state and resumes normal operation.
 5. If the participant's session has been invalidated (ban, room deletion, session expiry beyond refresh window), the server sends an `error` event with code `SESSION_INVALID` and the client redirects to the room join flow.
