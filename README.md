@@ -168,7 +168,7 @@ Also verified locally:
 
 - `POST /api/rooms` creates a room
 - `POST /api/rooms/:slug/join` returns a session payload and `websocketToken`; accepts optional `listenerSessionId` to upgrade a listener session in place to `member`, returning a replacement `websocketToken` with `accessTier: "member"`
-- `POST /api/rooms/:roomId/listen` returns a listener session (`accessTier: "listener"`) and a listener-tier `websocketToken`
+- `POST /api/rooms/:roomId/listen` serves as the room bootstrap and same-session rehydration path; returns a listener or rehydrated member/host session payload and a fresh `websocketToken` based on the active browser session cookie
 - Socket.IO connection receives `room.snapshot` (includes room metadata, playback, queue, participants, and recent messages filtered by access tier)
 
 ## Environment Variables
@@ -206,7 +206,7 @@ Important endpoints:
 - `GET /api/rooms/:roomId`
 - `PATCH /api/rooms/:roomId/settings`
 - `POST /api/rooms/:roomId/join` — room join with optional protect-and-join; accepts optional `listenerSessionId` to upgrade an existing Listener session to `member` in place; returns a replacement `websocketToken` with `accessTier: "member"`; separate from the standalone nickname endpoints above
-- `POST /api/rooms/:roomId/listen`
+- `POST /api/rooms/:roomId/listen` — room bootstrap and same-session rehydration endpoint; returns a listener or rehydrated member/host session payload and a fresh `websocketToken` based on the active browser session cookie
 - `POST /api/rooms/:roomId/password/verify`
 - `POST /api/rooms/:roomId/queue/items`
 - `POST /api/rooms/:roomId/queue/items/:queueItemId/vote`
