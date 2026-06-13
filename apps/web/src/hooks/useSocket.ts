@@ -50,7 +50,15 @@ export function useSocket(token: string | null, roomSlug?: string) {
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(next);
+
+    const heartbeatInterval = setInterval(() => {
+      if (next.connected) {
+        next.emit("presence.heartbeat", { type: "presence.heartbeat" });
+      }
+    }, 25_000);
+
     return () => {
+      clearInterval(heartbeatInterval);
       next.disconnect();
     };
   }, [applyEvent, token, roomSlug]);

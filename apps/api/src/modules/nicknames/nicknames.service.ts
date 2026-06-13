@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from "../../lib/argon2.js";
 import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
 import { hashToken, randomToken, signWsToken } from "../../lib/tokens.js";
 import { normalizeNickname } from "../identity/nickname.normalizer.js";
+import { cleanupInactiveSessions } from "../../realtime/presence.manager.js";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -249,6 +250,7 @@ export async function joinRoom(
 
   const room = await resolveRoom(app, roomIdOrSlug);
   await verifyRoomPassword(room, roomPassword);
+  await cleanupInactiveSessions(app, room.id);
   const normalized = normalizeNickname(displayNickname);
 
   // -- Upgrade path: listenerSessionId provided --
