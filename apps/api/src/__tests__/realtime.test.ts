@@ -164,6 +164,7 @@ async function setupTest(overrides?: {
       findUnique: vi.fn().mockResolvedValue(session),
       findMany: vi.fn().mockResolvedValue([session]),
       update: vi.fn().mockResolvedValue(session),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     room: {
       findUniqueOrThrow: vi.fn().mockResolvedValue(room),
@@ -389,6 +390,7 @@ describe("WebSocket gateway", () => {
       app.decorate("prisma", {
         roomSession: {
           findUnique: vi.fn().mockResolvedValue(null),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
       } as never);
 
