@@ -14,6 +14,9 @@ export async function sessionsRouter(app: FastifyInstance) {
       body.roomPassword,
       request.session,
     );
+    // If a sessionToken was returned, a new session was created (201 Created).
+    // If undefined, an existing valid session cookie was successfully rehydrated
+    // without overwriting the client's current session token (200 OK).
     if (result.sessionToken !== undefined) {
       reply.setCookie("session_token", result.sessionToken, {
         httpOnly: true,

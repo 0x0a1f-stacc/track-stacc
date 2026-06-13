@@ -39,6 +39,9 @@ export function useSocket(token: string | null, roomSlug?: string) {
         "unauthorized",
       ];
       if (authErrors.includes(err.message)) {
+        // Clear stale local credentials on authentication failure. This triggers 
+        // the RoomShell's bootstrap useEffect to fallback to the /listen endpoint 
+        // for same-session rehydration via the browser's session cookie.
         useRoomStore.getState().resetRoomState();
         if (roomSlug) {
           clearRoomCredentials(roomSlug);
