@@ -30,6 +30,16 @@ export async function registerRealtime(app: FastifyInstance) {
   });
   const pub = app.redis.duplicate();
   const sub = app.redis.duplicate();
+  if (typeof pub.on === "function") {
+    pub.on("error", (err) => {
+      app.log.warn({ err }, "Redis pub client error");
+    });
+  }
+  if (typeof sub.on === "function") {
+    sub.on("error", (err) => {
+      app.log.warn({ err }, "Redis sub client error");
+    });
+  }
   try {
     io.adapter(createAdapter(pub, sub));
   } catch {
