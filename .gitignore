@@ -12,3 +12,4 @@ coverage/
 .serena/
 *.tsbuildinfo
 *.tsbuildinfo
+.envrc
