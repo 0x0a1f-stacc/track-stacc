@@ -21,7 +21,7 @@ import {
   voteSchema,
 } from "../modules/queue/queue.schema.js";
 import { addQueueItem, voteQueueItem } from "../modules/queue/queue.service.js";
-import { getParticipants } from "./presence.manager.js";
+import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
 import { broadcast } from "./broadcast.js";
 import { generateEventRequestId } from "./request-id.js";
 
@@ -81,7 +81,9 @@ export function registerRoomHandlers(
         await app.prisma.roomSession.update({
           where: { id: sessionId },
           data: { lastSeenAt: new Date() },
-        });
+        }).catch(() => undefined);
+        await markSessionPresent(app, roomId, sessionId);
+        await cleanupInactiveSessions(app, roomId);
         broadcast(io, roomId, {
           type: "presence.updated",
           participants: await getParticipants(app, roomId),

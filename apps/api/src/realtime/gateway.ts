@@ -11,8 +11,9 @@ import {
   getPlaybackState,
 } from "../modules/playback/playback.coordinator.js";
 import { roomChannel } from "./broadcast.js";
-import { getParticipants } from "./presence.manager.js";
+import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
+import { broadcast } from "./broadcast.js";
 
 interface SocketData {
   roomId: string;
@@ -72,6 +73,15 @@ export async function registerRealtime(app: FastifyInstance) {
       where: { id: sessionId },
       data: { lastSeenAt: new Date(), leftAt: null },
     });
+    await markSessionPresent(app, roomId, sessionId);
+    await cleanupInactiveSessions(app, roomId);
+
+    // Broadcast presence update to other room participants
+    broadcast(io, roomId, {
+      type: "presence.updated",
+      participants: await getParticipants(app, roomId),
+    });
+
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
@@ -152,7 +162,8 @@ export async function registerRealtime(app: FastifyInstance) {
       await app.prisma.roomSession
         .update({ where: { id: sessionId }, data: { lastSeenAt: new Date() } })
         .catch(() => undefined);
-      io.to(roomChannel(roomId)).emit("presence.updated", {
+      await cleanupInactiveSessions(app, roomId);
+      broadcast(io, roomId, {
         type: "presence.updated",
         participants: await getParticipants(app, roomId),
       });
