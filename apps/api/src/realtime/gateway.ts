@@ -29,8 +29,8 @@ export async function registerRealtime(app: FastifyInstance) {
       credentials: true,
     },
   });
-  const pub = app.redis.duplicate();
-  const sub = app.redis.duplicate();
+  const pub = app.redis.duplicate({ enableOfflineQueue: true });
+  const sub = app.redis.duplicate({ enableOfflineQueue: true });
   if (typeof pub.on === "function") {
     pub.on("error", (err) => {
       app.log.warn({ err }, "Redis pub client error");
