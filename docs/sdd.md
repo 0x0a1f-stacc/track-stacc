@@ -383,6 +383,12 @@ This section applies to the native `trackstacc.live` site. External embeds and e
 | FR-091 | Presence updates when users connect, disconnect, or go idle.          | MVP         |
 | FR-092 | DJ rotation eligibility depends on presence and participation status. | MVP/Phase 2 |
 
+**Presence Identity and Lifecycle Design:**
+- **Identity Model:** Presence is tracked by a stable room session identity (`room_sessions.id`), rather than by transient socket ID or display name. This ensures that multiple tabs or sockets opened by the same user in the same room reconcile to a single active participant entry in the UI.
+- **Heartbeat & Timeout:** Connected clients emit a `presence.heartbeat` event every 25 seconds. The server sweeps inactive sessions whose last heartbeat or activity exceeds 60 seconds.
+- **Reconnection Convergence:** When a client reconnects, the server returns a complete `room.snapshot` containing the authoritative participant list. Active participants are also updated via `presence.updated` events. Clients overwrite local participant lists with these server-authoritative payloads to guarantee convergence.
+- **Degraded Fallback:** Presence uses Redis ZSETs for acceleration and distributed coordination. If Redis is degraded, presence falls back to PostgreSQL, querying `room_sessions` directly using the `lastSeenAt` and `leftAt` columns to determine active users. Stale sessions are cleaned up using DB fallback updates.
+
 ### 7.10 Room Settings
 
 | ID     | Requirement                                | Priority |
@@ -660,6 +666,7 @@ This flow covers the native site. The embed/external flow is unchanged (Sections
 7. Server creates or upgrades the room session to `member` tier.
 8. Client (re)opens or upgrades the WebSocket connection with a member-tier token.
 9. Server broadcasts presence update and optional system join message.
+10. **Refresh & Reconnection Rehydration:** If a participant refreshes the page or experiences a transient WebSocket drop, the browser's httpOnly session cookie is used to rehydrate the existing session at the primary bootstrap endpoint (`POST /api/rooms/:roomId/listen` or `/join`). Listeners reuse their active Listener session, and members/hosts reuse their active member/host session. Stale duplicate rows are not created, and host/member authority is preserved.
 
 A user with no protected nickname who never completes step 5 remains a Listener for the entire session.
 
@@ -1760,6 +1767,19 @@ Example bot messages:
 | User muted         | `@alice was muted from song requests for 30 minutes.`                                                    |
 | User unmuted       | `@alice was unmuted and can request songs again.`                                                        |
 
+### 13.13 Presence Manager
+
+Responsibilities:
+
+1. Maintain native room presence keyed by stable room session identity (`room_sessions.id`) rather than socket ID or display name.
+2. Reconcile multiple sockets or tabs opened under the same active room session to a single visible participant row.
+3. Reuse active Listener sessions on refresh (via cookie rehydration at `/listen`) to avoid creating duplicate Listener entries.
+4. Reuse active member/host sessions on refresh/reconnect (preserving member and host authority without leaving stale rows behind).
+5. Track active presence using Redis ZSETs where room sessions are mapped to the current epoch timestamp, and set a 24-hour TTL on the presence key.
+6. Periodically sweep inactive sessions (older than 60 seconds) out of Redis and update PostgreSQL `room_sessions` to set `leftAt = now` where `leftAt IS NULL`.
+7. Fail gracefully to PostgreSQL `lastSeenAt` / `leftAt` index queries when Redis is degraded or unavailable, ensuring presence remains bounded and approximate (capped at a 60-second lag) instead of producing unbounded participant list duplication.
+8. Scopes presence monitoring to native room participants; external participants are explicitly out of scope.
+
 ---
 
 ## 14. Data Model
@@ -1938,6 +1958,7 @@ Constraints:
 - `access_tier = member` requires a non-null `nickname_claim_id`, `normalized_nickname`, and `display_nickname` (application-layer and/or CHECK constraint).
 - `role` may only be `participant`, `moderator`, or `host` when `access_tier = member`.
 - A `listener` session is upgraded in place to `member` when the user authenticates or claims a protected nickname; the upgrade populates the nickname columns and `nickname_claim_id`.
+- Active presence status is server-authoritative and depends on the session being actively registered in Redis presence ZSET (or having a PostgreSQL `lastSeenAt` value within the 60-second timeout threshold if Redis is degraded) in addition to having `leftAt` set to `null`.
 
 #### `tracks`
 
@@ -2562,6 +2583,11 @@ On successful reconnection:
 | `room.mechanic.change` | Host changes playlist mechanic. | `member` (host)     |
 | `moderation.action`    | Host/mod action.                | `member` (host/mod) |
 
+**`presence.heartbeat` Event Details:**
+- Emitted by the client every 25 seconds when the connection is active.
+- Emitting a heartbeat updates `lastSeenAt` in the database and updates the presence key in Redis.
+- Heartbeats trigger a sweep of inactive sessions (older than 60 seconds) in Redis and PostgreSQL, followed by a broadcast of `presence.updated` to the room.
+
 Listener-tier sessions may connect to receive read-only state (Section 16.3) and may emit `playback.clientState` and `presence.heartbeat` only. Any `member`-only event received on a `listener`-tier connection is rejected with an `error` acknowledgement carrying code `LISTENER_READ_ONLY`; the server never trusts a client-supplied tier and re-derives it from the signed session token on every event (NFR-038).
 
 ### 16.3 Server-to-Client Events
@@ -2570,6 +2596,11 @@ Listener-tier sessions may connect to receive read-only state (Section 16.3) and
 | ----------------------- | ---------------------------------------- |
 | `room.snapshot`         | Full room state after connect/reconnect. |
 | `presence.updated`      | Participant list changed.                |
+
+**`room.snapshot` and `presence.updated` Convergence Behavior:**
+- On initial connection or successful reconnection, the server sends a `room.snapshot` event containing the full, authoritative list of active participants.
+- Whenever a participant joins, disconnects, or is swept due to a heartbeat timeout, the server broadcasts a `presence.updated` event containing the latest active participant list.
+- Clients treat these server events as the authoritative source of truth, completely replacing local participant arrays to ensure convergence and prevent duplicate participant rows.
 | `chat.message`          | New chat/system message.                 |
 | `chat.deleted`          | Message deleted.                         |
 | `queue.updated`         | Queue changed.                           |
@@ -3287,7 +3318,7 @@ Trackstacc must treat external dependencies as unreliable and use explicit circu
 | Dependency | Timeout target | Open breaker trigger | Open duration | Fallback / degraded behavior | User-visible behavior |
 | ---------- | -------------- | -------------------- | ------------- | ---------------------------- | --------------------- |
 | YouTube Data API / metadata lookup | 2s connect, 4s total request | 5 failures or timeout rate >50% over 60s | 60s, then half-open probe | Queue by validated video ID with `metadata_status=partial` when room policy allows; defer metadata enrichment to worker; disable in-app search while open. | Song request may succeed with partial title/thumbnail; search shows temporary outage. |
-| Redis | 500ms connect, 1s operation | 3 consecutive connection failures or p95 Redis latency >1s for 60s | 30s, then half-open probe | Fail closed for rate-limit-protected writes, external commands, nickname password attempts, and staff actions; allow safe reads from PostgreSQL; mark presence approximate; avoid cross-instance broadcast assumptions. | Writes that require rate limiting or distributed coordination return `SERVICE_DEGRADED`; room may show "realtime degraded." |
+| Redis | 500ms connect, 1s operation | 3 consecutive connection failures or p95 Redis latency >1s for 60s | 30s, then half-open probe | Fail closed for rate-limit-protected writes, external commands, nickname password attempts, and staff actions; allow safe reads from PostgreSQL; fall back to PostgreSQL lastSeenAt index for presence query and cleanup; avoid cross-instance broadcast assumptions. | Writes that require rate limiting or distributed coordination return `SERVICE_DEGRADED`; room may show "realtime degraded." |
 | PostgreSQL | 1s connect, 3s query for interactive routes | 3 consecutive failed health probes or pool exhaustion for 30s | 30s, then half-open probe | Readiness fails; durable reads/writes stop; optionally serve cached read-only room snapshot if marked stale and no secrets are exposed. | Most actions return `DEPENDENCY_UNAVAILABLE`; health readiness reports unavailable. |
 | Outbound bot webhook endpoint | 2s connect, 5s total request | 5 consecutive delivery failures, repeated 429/5xx, or timeout rate >50% over 5 minutes per integration | 5 minutes, then half-open probe | Do not roll back accepted queue, vote, playback, moderation, or setting changes; enqueue bounded retries with exponential backoff and idempotent delivery IDs; move exhausted deliveries to dead-letter queue. | External command can return success with `WEBHOOK_DELIVERY_DEFERRED` note when only announcement delivery failed. |
 
@@ -3303,6 +3334,7 @@ Trackstacc must treat external dependencies as unreliable and use explicit circu
 
 1. **YouTube metadata degradation:** The queue engine may accept a song with only a validated video ID if the URL format is valid, room duration policy can be enforced from cache or deferred policy, and the room does not require complete metadata before acceptance. If max-duration cannot be verified and the room requires strict duration enforcement, reject with `YOUTUBE_METADATA_DEGRADED` rather than accepting an unknown-duration video.
 2. **Redis degradation:** Because Redis backs rate limits and realtime coordination, abuse-sensitive writes must fail closed when Redis is unavailable. This includes external song requests, external votes, staff commands, nickname password attempts, room creation bursts, and public-room queue writes. Local in-memory fallback may be used only for development or single-instance emergency operation and must be marked unsafe for horizontal scale.
+- **Redis-degraded presence fallback:** When Redis is degraded/unavailable, the Presence Manager falls back to PostgreSQL. It queries active sessions directly using `lastSeenAt >= (now - 60 seconds) AND leftAt IS NULL` and sweeps inactive sessions by updating `leftAt = now` where `lastSeenAt < (now - 60 seconds) and leftAt IS NULL`. This bounds presence approximation to a maximum of 60 seconds and prevents participant list duplication or unbounded growth.
 3. **PostgreSQL degradation:** PostgreSQL is the source of truth. Do not accept queue, chat, moderation, playback, nickname, integration, or settings writes unless they can be durably committed. Redis/cache state must not become authoritative.
 4. **Webhook degradation:** Webhook failure is non-transactional relative to room state. The command result should distinguish accepted state changes from delayed external announcements.
 5. **Readiness:** `/health` may remain alive during degraded mode; `/health/ready` must fail when PostgreSQL is unavailable or when Redis is unavailable for deployments where realtime/rate-limit correctness is required.
@@ -3336,6 +3368,8 @@ Track:
 19. Integration abuse/rate-limit triggers.
 20. External staff command volume and settings changes.
 21. External mute/unmute actions and currently active mute counts.
+22. Presence degradation triggers (fallback to database).
+23. WebSocket disconnect spikes and reconnection rates.
 
 ### 24.2 Logs
 
@@ -3463,13 +3497,15 @@ Test:
 1. Connect with valid token.
 2. Reject invalid token.
 3. Reject member-only event on a listener-tier connection with `LISTENER_READ_ONLY`.
-3. Broadcast chat to room only.
-4. Broadcast queue updates.
-5. Reconnect and receive snapshot.
-6. Presence heartbeat timeout.
-7. Cross-instance event propagation.
-8. Pre-play veto events propagate to native clients and embeds.
-9. External settings changes broadcast to connected embeds.
+4. Broadcast chat to room only.
+5. Broadcast queue updates.
+6. Reconnect and receive snapshot.
+7. Presence heartbeat timeout (verifying 25s client emit, 60s server cleanup, and database/Redis synchronization).
+8. Presence reconnect and refresh convergence (verifying no duplicate entries are created for Listener, member, and host sessions).
+9. Presence manager Redis-degraded fallback (verifying cleanup and query fallback to PostgreSQL when Redis is mock-unreachable).
+10. Cross-instance event propagation.
+11. Pre-play veto events propagate to native clients and embeds.
+12. External settings changes broadcast to connected embeds.
 
 ### 26.4 End-to-End Tests
 
@@ -3827,6 +3863,18 @@ Staff command authorization and abuse controls follow the authoritative security
 - `!music unmute <@displayName | externalUserId>` lifts a mute early and restores the target's permissions immediately.
 - Mute/unmute actions are audit logged and announced as bot messages.
 
+### 31.10 Presence Lifecycle
+
+- **Stable Identity Tracking:** Native room presence is keyed by stable room session identity (`room_sessions.id`), rather than by transient socket ID or display name.
+- **Tab/Socket Reconciliation:** Multiple active sockets or browser tabs opened by the same user in the same room reconcile to a single active participant row.
+- **Listener Refresh/Reconnect:** A Listener refreshing or reconnecting to the room reuses their existing active Listener session and does not create duplicate Listener rows.
+- **Member Refresh/Reconnect:** An authenticated member refreshing or reconnecting to the room reuses their existing active member session and does not create duplicate member rows.
+- **Host Refresh/Reconnect:** A host refreshing or reconnecting to the room preserves their host/member authority and does not leave stale host rows behind.
+- **Heartbeat & Sweep Timeout:** Connected web clients emit `presence.heartbeat` every 25 seconds, and the server sweeps inactive participants whose last seen timestamp is older than 60 seconds from both Redis and PostgreSQL.
+- **Realtime Convergence:** Upon connection or reconnection, clients receive a server-authoritative `room.snapshot`, and participant updates are broadcast via `presence.updated`. Clients overwrite local state with these events to guarantee convergence.
+- **Redis Degradation Fallback:** If Redis is unavailable, the presence manager fallback logic bounds the presence degradation by using PostgreSQL `lastSeenAt` and `leftAt` fallback semantics to query and cleanup active participants.
+- **External Scoping:** External participants (embed viewers) do not participate in native presence tracking and are explicitly out of scope.
+
 ---
 
 ## 32. Risks and Mitigations
@@ -4041,6 +4089,7 @@ This matrix maps functional requirements (FRs) and non-functional requirements (
 | FR-076 Mute participants | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/mute` | `room_sessions.is_muted` | Integration: mute flow |
 | FR-080–FR-085 Host moderation | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/*` | `room_moderation_actions` | Integration: moderation actions |
 | FR-090 Show participants | Frontend Client, Presence Manager | WebSocket `presence.updated` | Redis, `room_sessions` | WebSocket: presence |
+| FR-091 Presence updates | Presence Manager, Frontend Client | WebSocket `presence.heartbeat` / `presence.updated`, `/listen`, `/join` | `room_sessions`, Redis | WebSocket: presence lifecycle, integration: reconnect convergence |
 | FR-110–FR-119 External site integration | External Command Service, Outbound Webhook Service | `POST /api/v1/rooms/:roomId/integrations/site`, `POST /api/v1/integrations/site-command`, embed endpoints | `site_integrations`, `external_participants`, `external_commands` | Integration: external command flow; E2E: embed display |
 | FR-130–FR-143 Pre-play veto | Queue Engine (veto logic), Playback Coordinator | WebSocket veto events, `POST /api/v1/integrations/site-command` | `preplay_veto_votes`, `preplay_veto_windows`, `queue_items` | Unit: veto threshold; Integration: veto cycle |
 | FR-150–FR-168 Staff commands and muting | External Command Service, Moderation Service | `POST /api/v1/integrations/site-command` | `external_commands`, `external_participants`, `room_moderation_actions` | Integration: staff command flow; Unit: mute expiry |
@@ -4083,6 +4132,7 @@ This section tracks known MVP shortcuts, accepted limitations, and technical deb
 | LIM-005 | No mobile-native apps. | Mobile experience is browser-only. Push notifications, background audio, and native gestures are unavailable. | Post-MVP: evaluate React Native or PWA. | Post-MVP |
 | LIM-006 | External embed is read-only by default. | Embed viewers cannot vote or add songs directly from the embed UI. All mutations flow through the server-to-server command bridge. | By design for MVP. Interactive embed with identity delegation is a Phase 2 consideration. | Phase 2 |
 | LIM-007 | Mandatory protected nickname adds onboarding friction for native participation. | Users must create a password before chatting or queuing on the native site, which may lower conversion from listening to participating. Listening remains free. | Accepted for v1.4.0 as a deliberate trade for accountability and abuse resistance. Monitor listen-to-participate conversion; revisit one-step flow ergonomics and consider lighter trusted-device continuity in Phase 2. | Accepted |
+| LIM-008 | Redis-degraded presence is approximate. | Presence list may lag or be updated only on fallback database checks rather than instantly on socket event triggers. | Bounded fallback to PostgreSQL lastSeenAt (60-second limit) preserves data integrity. | Accepted |
 
 ### 38.2 Technical Debt
 

@@ -405,14 +405,14 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 
 ### FR-090 / FR-091 / FR-092 — Presence (§7.9, MVP)
 - **Implements:** `FEAT-PRESENCE`
-- **Components:** Presence Manager, Frontend Client
-- **Data:** Redis (presence), `DATA-SESSIONS`
-- **APIs:** —
-- **WebSockets:** `WS-PRESENCE` `presence.heartbeat` (C2S), `presence.updated` (S2C)
-- **Security:** `SEC-TIER` (presence visible per tier); presence approximate if Redis degraded (§23.6)
-- **Errors:** — (degraded → `SERVICE_DEGRADED`)
-- **Acceptance:** — (covered by WS test areas, §37.1 FR-090)
-- **Risks:** Redis unavailability → approximate presence (§23.6, §24.3 alert)
+- **Components:** Socket.IO Gateway, Presence Manager, Frontend Client, Identity/Nickname session flow
+- **Data:** Redis (presence ZSET), `DATA-SESSIONS` (`room_sessions`)
+- **APIs:** `POST /api/v1/rooms/:roomId/listen` (bootstrap/rehydration), `POST /api/v1/rooms/:roomId/join` (in-place upgrade)
+- **WebSockets:** `WS-PRESENCE` `presence.heartbeat` (C2S), `presence.updated` (S2C); `WS-CONN` `room.snapshot` (S2C)
+- **Security:** `SEC-TIER` (tier validated server-side from signed token); presence falls back to DB if Redis degraded
+- **Errors:** `SERVICE_DEGRADED` (Redis offline fallback logged)
+- **Acceptance:** `AC-PRESENCE-1` to `AC-PRESENCE-9` (§31.10)
+- **Risks:** Redis unavailability → DB index query/cleanup fallback bounds approximation to 60s
 - **Decisions:** — (DJ-rotation eligibility FR-092 depends on presence)
 
 ### FR-100…FR-106 — Room settings (§7.10)
