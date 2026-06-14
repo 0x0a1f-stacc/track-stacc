@@ -1,12 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlaybackStatus } from "@trackstacc/types";
+import type { FastifyInstance } from "fastify";
+import type { Server } from "socket.io";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../realtime/broadcast.js", () => ({
-  broadcast: vi.fn(),
-  roomChannel: vi.fn().mockReturnValue("room:mocked"),
-}));
-
-import { broadcast } from "../realtime/broadcast.js";
 
 import {
   advanceQueue,
@@ -19,9 +15,12 @@ import {
   skipTrack,
   startTrack,
 } from "../modules/playback/playback.coordinator.js";
+import { broadcast } from "../realtime/broadcast.js";
 
-import type { FastifyInstance } from "fastify";
-import type { Server } from "socket.io";
+vi.mock("../realtime/broadcast.js", () => ({
+  broadcast: vi.fn(),
+  roomChannel: vi.fn().mockReturnValue("room:mocked"),
+}));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const ioMock = {} as any as Server;

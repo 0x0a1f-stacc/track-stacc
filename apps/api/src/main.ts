@@ -1,4 +1,6 @@
+/* eslint-disable import-x/order */
 import dotenv from "dotenv";
+
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,13 +14,9 @@ import Fastify from "fastify";
 import { nanoid } from "nanoid";
 import { ZodError } from "zod";
 
-import authPlugin from "./plugins/auth.js";
-import prismaPlugin from "./plugins/prisma.js";
-import rateLimitPlugin from "./plugins/rateLimit.js";
-import redisPlugin from "./plugins/redis.js";
-import { AppError, toErrorResponse } from "./lib/errors.js";
 import { loadConfig, createConfigPlugin } from "./lib/config.js";
 import type { ApiConfig } from "./lib/config.js";
+import { AppError, toErrorResponse } from "./lib/errors.js";
 import { setSecret } from "./lib/tokens.js";
 import { chatRouter } from "./modules/chat/chat.router.js";
 import { moderationRouter } from "./modules/moderation/moderation.router.js";
@@ -27,6 +25,10 @@ import { playbackRouter } from "./modules/playback/playback.router.js";
 import { queueRouter } from "./modules/queue/queue.router.js";
 import { roomsRouter } from "./modules/rooms/rooms.router.js";
 import { sessionsRouter } from "./modules/sessions/sessions.router.js";
+import authPlugin from "./plugins/auth.js";
+import prismaPlugin from "./plugins/prisma.js";
+import rateLimitPlugin from "./plugins/rateLimit.js";
+import redisPlugin from "./plugins/redis.js";
 import { registerRealtime } from "./realtime/gateway.js";
 
 export async function buildApp(config: ApiConfig) {

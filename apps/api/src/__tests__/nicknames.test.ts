@@ -1,12 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import cookie from "@fastify/cookie";
-import { ZodError } from "zod";
-
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import { describe, it, expect, vi } from "vitest";
+import { ZodError } from "zod";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
+import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
 
 vi.mock("../lib/argon2.js", () => ({
   hashPassword: vi.fn().mockResolvedValue("$argon2id$v=19$m=65536,t=3,p=1$salt$mockedhash"),
@@ -15,7 +15,7 @@ vi.mock("../lib/argon2.js", () => ({
   ),
 }));
 
-import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
+
 
 const CLAIM_ALICE = {
   id: "claim-alice-123",
