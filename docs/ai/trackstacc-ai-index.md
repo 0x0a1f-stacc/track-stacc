@@ -116,7 +116,7 @@ Trackstacc (`trackstacc.live`) is a **no-registration, real-time collaborative Y
 | Group | Stable ID | One-sentence description | Cross-refs |
 | ----- | --------- | ------------------------ | ---------- |
 | Conventions | `API-CONV` | `/api/v1/` versioning, cursor pagination, rate-limit headers, request-id, naming. | NFR-035/036, `ERR` |
-| Room | `API-ROOMS` | Create/get/patch room, host claim, password verify. | `DATA-ROOMS`, FR-001–006 |
+| Room | `API-ROOMS` | Create/get/patch room, host join/upgrade, password verify. | `DATA-ROOMS`, FR-001–006 |
 | Nickname & session | `API-NICK` | `/listen` (listener), `/join` (member, protect-and-join, upgrade-in-place), protect/authenticate/change. | `FEAT-NICKPROT`, `SEC-TIER` |
 | Queue | `API-QUEUE` | Add/remove queue items, vote. | `DATA-QUEUE`, FR-030–034 |
 | Chat | `API-CHAT` | Paginated history, delete message. | `DATA-CHAT`, FR-075 |

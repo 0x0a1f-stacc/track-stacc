@@ -66,7 +66,7 @@ Only open the raw SDD (or a split file from §5 of the plan) when an artifact po
 
 **Worked task — "Add a column to `room_sessions`":**
 1. `requirements-graph.md` reverse index → `room_sessions` is touched by FR-010/019/028/076/090 + every gated FR via `SEC-TIER`.
-2. `integration-matrix.md` → writers of `room_sessions`: `/listen`,`/join`,`/host/claim`,`/password/verify`,`/nickname/change`,moderation/*.
+2. `integration-matrix.md` → writers of `room_sessions`: `/listen`,`/join`,`/password/verify`,`/nickname/change`,moderation/*.
 3. SDD §14.3 → expand-contract Prisma Migrate, zero-downtime, rollback.
 4. `change-impact-matrix.md` CI-01 (tier) + CI-11 (PG source-of-truth) before merging.
 

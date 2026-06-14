@@ -209,10 +209,29 @@ async function checkPerRoomNicknameUniqueness(
     );
 }
 
+/**
+ * Resolves the role for a member room session.
+ * 
+ * Flow Details:
+ * 1. Room Creation: Sets the cryptographically secure `host_token` cookie on the client.
+ * 2. Room Bootstrap: When the creator enters the room via `POST /api/rooms/:roomId/listen`,
+ *    the system is blind to the `host_token` and creates a default session with `accessTier: "listener"`
+ *    and `role: "listener"`. The creator starts strictly as a read-only Listener.
+ * 3. Nickname Authentication (Upgrade): To activate host authority, the creator must authenticate
+ *    or claim a protected nickname by calling `POST /api/rooms/:roomId/join` (optionally passing `listenerSessionId`
+ *    for in-place upgrades). This endpoint reads the `host_token` cookie and calls `determineRole()`.
+ *    If the token matches the room's `hostSecretHash`, their role is upgraded to `"host"`.
+ */
 export function determineRole(
   hostToken: string | undefined,
   room: { hostSecretHash: string },
 ) {
+  // NOTE: Room creation sets the `host_token` cookie and the `hostSecretHash` in the database.
+  // When a user first connects or refreshes, calling POST /api/rooms/:roomId/listen always
+  // produces a standard "listener" session (the system ignores hostToken at bootstrap).
+  //
+  // Host role activation only occurs during POST /api/rooms/:roomId/join (upgrade or join),
+  // which verifies the hostToken against the room's hostSecretHash using determineRole().
   if (hostToken) {
     return verifyPassword(room.hostSecretHash, hostToken).then(
       (valid) => (valid ? ("host" as const) : ("participant" as const)),
@@ -328,6 +347,8 @@ export async function joinRoom(
       }
     }
 
+    // Resolves host role if the host_token cookie matches the room's hostSecretHash.
+    // This transitions the user from read-only Listener to active Host.
     const role = await determineRole(hostToken, room);
 
     // Upgrade the existing session in-place
@@ -416,6 +437,8 @@ export async function joinRoom(
     }
   }
 
+  // Resolves host role if the host_token cookie matches the room's hostSecretHash.
+  // This transitions the user from read-only Listener to active Host.
   const role = await determineRole(hostToken, room);
   const sessionToken = randomToken();
   const session = await app.prisma.roomSession.create({

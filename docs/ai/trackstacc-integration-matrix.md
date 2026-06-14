@@ -52,16 +52,16 @@
 - **Acceptance:** `AC-MECH-1`…`AC-MECH-6`, `AC-CHAT-2` (listener visibility)
 - **Errors:** `HOST_REQUIRED` (403), `MECHANIC_CHANGE_COOLDOWN` (429), `VALIDATION_FAILED`
 
-### `POST /api/v1/rooms/:roomId/host/claim`
-- **Purpose:** Claim host authority via host secret/link (FR-003).
+### `POST /api/v1/rooms/:roomId/join` (Host Activation Flow)
+- **Purpose:** Claim host authority via host secret/cookie during protected nickname join/upgrade (FR-003).
 - **Reads:** `rooms` (`host_secret_hash`)
-- **Writes:** `room_sessions` (host binding); token rotation
+- **Writes:** `room_sessions` (upgrades session to member tier and sets role to host); token rotation
 - **Emits:** `WS-CONN` re-auth (rotated token)
 - **Security:** `SEC-SESSION` (rotate on privilege escalation, §19.4); hash compare only
-- **Tier:** elevates to `host`
-- **Rate limit:** per-session attempt control
+- **Tier:** elevates session to `host` role (member tier)
+- **Rate limit:** nickname rate limits and attempt controls
 - **Acceptance:** `AC-RC-2`, `AC-V140-7`
-- **Errors:** `HOST_REQUIRED` (403), `SESSION_INVALID` (401)
+- **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `NICKNAME_TAKEN` (409)
 
 ### `POST /api/v1/rooms/:roomId/password/verify`
 - **Purpose:** Verify room password to gain entry (FR-004/106).
@@ -323,7 +323,7 @@ Client→server interactive events (`WS-C2S`) are gated by minimum tier `member`
 | Table (`DATA-*`) | Written by |
 | --- | --- |
 | `rooms` (`DATA-ROOMS`) | `POST /rooms`, `PATCH /rooms/:id/settings`, `site-command` (`!music`) |
-| `room_sessions` (`DATA-SESSIONS`) | `/listen`, `/join`, `/host/claim`, `/password/verify`, `/nickname/change`, moderation/* |
+| `room_sessions` (`DATA-SESSIONS`) | `/listen`, `/join`, `/password/verify`, `/nickname/change`, moderation/* |
 | `nickname_claims` (`DATA-NICKNAMES`) | `/nicknames/protect`, `/join` (new claim) |
 | `queue_items` (`DATA-QUEUE`) | `POST/DELETE /queue/items`, `/approve`/`/reject`, `/playback/skip`, `site-command` (`!sr`/`!rm`/advance) |
 | `queue_votes` (`DATA-VOTES`) | `/queue/items/:id/vote` |
