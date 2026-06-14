@@ -44,9 +44,9 @@
 - **Purpose:** Create a room without registration and grant host authority (FR-001–006).
 - **Dependencies:** `FEAT-NICKPROT` (host must protect a nickname to exercise authority — `AC-V140-7`), `FEAT-MECHANICS` (default mechanic), `FEAT-ROOMSETTINGS`. Room Service (§13.2) + Identity Service (§13.3).
 - **Data Entities:** `DATA-ROOMS` (`host_secret_hash`, `playlist_mechanic`, config), `DATA-SESSIONS`.
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/host/claim`, `POST /api/v1/rooms/:roomId/password/verify`.
-- **WebSockets:** `WS-CONN` token rotation on host claim.
-- **Security Controls:** `SEC-SESSION` (httpOnly cookie + WS token, rotate on host claim — §19.4); host secret stored hash-only (`SEC-PWD` pattern); room password hash.
+- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` (cookie-based host upgrade), `POST /api/v1/rooms/:roomId/password/verify`.
+- **WebSockets:** `WS-CONN` token rotation on host upgrade/activation.
+- **Security Controls:** `SEC-SESSION` (httpOnly cookie + WS token, rotate on host upgrade/activation — §19.4); host secret stored hash-only (`SEC-PWD` pattern); room password hash.
 - **Acceptance Criteria:** `AC-RC-1`…`AC-RC-4`.
 - **Failure Modes:** Invalid config → `VALIDATION_FAILED`; non-host claim → `HOST_REQUIRED` (403); wrong room password → `ROOM_PASSWORD_INCORRECT`; room-creation burst fails closed if Redis down (§23.6).
 - **Observability Signals:** §24.1 *room creation rate* (#9), *active rooms* (#1); §24.3 alert *sudden room creation spam* (#7).

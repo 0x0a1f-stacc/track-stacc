@@ -646,10 +646,11 @@ Authorization for External Staff must be evaluated on every command from the ser
    - Duplicate policy
    - Skip vote threshold
 
-5. Server creates room and host secret.
-6. User is prompted to claim or authenticate a **protected nickname** (set a password, or sign in to an existing one). Host authority requires the `member` tier, so this step is mandatory before entering as host.
-7. User enters room as host (a Protected Nickname User).
-8. Host can copy share link.
+5. Server creates room, registers the host secret, and sets a cryptographically secure `host_token` cookie on the creator's browser.
+6. The creator opens the room and enters immediately as a read-only **Listener** (via `/listen`). Host authority is not active yet.
+7. To activate host authority, the creator is prompted to claim or authenticate a **protected nickname** (via `/join` or the in-room upgrade prompt).
+8. During this `/join` request, the server reads the `host_token` cookie. If it matches the room's host secret hash, the creator's session is upgraded in-place to `accessTier: "member"` and `role: "host"`.
+9. The upgraded host can then copy the share link, configure room settings, and perform moderation/host tasks.
 
 ### 10.2 Open Room and Join Flow
 
@@ -2326,7 +2327,7 @@ Every API request is assigned a unique request ID. If the client sends an `X-Req
 POST /api/rooms
 GET /api/rooms/:roomId
 PATCH /api/rooms/:roomId/settings
-POST /api/rooms/:roomId/host/claim
+POST /api/rooms/:roomId/host/claim (Deprecated: Host authority activation is merged into POST /api/rooms/:roomId/join via host_token cookie verification during protected nickname join/upgrade)
 POST /api/rooms/:roomId/password/verify
 ```
 
@@ -4054,7 +4055,7 @@ This matrix maps functional requirements (FRs) and non-functional requirements (
 | ----------- | ------------ | ---------------- | -------------- | ------------- |
 | FR-001 Room creation without registration | Room Service | `POST /api/v1/rooms` | `rooms` | Unit: room creation; Integration: create room flow |
 | FR-002 Default playlist mechanic | Room Service | `POST /api/v1/rooms` | `rooms.playlist_mechanic` | Unit: mechanic default; Integration: create room |
-| FR-003 Host authority via secret | Room Service, Identity Service | `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/host/claim` | `rooms.host_secret_hash` | Unit: host token; Integration: host claim |
+| FR-003 Host authority via secret | Room Service, Identity Service | `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` | `rooms.host_secret_hash` | Unit: host token; Integration: host claim during join/upgrade |
 | FR-006 Queue limits and duplicate rules | Queue Engine | `PATCH /api/v1/rooms/:roomId/settings` | `rooms` | Unit: limit validation; Integration: settings update |
 | FR-010 Protected nickname required for native participation | Identity Service, Auth Middleware | `POST /api/v1/rooms/:roomId/join` | `room_sessions.access_tier`, `nickname_claims` | Unit: tier gate; Integration: gated-action rejection |
 | FR-019 Read-only Listener access | Identity Service, Frontend Client | `POST /api/v1/rooms/:roomId/listen` | `room_sessions.access_tier` | Integration: listen flow; E2E: read-only room |

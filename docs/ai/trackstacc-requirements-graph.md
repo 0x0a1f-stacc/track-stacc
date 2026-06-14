@@ -83,10 +83,10 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-CREATE`
 - **Components:** Room Service, Identity Service (`COMP` §13.3)
 - **Data:** `DATA-ROOMS` (`rooms.host_secret_hash`)
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/host/claim`
-- **WebSockets:** `WS-CONN` (token rotation on host claim)
+- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` (cookie-based host upgrade)
+- **WebSockets:** `WS-CONN` (token rotation on host upgrade/activation)
 - **Security:** `SEC-SESSION` (httpOnly cookie + short-lived WS token; rotate on privilege escalation, §19.4); host secret stored hash-only (`SEC-PWD` pattern, §19.2)
-- **Errors:** `HOST_REQUIRED`, `SESSION_INVALID`
+- **Errors:** `NICKNAME_PROTECTION_REQUIRED`, `NICKNAME_TAKEN`
 - **Acceptance:** `AC-RC-2`, `AC-V140-7` (host must hold protected nickname)
 - **Risks:** Host link leaked → room takeover (§32)
 - **Decisions:** DL-002 (host secret hash + Phase-2 rotation/nickname bind)
