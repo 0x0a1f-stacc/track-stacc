@@ -14,7 +14,7 @@
 - **Purpose:** Let anyone open a native room and hear playback + view the playlist/queue with no nickname or password (FR-019); the on-ramp that keeps the no-registration promise while protection is mandatory for participation.
 - **Dependencies:** `FEAT-NICKPROT` (upgrade path), `FEAT-PLAYBACK` (read stream), `FEAT-QUEUE` (read view), `FEAT-CHAT` (conditional read via `listener_chat_visible`). Identity Service (§13.3) issues the listener tier; Frontend Client (§13.1) renders gated prompts.
 - **Data Entities:** `DATA-SESSIONS` (`room_sessions.access_tier = listener`), `DATA-ROOMS` (`listener_chat_visible`).
-- **APIs:** `API-NICK` `POST /api/v1/rooms/:roomId/listen`.
+- **APIs:** `API-NICK` `POST /api/rooms/:roomId/listen`.
 - **WebSockets:** `WS-CONN` `room.snapshot`; read-only `WS-PLAYBACK` `playback.state`, `WS-QUEUE` `queue.updated`; `WS-CHAT` only when `listener_chat_visible = true`.
 - **Security Controls:** `SEC-TIER` (listener tier encoded in signed token, re-derived server-side); `ROOM_PASSWORD_REQUIRED` if room is password-protected.
 - **Acceptance Criteria:** `AC-V140-1`, `AC-V140-6`, `AC-JOIN-1`.
@@ -29,7 +29,7 @@
 - **Purpose:** Require an authenticated password-protected nickname before any native interactive action (FR-010, FR-028); the core v1.4.0 access-control feature.
 - **Dependencies:** `FEAT-LISTEN` (the tier it upgrades from); gates `FEAT-CHAT`, `FEAT-QUEUE`, `FEAT-MOD`, voting, reactions. Identity Service (§13.3) + Auth Middleware own enforcement; Rate Limit Service (§13.9) throttles password attempts.
 - **Data Entities:** `DATA-NICKNAMES` (`nickname_claims.password_hash`), `DATA-SESSIONS` (`access_tier`, in-place upgrade).
-- **APIs:** `API-NICK` `POST /api/v1/nicknames/{check,protect,authenticate}`, `POST /api/v1/rooms/:roomId/{listen,join}`, `.../nickname/change`.
+- **APIs:** `API-NICK` `POST /api/nicknames/{check,protect,authenticate}`, `POST /api/rooms/:roomId/{listen,join}`, `.../nickname/change`.
 - **WebSockets:** `WS-C2S` — every interactive event carries a minimum-tier check; `WS-S2C` `presence.updated`, system `chat.message` on protect/change.
 - **Security Controls:** `SEC-TIER` (**must never be weakened**; tier from signed token `accessTier`, DB fallback — §19.4), `SEC-PWD` (Argon2id, never plaintext/logged/returned — §19.3), brute-force rate limits by nickname/IP/global (§19.2).
 - **Acceptance Criteria:** `AC-V140-2`, `AC-V140-3`, `AC-V140-5`, `AC-V140-7`, `AC-JOIN-1`…`AC-JOIN-4`.
@@ -44,7 +44,7 @@
 - **Purpose:** Create a room without registration and grant host authority (FR-001–006).
 - **Dependencies:** `FEAT-NICKPROT` (host must protect a nickname to exercise authority — `AC-V140-7`), `FEAT-MECHANICS` (default mechanic), `FEAT-ROOMSETTINGS`. Room Service (§13.2) + Identity Service (§13.3).
 - **Data Entities:** `DATA-ROOMS` (`host_secret_hash`, `playlist_mechanic`, config), `DATA-SESSIONS`.
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` (cookie-based host upgrade), `POST /api/v1/rooms/:roomId/password/verify`.
+- **APIs:** `API-ROOMS` `POST /api/rooms`, `POST /api/rooms/:roomId/join` (cookie-based host upgrade), `POST /api/rooms/:roomId/password/verify`.
 - **WebSockets:** `WS-CONN` token rotation on host upgrade/activation.
 - **Security Controls:** `SEC-SESSION` (httpOnly cookie + WS token, rotate on host upgrade/activation — §19.4); host secret stored hash-only (`SEC-PWD` pattern); room password hash.
 - **Acceptance Criteria:** `AC-RC-1`…`AC-RC-4`.
@@ -59,7 +59,7 @@
 - **Purpose:** Add YouTube songs by URL with validation, dedup, and duration limits; maintain the queue (FR-030–037, FR-050–058).
 - **Dependencies:** `FEAT-MECHANICS` (selection order), `FEAT-PLAYBACK` (advance), `FEAT-VETO` (pre-play gate), `YT` integration. Queue Engine (§13.4) + YouTube Metadata Service (§13.8) + Rate Limit Service.
 - **Data Entities:** `DATA-QUEUE` (`queue_items` + state/position/score), `DATA-TRACKS` (`tracks`, `metadata_status`), `DATA-VOTES`.
-- **APIs:** `API-QUEUE` `POST/DELETE /api/v1/rooms/:roomId/queue/items[/:queueItemId]`, `.../vote`, `.../approve`, `.../reject`.
+- **APIs:** `API-QUEUE` `POST/DELETE /api/rooms/:roomId/queue/items[/:queueItemId]`, `.../vote`, `.../approve`, `.../reject`.
 - **WebSockets:** `WS-QUEUE` `queue.item.added/removed`, `queue.updated`, `queue.vote.updated`.
 - **Security Controls:** `SEC-TIER` (member); YouTube API key server-side only (§19.2); add-song cooldown 30s, per-user queue limits (App. A).
 - **Acceptance Criteria:** `AC-QUEUE-1`…`AC-QUEUE-4`.
@@ -74,7 +74,7 @@
 - **Purpose:** Maintain one authoritative current-track state and keep all clients in sync (FR-040–046); resync target ≤3s (NFR-003).
 - **Dependencies:** `FEAT-QUEUE` (next item), `FEAT-VETO` (pre-play window before start), `SYNC` (§18 server time model). Playback Coordinator (§13.5).
 - **Data Entities:** `DATA-QUEUE` (`queue_items` state/started_at/ended_at), `DATA-SKIPVOTES` (`skip_votes`).
-- **APIs:** `API-QUEUE`/playback `POST /api/v1/rooms/:roomId/playback/skip`, `.../skip-vote`.
+- **APIs:** `API-QUEUE`/playback `POST /api/rooms/:roomId/playback/skip`, `.../skip-vote`.
 - **WebSockets:** `WS-PLAYBACK` `playback.state`, `playback.resync`, `playback.clientState` (C2S), `playback.skipVote`; `room.snapshot` on connect.
 - **Security Controls:** server-authoritative for all playback decisions (`ARCH` §12); `MODERATOR_REQUIRED`/`HOST_REQUIRED` to force-skip; skip-vote requires member tier.
 - **Acceptance Criteria:** `AC-PLAY-1`…`AC-PLAY-4`.
@@ -89,7 +89,7 @@
 - **Purpose:** Support FIFO/voting/DJ-rotation/host-curated/moderated-suggestion modes and allow safe live mechanic changes without interrupting the current song (FR-050–060).
 - **Dependencies:** `FEAT-QUEUE` (selection), `FEAT-PLAYBACK` (non-interruption), `FEAT-CHAT` (system announcement), `ALGO` (§17). Queue Engine + Room Service + Playback Coordinator + Chat Service.
 - **Data Entities:** `DATA-ROOMS` (`playlist_mechanic`), `DATA-SETTINGSHIST` (`room_settings_history`), `DATA-QUEUE`, `DATA-VOTES`.
-- **APIs:** `API-ROOMS` `PATCH /api/v1/rooms/:roomId/settings`.
+- **APIs:** `API-ROOMS` `PATCH /api/rooms/:roomId/settings`.
 - **WebSockets:** `WS-S2C` `room.mechanic.changed`, system `chat.message`.
 - **Security Controls:** `HOST_REQUIRED`; public-room mechanic-change cooldown (default 5 min, App. A).
 - **Acceptance Criteria:** `AC-MECH-1`…`AC-MECH-6`.
@@ -104,7 +104,7 @@
 - **Purpose:** Member-tier real-time messaging with system announcements, rate limits, and listener-read controls (FR-070–078).
 - **Dependencies:** `FEAT-NICKPROT` (send gate), `FEAT-LISTEN` (conditional read), `FEAT-MOD` (delete/mute/lock). Chat Service (§13.6) + Rate Limit Service.
 - **Data Entities:** `DATA-CHAT` (`chat_messages`, `deleted_at`), `DATA-ROOMS` (`listener_chat_visible`), `DATA-SESSIONS` (`is_muted`).
-- **APIs:** `API-CHAT` `GET /api/v1/rooms/:roomId/chat/messages?before=&limit=`, `DELETE .../chat/messages/:messageId`.
+- **APIs:** `API-CHAT` `GET /api/rooms/:roomId/chat/messages?before=&limit=`, `DELETE .../chat/messages/:messageId`.
 - **WebSockets:** `WS-CHAT` `chat.send` (C2S), `chat.message`/`chat.deleted` (S2C).
 - **Security Controls:** `SEC-TIER` (member to send); content sanitization/escape + CSP (XSS, §19.2/§19.6); chat rate limit 5 msg / 10s (App. A, FR-073).
 - **Acceptance Criteria:** `AC-CHAT-1`…`AC-CHAT-5`, `AC-V140-6`.
@@ -119,7 +119,7 @@
 - **Purpose:** Host/mod tools — mute, ban, remove items, skip, assign roles, lock queue/chat, audit (FR-080–088).
 - **Dependencies:** `FEAT-CHAT`, `FEAT-QUEUE`, `FEAT-PLAYBACK`; `MOD-NATIVE` (§20.2). Moderation Service (§13.7).
 - **Data Entities:** `DATA-MODACTIONS` (`room_moderation_actions`), `DATA-SESSIONS` (`is_muted`/`is_banned`), `DATA-CHAT`, `DATA-QUEUE`.
-- **APIs:** `API-MOD` `POST /api/v1/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`.
+- **APIs:** `API-MOD` `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`.
 - **WebSockets:** `WS-MOD` `moderation.action` (C2S), `moderation.applied` (S2C); system `chat.message`.
 - **Security Controls:** `HOST_REQUIRED`/`MODERATOR_REQUIRED`; server-side role check on every write (§19.2 #7); audit logging (NFR-067).
 - **Acceptance Criteria:** `AC-CHAT-3` + moderation-action criteria (`MOD-NATIVE`).
@@ -134,7 +134,7 @@
 - **Purpose:** Provide a read-only embeddable room/player/queue/veto view for embedding sites (FR-110–113).
 - **Dependencies:** `FEAT-EXTCMD` (config/identity bridge), `FEAT-PLAYBACK`/`FEAT-QUEUE`/`FEAT-VETO` (read state). Embeddable Room Client (§13.10).
 - **Data Entities:** read-only snapshot of `DATA-ROOMS`/`DATA-QUEUE`/`DATA-VETOWIN`; `DATA-INTEGRATIONS` (`allowed_origins`).
-- **APIs:** `API-INTEG` `GET /api/v1/embed/rooms/:roomSlug`, `GET .../snapshot`.
+- **APIs:** `API-INTEG` `GET /api/embed/rooms/:roomSlug`, `GET .../snapshot`.
 - **WebSockets:** read-only `WS-S2C` subscription.
 - **Security Controls:** **`SEC-EXTINTEG` (§19.5, authoritative)**; `SEC-CSP` dynamic `frame-ancestors` per integration (§19.6.4); `SEC-CORS` per-integration origins; `SEC-FRAME`; **no secrets in iframe URL / JS / storage / postMessage / snapshot** (§19.6.4).
 - **Acceptance Criteria:** `AC-EXT-3`, `AC-STAFF-7`.
@@ -149,7 +149,7 @@
 - **Purpose:** Accept external chat commands (`!sr`, `!yay`/`!nay`, `!song`, `!queue`, staff commands) over a server-to-server endpoint and post signed bot replies (FR-115–119, FR-170–179).
 - **Dependencies:** `FEAT-EMBED`, `FEAT-SRPOLICY`, `FEAT-VETO`, `FEAT-EXTSTAFF`, `FEAT-EXTMUTE`. External Command Service (§13.11) + Outbound Bot Webhook Service (§13.12) + Rate Limit Service.
 - **Data Entities:** `DATA-INTEGRATIONS`, `DATA-EXTPART`, `DATA-EXTCMD` (idempotency), `DATA-EXTREF`, `DATA-EXTCONFIG`.
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (+ outbound webhook egress).
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (+ outbound webhook egress).
 - **WebSockets:** `WS-INTEG` `integration.command.received/accepted/rejected`, `external.bot_message.created`.
 - **Security Controls:** **`SEC-EXTINTEG` (§19.5, authoritative)** — HMAC/bearer auth, timestamp freshness, replay protection, idempotency by message ID, strict schema validation, multi-level rate limits, sanitization, signed outbound webhooks (defense-in-depth items 1–13).
 - **Acceptance Criteria:** `AC-EXT-4`…`AC-EXT-8`, `AC-STAFF-6`.
@@ -164,7 +164,7 @@
 - **Purpose:** Let eligible users `!yay`/`!nay` an upcoming candidate before it plays, vetoing it at a configured threshold (FR-130–143).
 - **Dependencies:** `FEAT-QUEUE` (alternate candidate must exist), `FEAT-PLAYBACK` (window opens before start), `FEAT-EXTCMD` (vote ingress), `ALGO` (§17.6 advance cycle). Queue Engine (veto logic) + Playback Coordinator.
 - **Data Entities:** `DATA-VETOVOTES` (`preplay_veto_votes`, one active vote/candidate/voter), `DATA-VETOWIN` (`preplay_veto_windows`, status + threshold snapshot), `DATA-QUEUE`.
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!yay`/`!nay`).
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!yay`/`!nay`).
 - **WebSockets:** `WS-QUEUE` `queue.item.veto_window.opened/.updated`, `queue.item.vetoed`, `queue.item.veto_passed`; `WS-PLAYBACK` `playback.state`.
 - **Security Controls:** one vote per stable external user ID (`MOD-EXTVOTE`, §19.2); requester eligibility (DL-013); no anonymous embed votes by default.
 - **Acceptance Criteria:** `AC-VETO-1`…`AC-VETO-7`.
@@ -179,7 +179,7 @@
 - **Purpose:** Govern external song additions via policy modes: open / per-user-cooldown / after-user-song-finishes / staff-only / closed (FR-157–161, FR-173).
 - **Dependencies:** `FEAT-EXTCMD`, `FEAT-QUEUE`, `FEAT-EXTSTAFF` (policy changes), `FEAT-EXTMUTE`. External Command Service + Queue Engine + Rate Limit Service.
 - **Data Entities:** `DATA-EXTCONFIG` (`songRequestPolicy` JSONB on `rooms`), `DATA-EXTPART`, `DATA-QUEUE`.
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!sr`, policy commands).
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!sr`, policy commands).
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`.
 - **Security Controls:** **`SEC-EXTINTEG`**; per-user cooldown by external user ID (default 90s, App. A); max pending 2; max queue 50; blocked-content policy.
 - **Acceptance Criteria:** `AC-EXT-6`, `AC-STAFF-4`.
@@ -194,7 +194,7 @@
 - **Purpose:** Authorize staff (by external user ID allowlist or trusted role mapping) to remove items, force-skip, and change settings via chat commands (FR-150–162).
 - **Dependencies:** `FEAT-EXTCMD`, `FEAT-QUEUE`, `FEAT-PLAYBACK`, `FEAT-SRPOLICY`, `FEAT-VETO`. External Command Service + Moderation Service + Queue Engine.
 - **Data Entities:** `DATA-INTEGRATIONS` (staff allowlist/role map), `DATA-EXTCMD`, `DATA-QUEUE`, `DATA-EXTREF`, `DATA-ROOMS`, `DATA-SETTINGSHIST`, `DATA-MODACTIONS`.
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!rm`, `!skip`, `!music ...`).
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!rm`, `!skip`, `!music ...`).
 - **WebSockets:** `WS-QUEUE` `queue.item.removed`; `WS-PLAYBACK` `playback.state`; `WS-INTEG` `room.external_settings.changed`, `external.bot_message.created`.
 - **Security Controls:** **`SEC-EXTINTEG`** — server-side authorization, no client-side trust; staff-only failure reasons must not reveal allowlists/secrets/role claims (§23.5 #3); audit accepted+rejected privileged commands.
 - **Acceptance Criteria:** `AC-STAFF-1`…`AC-STAFF-5`.
@@ -209,7 +209,7 @@
 - **Purpose:** Let staff timed- or permanently-mute an external participant from `!sr`/`!yay`/`!nay` while preserving read-only commands, with auto-expiry and early unmute (FR-163–168).
 - **Dependencies:** `FEAT-EXTSTAFF`, `FEAT-EXTCMD`, `FEAT-VETO`, `FEAT-SRPOLICY`. External Command Service + Moderation Service.
 - **Data Entities:** `DATA-EXTPART` (mute fields: muted flag, expiry, reason), `DATA-MODACTIONS`.
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!music mute/unmute`).
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!music mute/unmute`).
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`.
 - **Security Controls:** **`SEC-EXTINTEG`**; rate-limit + audit + explicit duration (`MOD-EXTMUTE`, §20.3); lazy TTL check on next command + periodic cleanup (§10.18, §20.3).
 - **Acceptance Criteria:** `AC-STAFF-8`…`AC-STAFF-11`.
@@ -225,7 +225,7 @@
 - **Components:** Socket.IO Gateway, Presence Manager, Frontend Client, Identity/Nickname session flow.
 - **Dependencies:** `FEAT-MECHANICS` (DJ rotation), `FEAT-LISTEN` (listen rehydration), `FEAT-NICKPROT` (upgrade/join flow rehydration).
 - **Data Entities:** `DATA-SESSIONS` (`room_sessions`), Redis presence state (ZSET).
-- **APIs/events:** `POST /api/v1/rooms/:roomId/listen`, `POST /api/v1/rooms/:roomId/join`, `room.snapshot`, `presence.heartbeat`, `presence.updated`.
+- **APIs/events:** `POST /api/rooms/:roomId/listen`, `POST /api/rooms/:roomId/join`, `room.snapshot`, `presence.heartbeat`, `presence.updated`.
 - **Security Controls:** `SEC-TIER` (tier validated server-side from signed WS token).
 - **Acceptance Criteria:** `AC-PRESENCE-1` to `AC-PRESENCE-9` (Presence Lifecycle acceptance criteria, §31.10).
 - **Failure Modes:** Redis degraded fallback (PostgreSQL `lastSeenAt`/`leftAt` active session query and sweep cleanup), stale sessions (duplicate rows avoided on refresh/reconnect by rehydrating the same session), reconnect convergence (clients replace local state with server-authoritative snapshots/updates), external participants out of scope.
@@ -239,7 +239,7 @@
 - **Purpose:** Let the host update name/description, duration limits, duplicate policy, add-song permissions, skip threshold, visibility, and room password (FR-100–106).
 - **Dependencies:** `FEAT-ROOMCREATE`, `FEAT-MECHANICS`, `FEAT-QUEUE`, `FEAT-MOD`. Room Service.
 - **Data Entities:** `DATA-ROOMS`, `DATA-SETTINGSHIST`.
-- **APIs:** `API-ROOMS` `PATCH /api/v1/rooms/:roomId/settings`.
+- **APIs:** `API-ROOMS` `PATCH /api/rooms/:roomId/settings`.
 - **WebSockets:** `WS-S2C` `room.settings.changed`.
 - **Security Controls:** `HOST_REQUIRED`; room password hash (`SEC-PWD`, FR-106 Phase 2).
 - **Acceptance Criteria:** `AC-MECH-6` (settings recorded in history/audit).

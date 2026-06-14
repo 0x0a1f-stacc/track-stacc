@@ -53,7 +53,7 @@
 
 ## API Summary
 
-Base path `/api/v1/`; additive changes don't bump version, breaking changes do. Cursor-based pagination (`limit`≤100, `before`/`after`), rate-limit headers (`X-RateLimit-*`, `Retry-After` on 429), request-id correlation (`X-Request-Id`). DB columns `snake_case`, payloads `camelCase`, WS events `dot.separated`, error codes `UPPER_SNAKE_CASE`.
+Base path `/api/`; additive changes don't bump version, breaking changes do. Cursor-based pagination (`limit`≤100, `before`/`after`), rate-limit headers (`X-RateLimit-*`, `Retry-After` on 429), request-id correlation (`X-Request-Id`). DB columns `snake_case`, payloads `camelCase`, WS events `dot.separated`, error codes `UPPER_SNAKE_CASE`.
 
 - **Room** (`API-ROOMS`): `POST /rooms`, `GET /rooms/:id`, `PATCH /rooms/:id/settings`, `POST /rooms/:id/join` (handles host upgrade/activation via `host_token` cookie), `POST /rooms/:id/password/verify`.
 - **Nickname & session** (`API-NICK`): `POST /nicknames/check|protect|authenticate`; `POST /rooms/:id/listen` → read-only listener session (no nickname; room password only if protected); `POST /rooms/:id/join` → member session via authenticate existing or claim new (protect-and-join), upgrades a supplied listener session in place; `POST /rooms/:id/nickname/change`. Join without a way to obtain a protected nickname → `409 NICKNAME_PROTECTION_REQUIRED`; interactive action on a listener session → `403 LISTENER_READ_ONLY`.
@@ -142,4 +142,4 @@ FIFO (private) / voting (public) mechanic; max song 10 min; block-if-queued dupl
 
 ---
 
-*Authority reminders for agents: §19.5 (`SEC-EXTINTEG`) overrides any external-security reference copy; §23.4 (`ERR-REGISTRY`) is the canonical error list; §4 (`DEF`) is canonical terminology; `/api/v1/` is the authoritative API version; never weaken the server-side tier gate (`SEC-TIER`, NFR-038, FR-028). See `trackstacc-ai-documentation-plan.md` §1.4/§6.5 for flagged source discrepancies — surface, don't silently reconcile.*
+*Authority reminders for agents: §19.5 (`SEC-EXTINTEG`) overrides any external-security reference copy; §23.4 (`ERR-REGISTRY`) is the canonical error list; §4 (`DEF`) is canonical terminology; `/api/` is the authoritative API version; never weaken the server-side tier gate (`SEC-TIER`, NFR-038, FR-028). See `trackstacc-ai-documentation-plan.md` §1.4/§6.5 for flagged source discrepancies — surface, don't silently reconcile.*

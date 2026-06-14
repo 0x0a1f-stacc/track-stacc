@@ -2,7 +2,7 @@
 
 > **Engineering Knowledge-Graph Layer — Deliverable 3 of 7**
 > Per-endpoint implementation reference: for every API endpoint, the tables it reads, the tables it writes, the WebSocket events it emits, the security controls applied, its rate limit, and the acceptance criteria that validate it.
-> This is the **primary implementation reference** for coding agents. Endpoints are verbatim from SDD §15.2 under the canonical `/api/v1/` version (§15.1, `API-CONV`). Reads/writes derive from §37.1 + §14 + the §4.2/§4.3 cross-maps. Emitted events from §16 + the §4.4 cross-map. Rate-limit values from App. A and §8 NFRs where the SDD gives concrete numbers; otherwise the **control class** is named (per-user / per-room / per-integration / per-command, FR-172, NFR-035).
+> This is the **primary implementation reference** for coding agents. Endpoints are verbatim from SDD §15.2 under the canonical `/api/` version (§15.1, `API-CONV`). Reads/writes derive from §37.1 + §14 + the §4.2/§4.3 cross-maps. Emitted events from §16 + the §4.4 cross-map. Rate-limit values from App. A and §8 NFRs where the SDD gives concrete numbers; otherwise the **control class** is named (per-user / per-room / per-integration / per-command, FR-172, NFR-035).
 
 **Authority reminders:** All external (`/integrations/*`, `/embed/*`) security defers to `SEC-EXTINTEG` (§19.5, authoritative). Every native mutating route is behind `SEC-TIER` (member) per FR-028 — listed once here, enforced everywhere. Error codes are canonical per `ERR-REGISTRY` (§23.4). Rate-limit responses carry headers per `API-CONV` (§15.1).
 
@@ -19,7 +19,7 @@
 
 ## API-ROOMS — Room endpoints (§15.2)
 
-### `POST /api/v1/rooms`
+### `POST /api/rooms`
 - **Purpose:** Create a room without registration (FR-001–006).
 - **Reads:** — (validates input)
 - **Writes:** `rooms` (`DATA-ROOMS`: `host_secret_hash`, `playlist_mechanic`, config, optional `password_hash`)
@@ -30,7 +30,7 @@
 - **Acceptance:** `AC-RC-1`, `AC-RC-3`
 - **Errors:** `VALIDATION_FAILED`
 
-### `GET /api/v1/rooms/:roomId`
+### `GET /api/rooms/:roomId`
 - **Purpose:** Fetch room state/config.
 - **Reads:** `rooms`, `room_settings_history` (effective settings); `queue_items`/`tracks` for preview where included
 - **Writes:** —
@@ -41,7 +41,7 @@
 - **Acceptance:** `AC-RC-3`
 - **Errors:** `ROOM_NOT_FOUND` (404)
 
-### `PATCH /api/v1/rooms/:roomId/settings`
+### `PATCH /api/rooms/:roomId/settings`
 - **Purpose:** Update room settings incl. playlist mechanic, duration, duplicate policy, skip threshold, `listener_chat_visible`, visibility (FR-055–060, FR-078, FR-100–106).
 - **Reads:** `rooms`
 - **Writes:** `rooms`, `room_settings_history` (`DATA-SETTINGSHIST`)
@@ -52,7 +52,7 @@
 - **Acceptance:** `AC-MECH-1`…`AC-MECH-6`, `AC-CHAT-2` (listener visibility)
 - **Errors:** `HOST_REQUIRED` (403), `MECHANIC_CHANGE_COOLDOWN` (429), `VALIDATION_FAILED`
 
-### `POST /api/v1/rooms/:roomId/join` (Host Activation Flow)
+### `POST /api/rooms/:roomId/join` (Host Activation Flow)
 - **Purpose:** Claim host authority via host secret/cookie during protected nickname join/upgrade (FR-003).
 - **Reads:** `rooms` (`host_secret_hash`)
 - **Writes:** `room_sessions` (upgrades session to member tier and sets role to host); token rotation
@@ -63,7 +63,7 @@
 - **Acceptance:** `AC-RC-2`, `AC-V140-7`
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `NICKNAME_TAKEN` (409)
 
-### `POST /api/v1/rooms/:roomId/password/verify`
+### `POST /api/rooms/:roomId/password/verify`
 - **Purpose:** Verify room password to gain entry (FR-004/106).
 - **Reads:** `rooms` (`password_hash`)
 - **Writes:** `room_sessions` (entry grant)
@@ -78,7 +78,7 @@
 
 ## API-NICK — Nickname & session endpoints (§15.2) — the `SEC-TIER` surface
 
-### `POST /api/v1/nicknames/check`
+### `POST /api/nicknames/check`
 - **Purpose:** Check nickname availability/normalization before claim (FR-012, FR-018).
 - **Reads:** `nickname_claims` (`DATA-NICKNAMES`)
 - **Writes:** —
@@ -89,7 +89,7 @@
 - **Acceptance:** `AC-JOIN-2`
 - **Errors:** `NICKNAME_TAKEN` (409), `VALIDATION_FAILED`
 
-### `POST /api/v1/nicknames/protect`
+### `POST /api/nicknames/protect`
 - **Purpose:** Claim/protect a nickname by setting a password (FR-020, FR-021).
 - **Reads:** `nickname_claims`
 - **Writes:** `nickname_claims` (`password_hash` via Argon2id)
@@ -100,7 +100,7 @@
 - **Acceptance:** `AC-V140-3`, `AC-JOIN-3`
 - **Errors:** `NICKNAME_TAKEN` (409), `VALIDATION_FAILED` (weak password)
 
-### `POST /api/v1/nicknames/authenticate`
+### `POST /api/nicknames/authenticate`
 - **Purpose:** Authenticate an existing protected nickname (FR-014, FR-022).
 - **Reads:** `nickname_claims`
 - **Writes:** Redis (failed-attempt counters)
@@ -111,7 +111,7 @@
 - **Acceptance:** `AC-JOIN-3`, `AC-JOIN-4`
 - **Errors:** `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
 
-### `POST /api/v1/rooms/:roomId/listen`
+### `POST /api/rooms/:roomId/listen`
 - **Purpose:** Establish a read-only Listener session (FR-019). Primary bootstrap and rehydration path. If client sends a valid session cookie representing an existing host or member session, rehydrates that session and returns the correct access tier and a fresh WebSocket token instead of creating a new Listener session or overwriting the cookie.
 - **Reads:** `rooms`, `room_sessions` (for rehydration)
 - **Writes:** `room_sessions` (`access_tier = listener` / reuses existing session)
@@ -122,7 +122,7 @@
 - **Acceptance:** `AC-V140-1`, `AC-JOIN-1`
 - **Errors:** `ROOM_PASSWORD_REQUIRED` (401)
 
-### `POST /api/v1/rooms/:roomId/join`
+### `POST /api/rooms/:roomId/join`
 - **Purpose:** Establish or upgrade to a member session; authenticate existing or claim new nickname in one protect-and-join step; upgrades a Listener session **in place** (FR-010, FR-014, FR-015). Reuses existing active session and replaces WebSocket token, prompting presence update broadcast.
 - **Reads:** `rooms`, `nickname_claims`
 - **Writes:** `room_sessions` (`access_tier = member`, in-place upgrade), `nickname_claims` (on new claim), Redis (failed-attempt counters)
@@ -133,7 +133,7 @@
 - **Acceptance:** `AC-V140-3`, `AC-V140-4`, `AC-JOIN-1`, `AC-JOIN-3`, `AC-JOIN-4`
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_TAKEN` (409), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
 
-### `POST /api/v1/rooms/:roomId/nickname/change`
+### `POST /api/rooms/:roomId/nickname/change`
 - **Purpose:** Change to another protected nickname (FR-017).
 - **Reads:** `nickname_claims`
 - **Writes:** `room_sessions`, Redis (rate counters)
@@ -148,7 +148,7 @@
 
 ## API-QUEUE — Queue & playback endpoints (§15.2)
 
-### `POST /api/v1/rooms/:roomId/queue/items`
+### `POST /api/rooms/:roomId/queue/items`
 - **Purpose:** Add a song by YouTube URL with validation/dedup/duration checks (FR-030–034, FR-050–053).
 - **Reads:** `rooms` (`max_song_duration_seconds`, duplicate/lock policy), `queue_items` (dedup), `tracks` (cache)
 - **Writes:** `queue_items` (`DATA-QUEUE`), `tracks` (`DATA-TRACKS`, metadata cache)
@@ -159,7 +159,7 @@
 - **Acceptance:** `AC-QUEUE-1`…`AC-QUEUE-3`
 - **Errors:** `VIDEO_URL_INVALID` (400), `VIDEO_UNAVAILABLE` (422), `VIDEO_TOO_LONG` (422), `DUPLICATE_VIDEO` (409), `QUEUE_LOCKED` (403), `QUEUE_FULL` (409), `YOUTUBE_METADATA_DEGRADED` (503), `LISTENER_READ_ONLY` (403)
 
-### `DELETE /api/v1/rooms/:roomId/queue/items/:queueItemId`
+### `DELETE /api/rooms/:roomId/queue/items/:queueItemId`
 - **Purpose:** Remove a queue item (host/mod, FR-082).
 - **Reads:** `queue_items`
 - **Writes:** `queue_items` (removed state), `room_moderation_actions` (audit)
@@ -170,7 +170,7 @@
 - **Acceptance:** `AC-QUEUE-4`
 - **Errors:** `MODERATOR_REQUIRED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
-### `POST /api/v1/rooms/:roomId/queue/items/:queueItemId/vote`
+### `POST /api/rooms/:roomId/queue/items/:queueItemId/vote`
 - **Purpose:** Cast a queue vote (voting mechanic, FR-051).
 - **Reads:** `queue_items`, `queue_votes`
 - **Writes:** `queue_votes` (`DATA-VOTES`), `queue_items.score`
@@ -181,7 +181,7 @@
 - **Acceptance:** `AC-QUEUE-4`
 - **Errors:** `VOTE_NOT_ALLOWED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
-### `POST /api/v1/rooms/:roomId/queue/items/:queueItemId/approve` · `.../reject`
+### `POST /api/rooms/:roomId/queue/items/:queueItemId/approve` · `.../reject`
 - **Purpose:** Host-curated / moderated-suggestion approval flow (FR-053, FR-054 Phase 2).
 - **Reads:** `queue_items`
 - **Writes:** `queue_items` (state)
@@ -192,7 +192,7 @@
 - **Acceptance:** `AC-QUEUE-4`
 - **Errors:** `MODERATOR_REQUIRED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
-### `POST /api/v1/rooms/:roomId/playback/skip`
+### `POST /api/rooms/:roomId/playback/skip`
 - **Purpose:** Host/mod force-skip current track (FR-042).
 - **Reads:** `queue_items` (current)
 - **Writes:** `queue_items` (advance), `room_moderation_actions` (audit)
@@ -203,7 +203,7 @@
 - **Acceptance:** `AC-PLAY-3`
 - **Errors:** `MODERATOR_REQUIRED` (403), `TRACK_NOT_FOUND` (404)
 
-### `POST /api/v1/rooms/:roomId/playback/skip-vote`
+### `POST /api/rooms/:roomId/playback/skip-vote`
 - **Purpose:** Participant vote-to-skip (FR-043).
 - **Reads:** `skip_votes`, `room_sessions` (active non-muted count)
 - **Writes:** `skip_votes` (`DATA-SKIPVOTES`)
@@ -218,7 +218,7 @@
 
 ## API-CHAT — Chat endpoints (§15.2)
 
-### `GET /api/v1/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>`
+### `GET /api/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>`
 - **Purpose:** Paginated chat history (FR-070, cursor pagination per §15.1; cap 100, DL-004).
 - **Reads:** `chat_messages` (`DATA-CHAT`)
 - **Writes:** —
@@ -231,7 +231,7 @@
 
 > **Note:** Real-time chat *send* is a WebSocket event (`WS-CHAT` `chat.send`), not a REST endpoint — see WS section. The chat rate limit (5 msg/10s, App. A) applies there.
 
-### `DELETE /api/v1/rooms/:roomId/chat/messages/:messageId`
+### `DELETE /api/rooms/:roomId/chat/messages/:messageId`
 - **Purpose:** Host/mod delete a message (FR-075).
 - **Reads:** `chat_messages`
 - **Writes:** `chat_messages` (`deleted_at`), `room_moderation_actions` (audit)
@@ -246,7 +246,7 @@
 
 ## API-MOD — Moderation endpoints (§15.2)
 
-### `POST /api/v1/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
+### `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
 - **Purpose:** Native moderation suite (FR-080–085).
 - **Reads:** `room_sessions`, `room_moderation_actions`
 - **Writes:** `room_sessions` (`is_muted`/`is_banned`/role), `room_moderation_actions` (`DATA-MODACTIONS`, audit)
@@ -261,7 +261,7 @@
 
 ## API-INTEG — External integration, embed & site-command endpoints (§15.2) — `SEC-EXTINTEG` authoritative (§19.5)
 
-### `POST /api/v1/rooms/:roomId/integrations/site` · `PATCH`/`DELETE .../integrations/site/:integrationId`
+### `POST /api/rooms/:roomId/integrations/site` · `PATCH`/`DELETE .../integrations/site/:integrationId`
 - **Purpose:** Create/update/delete a site integration: origins, channel ID, command prefix, webhook URL, enabled commands, staff mappings (FR-110, FR-111).
 - **Reads:** `rooms`, `site_integrations`
 - **Writes:** `site_integrations` (`DATA-INTEGRATIONS`, secret hashes), `rooms.external_chat_music` (`DATA-EXTCONFIG` JSONB)
@@ -272,7 +272,7 @@
 - **Acceptance:** `AC-EXT-1`, `AC-EXT-2`
 - **Errors:** `HOST_REQUIRED` (403), `EXTERNAL_INTEGRATION_NOT_FOUND` (404), `VALIDATION_FAILED`
 
-### `POST /api/v1/integrations/site-command`  ★ server-to-server, the external command spine
+### `POST /api/integrations/site-command`  ★ server-to-server, the external command spine
 - **Purpose:** Single ingress for all external chat commands — `!sr`, `!yay`/`!nay`, `!song`/`!np`, `!queue`, `!rm`, `!skip`, `!music ...` (FR-115–119, FR-130–168, FR-170–179).
 - **Reads:** `site_integrations` (auth/config), `external_participants` (identity/mute), `external_commands` (idempotency), `external_references`, `rooms`/`external_chat_music` (policy), `queue_items`, `preplay_veto_windows`/`preplay_veto_votes`, Redis (rate counters)
 - **Writes (command-dependent):** `external_commands` (always, audit + idempotency), `external_participants` (mute/identity), `queue_items` (`!sr`/`!rm`), `queue_votes`/`preplay_veto_votes` (votes), `preplay_veto_windows`, `rooms`/`external_chat_music` (`!music` settings), `room_settings_history`, `room_moderation_actions` (mute/skip)
@@ -283,7 +283,7 @@
 - **Acceptance:** `AC-EXT-4`…`AC-EXT-8`, `AC-VETO-1`…`AC-VETO-7`, `AC-STAFF-1`…`AC-STAFF-11`
 - **Errors:** `INTEGRATION_AUTH_INVALID` (401), `EXTERNAL_COMMAND_REPLAY` (409), `EXTERNAL_COMMAND_DUPLICATE` (409, returns original), `INVALID_COMMAND_SYNTAX` (400), `EXTERNAL_COMMAND_UNAUTHORIZED` (403), `EXTERNAL_ROLE_UNTRUSTED` (403), `EXTERNAL_USER_MUTED` (403), `SONG_REQUEST_POLICY_CLOSED` (403), `SONG_REQUEST_COOLDOWN` (429), `MAX_PENDING_PER_USER_REACHED` (409), `QUEUE_FULL` (409), `NO_VETO_OPEN` (422), `NO_ALTERNATE_FOR_VETO` (422), `VETO_WINDOW_CLOSED` (409), `RATE_LIMITED` (429), `WEBHOOK_DELIVERY_DEFERRED` (503)
 
-### `GET /api/v1/embed/rooms/:roomSlug` · `GET .../embed/rooms/:roomSlug/snapshot`
+### `GET /api/embed/rooms/:roomSlug` · `GET .../embed/rooms/:roomSlug/snapshot`
 - **Purpose:** Read-only embeddable view + state snapshot (current track, queue, veto status, command hints) (FR-112, FR-113).
 - **Reads:** `rooms`, `queue_items`, `tracks`, `preplay_veto_windows`, `external_chat_music` (policy display)
 - **Writes:** —

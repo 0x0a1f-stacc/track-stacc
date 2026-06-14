@@ -351,12 +351,12 @@ Each summary uses the required template. *Dependencies* = sections this relies o
 
 ### `API` — §15 API Design
 - **Purpose:** REST conventions + endpoints by group.
-- **Key Concepts:** `/api/v1/` versioning; cursor pagination; rate-limit headers; request-id correlation; naming conventions; `/listen` (listener) vs `/join` (member, protect-and-join, upgrade-in-place); queue/chat/moderation/integration endpoints; `site-command` server-to-server.
+- **Key Concepts:** `/api/` versioning; cursor pagination; rate-limit headers; request-id correlation; naming conventions; `/listen` (listener) vs `/join` (member, protect-and-join, upgrade-in-place); queue/chat/moderation/integration endpoints; `site-command` server-to-server.
 - **Dependencies:** `FR`, `ROLE`, `DATA`, `ERR` (envelopes/codes).
 - **Used By:** `WS`, `TRACE`, `TEST`, `DEVOPS`.
 - **Critical Decisions:** `409 NICKNAME_PROTECTION_REQUIRED` / `403 LISTENER_READ_ONLY` for gated actions.
 - **Implementation Impact:** Route contracts + status conventions.
-- **Open Questions:** Path examples mix `/api/` and `/api/v1/`; treat §15.1.1 (v1) as authoritative.
+- **Open Questions:** Path examples mix `/api/` and `/api/`; treat §15.1.1 (v1) as authoritative.
 
 ### `WS` — §16 WebSocket Event Design
 - **Purpose:** Connection, reconnection backoff, client/server event families.
@@ -854,7 +854,7 @@ This base layer is small enough to coexist with a real task and is usually suffi
 1. **External-integration security:** `19.5` / `SEC-EXTINTEG` wins over any reference copy (§12.4, §13.11, §20.3, §31.7, §31.9).
 2. **Error codes:** `23.4` / `ERR-REGISTRY` is canonical (and must stay in sync with `apps/api/src/lib/error-codes.ts`).
 3. **Terminology:** `04` / `DEF` is canonical.
-4. **API version:** treat `/api/v1/` (§15.1.1) as authoritative when older `/api/...` examples appear.
+4. **API version:** treat `/api/` (§15.1.1) as authoritative when older `/api/...` examples appear.
 5. **Decisions:** `28` / `DEC` resolves design ambiguity; cite the `DL-*` ID.
 6. **Tier gate:** never weaken `SEC-TIER`; it is server-side on every request/event (NFR-038, FR-028).
 7. Where §1.4 flags a body-vs-matrix or enum discrepancy, **do not silently reconcile**; surface it and ask the doc owner.

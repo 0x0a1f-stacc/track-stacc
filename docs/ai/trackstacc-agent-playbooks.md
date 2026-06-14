@@ -36,7 +36,7 @@ Only open the raw SDD (or a split file from §5 of the plan) when an artifact po
 - **Usually Load:** `trackstacc-architecture-dependencies.md` (service dependency directions, fail-closed rules); SDD §13 (component responsibilities), §14 (table schema), §23.4 (error codes to return).
 - **Load On Demand:** SDD §17/§18 (queue/sync algorithms) for playback work; §19.5 for any external endpoint; §16.1.1 for WS reconnection.
 
-**Worked task — "Implement `POST /api/v1/rooms/:roomId/join`":**
+**Worked task — "Implement `POST /api/rooms/:roomId/join`":**
 1. `integration-matrix.md` → API-NICK `/join` row: reads `rooms`,`nickname_claims`; writes `room_sessions`(member, in-place upgrade),`nickname_claims`,Redis; emits `presence.updated`; tier listener→member; fail-closed if Redis down.
 2. `requirements-graph.md` → FR-010/FR-014/FR-015 nodes for exact behavior + protect-and-join.
 3. SDD §15.2 (request/response shape), §14.2 (`room_sessions.access_tier`), §19.3 (Argon2id), §23.4 (`NICKNAME_*` codes).

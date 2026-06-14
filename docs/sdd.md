@@ -2241,9 +2241,9 @@ Schema changes must follow expand-contract patterns to avoid downtime during rol
 
 #### 15.1.1 API Versioning Strategy
 
-All REST endpoints use a URL path prefix: `/api/v1/`. The current version is `v1`. When breaking changes are introduced (field removal, incompatible type changes, removed endpoints, changed authentication flows), a new version prefix (`/api/v2/`) is created and the previous version is maintained for a documented deprecation period. Additive changes (new optional fields, new endpoints, new enum values) do not require a version bump but must be documented in a changelog.
+All REST endpoints use a URL path prefix: `/api/`. The current version is `v1`. When breaking changes are introduced (field removal, incompatible type changes, removed endpoints, changed authentication flows), a new version prefix (`/api/v2/`) is created and the previous version is maintained for a documented deprecation period. Additive changes (new optional fields, new endpoints, new enum values) do not require a version bump but must be documented in a changelog.
 
-External integrations using the command endpoint (`/api/v1/integrations/site-command`) are versioned under the same scheme. Breaking changes to the external command payload or response envelope require a new API version.
+External integrations using the command endpoint (`/api/integrations/site-command`) are versioned under the same scheme. Breaking changes to the external command payload or response envelope require a new API version.
 
 #### 15.1.2 HTTP Status Code Conventions
 
@@ -2264,7 +2264,7 @@ List endpoints that may return unbounded results use cursor-based pagination. Th
 Paginated request format:
 
 ```text
-GET /api/v1/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>
+GET /api/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>
 ```
 
 Paginated response format:
@@ -4053,48 +4053,48 @@ This matrix maps functional requirements (FRs) and non-functional requirements (
 
 | Requirement | Component(s) | API Endpoint(s) | Data Table(s) | Test Area(s) |
 | ----------- | ------------ | ---------------- | -------------- | ------------- |
-| FR-001 Room creation without registration | Room Service | `POST /api/v1/rooms` | `rooms` | Unit: room creation; Integration: create room flow |
-| FR-002 Default playlist mechanic | Room Service | `POST /api/v1/rooms` | `rooms.playlist_mechanic` | Unit: mechanic default; Integration: create room |
-| FR-003 Host authority via secret | Room Service, Identity Service | `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` | `rooms.host_secret_hash` | Unit: host token; Integration: host claim during join/upgrade |
-| FR-006 Queue limits and duplicate rules | Queue Engine | `PATCH /api/v1/rooms/:roomId/settings` | `rooms` | Unit: limit validation; Integration: settings update |
-| FR-010 Protected nickname required for native participation | Identity Service, Auth Middleware | `POST /api/v1/rooms/:roomId/join` | `room_sessions.access_tier`, `nickname_claims` | Unit: tier gate; Integration: gated-action rejection |
-| FR-019 Read-only Listener access | Identity Service, Frontend Client | `POST /api/v1/rooms/:roomId/listen` | `room_sessions.access_tier` | Integration: listen flow; E2E: read-only room |
-| FR-028 Server-side rejection of interactive actions for non-members | Auth Middleware, Chat/Queue/Moderation Services | `POST /api/v1/rooms/:roomId/*`, WebSocket events | `room_sessions.access_tier` | Unit: tier enforcement; Integration: listener escalation attempt |
+| FR-001 Room creation without registration | Room Service | `POST /api/rooms` | `rooms` | Unit: room creation; Integration: create room flow |
+| FR-002 Default playlist mechanic | Room Service | `POST /api/rooms` | `rooms.playlist_mechanic` | Unit: mechanic default; Integration: create room |
+| FR-003 Host authority via secret | Room Service, Identity Service | `POST /api/rooms`, `POST /api/rooms/:roomId/join` | `rooms.host_secret_hash` | Unit: host token; Integration: host claim during join/upgrade |
+| FR-006 Queue limits and duplicate rules | Queue Engine | `PATCH /api/rooms/:roomId/settings` | `rooms` | Unit: limit validation; Integration: settings update |
+| FR-010 Protected nickname required for native participation | Identity Service, Auth Middleware | `POST /api/rooms/:roomId/join` | `room_sessions.access_tier`, `nickname_claims` | Unit: tier gate; Integration: gated-action rejection |
+| FR-019 Read-only Listener access | Identity Service, Frontend Client | `POST /api/rooms/:roomId/listen` | `room_sessions.access_tier` | Integration: listen flow; E2E: read-only room |
+| FR-028 Server-side rejection of interactive actions for non-members | Auth Middleware, Chat/Queue/Moderation Services | `POST /api/rooms/:roomId/*`, WebSocket events | `room_sessions.access_tier` | Unit: tier enforcement; Integration: listener escalation attempt |
 | FR-029 Inline upgrade prompts for Listeners | Frontend Client | N/A | N/A | E2E: gated control prompt |
-| FR-078 Listener chat visibility setting | Chat Service | `PATCH /api/v1/rooms/:roomId/settings` | `rooms.listener_chat_visible` | Integration: listener chat visibility |
+| FR-078 Listener chat visibility setting | Chat Service | `PATCH /api/rooms/:roomId/settings` | `rooms.listener_chat_visible` | Integration: listener chat visibility |
 | FR-011 Nickname prompt | Frontend Client | N/A | N/A | E2E: join flow |
-| FR-012 Never assign generic nicknames | Identity Service | `POST /api/v1/rooms/:roomId/join` | N/A | Unit: nickname validation |
-| FR-020 Password-protect nickname | Identity Service | `POST /api/v1/nicknames/protect` | `nickname_claims` | Unit: claim creation; Integration: protect flow |
-| FR-021 Authenticate protected nickname | Identity Service | `POST /api/v1/nicknames/authenticate`, `POST /api/v1/rooms/:roomId/join` | `nickname_claims` | Unit: password verify; Integration: protected join |
-| FR-022 Rate-limit failed password attempts | Rate Limit Service | `POST /api/v1/rooms/:roomId/join` | Redis | Unit: rate limit calc; Integration: brute force |
+| FR-012 Never assign generic nicknames | Identity Service | `POST /api/rooms/:roomId/join` | N/A | Unit: nickname validation |
+| FR-020 Password-protect nickname | Identity Service | `POST /api/nicknames/protect` | `nickname_claims` | Unit: claim creation; Integration: protect flow |
+| FR-021 Authenticate protected nickname | Identity Service | `POST /api/nicknames/authenticate`, `POST /api/rooms/:roomId/join` | `nickname_claims` | Unit: password verify; Integration: protected join |
+| FR-022 Rate-limit failed password attempts | Rate Limit Service | `POST /api/rooms/:roomId/join` | Redis | Unit: rate limit calc; Integration: brute force |
 | FR-025 Warn no password recovery | Frontend Client | N/A | N/A | E2E: protect nickname flow |
-| FR-030 Add song by YouTube URL | Queue Engine, YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items`, `tracks` | Unit: URL parsing; Integration: add song |
-| FR-031 Extract and validate video IDs | YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `tracks` | Unit: URL parsing |
-| FR-032 Fetch metadata | YouTube Metadata Service | `POST /api/v1/rooms/:roomId/queue/items` | `tracks` | Unit: metadata fetch; Integration: add song |
-| FR-033 Reject over-duration videos | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `rooms.max_song_duration_seconds` | Unit: duration check |
-| FR-034 Reject duplicates | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items` | Unit: duplicate check |
-| FR-037 Handle unavailable videos | YouTube Metadata Service, Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `tracks.metadata_status` | Unit: unavailable handling |
+| FR-030 Add song by YouTube URL | Queue Engine, YouTube Metadata Service | `POST /api/rooms/:roomId/queue/items` | `queue_items`, `tracks` | Unit: URL parsing; Integration: add song |
+| FR-031 Extract and validate video IDs | YouTube Metadata Service | `POST /api/rooms/:roomId/queue/items` | `tracks` | Unit: URL parsing |
+| FR-032 Fetch metadata | YouTube Metadata Service | `POST /api/rooms/:roomId/queue/items` | `tracks` | Unit: metadata fetch; Integration: add song |
+| FR-033 Reject over-duration videos | Queue Engine | `POST /api/rooms/:roomId/queue/items` | `rooms.max_song_duration_seconds` | Unit: duration check |
+| FR-034 Reject duplicates | Queue Engine | `POST /api/rooms/:roomId/queue/items` | `queue_items` | Unit: duplicate check |
+| FR-037 Handle unavailable videos | YouTube Metadata Service, Queue Engine | `POST /api/rooms/:roomId/queue/items` | `tracks.metadata_status` | Unit: unavailable handling |
 | FR-040 Authoritative current track | Playback Coordinator | WebSocket `playback.state` | `queue_items` | Integration: playback state |
 | FR-041 Clients receive playback state | Playback Coordinator | WebSocket `room.snapshot`, `playback.state` | `queue_items` | WebSocket: snapshot on connect |
-| FR-042 Host skip | Playback Coordinator, Moderation Service | `POST /api/v1/rooms/:roomId/playback/skip` | `queue_items`, `room_moderation_actions` | Integration: host skip |
+| FR-042 Host skip | Playback Coordinator, Moderation Service | `POST /api/rooms/:roomId/playback/skip` | `queue_items`, `room_moderation_actions` | Integration: host skip |
 | FR-044 Auto-advance on track end | Playback Coordinator, Queue Engine | WebSocket `playback.clientState` | `queue_items` | Integration: track end advance |
-| FR-050 FIFO mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items.position` | Unit: FIFO selection |
-| FR-051 Voting mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items/:id/vote` | `queue_items.score`, `queue_votes` | Unit: voting selection |
-| FR-053 Host-curated mode | Queue Engine | `POST /api/v1/rooms/:roomId/queue/items` | `queue_items` | Unit: host-curated selection |
-| FR-055 Change playlist mechanic | Room Service, Queue Engine | `PATCH /api/v1/rooms/:roomId/settings` | `rooms`, `room_settings_history` | Unit: mechanic change; Integration: change flow |
-| FR-056 No interruption on change | Room Service, Playback Coordinator | `PATCH /api/v1/rooms/:roomId/settings` | `rooms` | Integration: mechanic change |
+| FR-050 FIFO mode | Queue Engine | `POST /api/rooms/:roomId/queue/items` | `queue_items.position` | Unit: FIFO selection |
+| FR-051 Voting mode | Queue Engine | `POST /api/rooms/:roomId/queue/items/:id/vote` | `queue_items.score`, `queue_votes` | Unit: voting selection |
+| FR-053 Host-curated mode | Queue Engine | `POST /api/rooms/:roomId/queue/items` | `queue_items` | Unit: host-curated selection |
+| FR-055 Change playlist mechanic | Room Service, Queue Engine | `PATCH /api/rooms/:roomId/settings` | `rooms`, `room_settings_history` | Unit: mechanic change; Integration: change flow |
+| FR-056 No interruption on change | Room Service, Playback Coordinator | `PATCH /api/rooms/:roomId/settings` | `rooms` | Integration: mechanic change |
 | FR-057 Announce change in chat | Chat Service | WebSocket `chat.message` | `chat_messages` | WebSocket: system message |
 | FR-070 Real-time chat | Chat Service | WebSocket `chat.send` / `chat.message` | `chat_messages` | WebSocket: chat broadcast |
 | FR-073 Chat rate limiting | Rate Limit Service, Chat Service | WebSocket `chat.send` | Redis | Unit: rate limit; WebSocket: rate limit |
-| FR-075 Delete chat messages | Moderation Service | `DELETE /api/v1/rooms/:roomId/chat/messages/:id` | `chat_messages.deleted_at` | Integration: delete message |
-| FR-076 Mute participants | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/mute` | `room_sessions.is_muted` | Integration: mute flow |
-| FR-080–FR-085 Host moderation | Moderation Service | `POST /api/v1/rooms/:roomId/moderation/*` | `room_moderation_actions` | Integration: moderation actions |
+| FR-075 Delete chat messages | Moderation Service | `DELETE /api/rooms/:roomId/chat/messages/:id` | `chat_messages.deleted_at` | Integration: delete message |
+| FR-076 Mute participants | Moderation Service | `POST /api/rooms/:roomId/moderation/mute` | `room_sessions.is_muted` | Integration: mute flow |
+| FR-080–FR-085 Host moderation | Moderation Service | `POST /api/rooms/:roomId/moderation/*` | `room_moderation_actions` | Integration: moderation actions |
 | FR-090 Show participants | Frontend Client, Presence Manager | WebSocket `presence.updated` | Redis, `room_sessions` | WebSocket: presence |
 | FR-091 Presence updates | Presence Manager, Frontend Client | WebSocket `presence.heartbeat` / `presence.updated`, `/listen`, `/join` | `room_sessions`, Redis | WebSocket: presence lifecycle, integration: reconnect convergence |
-| FR-110–FR-119 External site integration | External Command Service, Outbound Webhook Service | `POST /api/v1/rooms/:roomId/integrations/site`, `POST /api/v1/integrations/site-command`, embed endpoints | `site_integrations`, `external_participants`, `external_commands` | Integration: external command flow; E2E: embed display |
-| FR-130–FR-143 Pre-play veto | Queue Engine (veto logic), Playback Coordinator | WebSocket veto events, `POST /api/v1/integrations/site-command` | `preplay_veto_votes`, `preplay_veto_windows`, `queue_items` | Unit: veto threshold; Integration: veto cycle |
-| FR-150–FR-168 Staff commands and muting | External Command Service, Moderation Service | `POST /api/v1/integrations/site-command` | `external_commands`, `external_participants`, `room_moderation_actions` | Integration: staff command flow; Unit: mute expiry |
-| FR-170–FR-179 Abuse prevention | Rate Limit Service, External Command Service | `POST /api/v1/integrations/site-command` | `external_commands`, Redis | Unit: rate limits; Integration: abuse scenarios |
+| FR-110–FR-119 External site integration | External Command Service, Outbound Webhook Service | `POST /api/rooms/:roomId/integrations/site`, `POST /api/integrations/site-command`, embed endpoints | `site_integrations`, `external_participants`, `external_commands` | Integration: external command flow; E2E: embed display |
+| FR-130–FR-143 Pre-play veto | Queue Engine (veto logic), Playback Coordinator | WebSocket veto events, `POST /api/integrations/site-command` | `preplay_veto_votes`, `preplay_veto_windows`, `queue_items` | Unit: veto threshold; Integration: veto cycle |
+| FR-150–FR-168 Staff commands and muting | External Command Service, Moderation Service | `POST /api/integrations/site-command` | `external_commands`, `external_participants`, `room_moderation_actions` | Integration: staff command flow; Unit: mute expiry |
+| FR-170–FR-179 Abuse prevention | Rate Limit Service, External Command Service | `POST /api/integrations/site-command` | `external_commands`, Redis | Unit: rate limits; Integration: abuse scenarios |
 
 ### 37.2 Non-Functional Requirements Traceability
 
