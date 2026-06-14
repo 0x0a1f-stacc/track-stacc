@@ -1,14 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import cookie from "@fastify/cookie";
-import { ZodError } from "zod";
-
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
+import { describe, it, expect, vi } from "vitest";
+import { ZodError } from "zod";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
 import { verifyWsToken, setSecret } from "../lib/tokens.js";
+import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
+import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 
 const MOCK_SECRET = "test-secret-for-join-upgrade-tests-32chars!";
 setSecret(MOCK_SECRET);
@@ -24,8 +25,7 @@ vi.mock("../lib/argon2.js", () => ({
     ),
 }));
 
-import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
-import { sessionsRouter } from "../modules/sessions/sessions.router.js";
+
 
 // ---------------------------------------------------------------------------
 // Shared test data

@@ -9,7 +9,7 @@
     "./eslint/base": "./eslint.config.base.js",
     "./tailwind/base": "./tailwind.config.base.ts"
   },
-  "devDependencies": {
+  "dependencies": {
     "@eslint/js": "^9.17.0",
     "@typescript-eslint/eslint-plugin": "^8.19.0",
     "@typescript-eslint/parser": "^8.19.0",

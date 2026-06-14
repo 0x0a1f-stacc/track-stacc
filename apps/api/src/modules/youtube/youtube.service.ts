@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Track } from "@prisma/client";
 import type { Redis } from "ioredis";
 
 import { AppError } from "../../lib/errors.js";
@@ -69,9 +69,7 @@ export async function getOrFetchTrack(
   const cacheKey = `youtube:track:${videoId}`;
   const cached = await redis.get(cacheKey);
   if (cached)
-    return JSON.parse(cached) as Awaited<
-      ReturnType<PrismaClient["track"]["findUnique"]>
-    >;
+    return JSON.parse(cached) as Track;
 
   const existing = await prisma.track.findUnique({
     where: {

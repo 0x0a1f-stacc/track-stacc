@@ -1,18 +1,18 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import type { AddressInfo } from "node:net";
+
 import cookie from "@fastify/cookie";
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
-
-// No mock needed — gateway handles missing Redis adapter gracefully
-
 import { Server } from "socket.io";
 import { io as ioc } from "socket.io-client";
+import { describe, it, expect, vi } from "vitest";
 
 import { createConfigPlugin } from "../lib/config.js";
 import type { ApiConfig } from "../lib/config.js";
-import { registerRealtime } from "../realtime/gateway.js";
 import { setSecret, signWsToken, verifyWsToken } from "../lib/tokens.js";
+import { registerRealtime } from "../realtime/gateway.js";
+
+// No mock needed — gateway handles missing Redis adapter gracefully
 
 const TEST_SECRET = "test-secret-for-testing-only-1234567890";
 setSecret(TEST_SECRET);
