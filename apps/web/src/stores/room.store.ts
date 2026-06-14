@@ -39,9 +39,14 @@ export const useRoomStore = create<RoomState>((set) => ({
   listenerSessionId: null,
   lastError: null,
   ownAccessTier: null,
+  // Note: setToken updates the WS token. The useSocket hook detects this change
+  // and will automatically reconnect the Socket.IO client, upgrading the access tier in-place
+  // without needing a full component unmount or page reload.
   setToken: (token) => set({ websocketToken: token }),
   setListenerSessionId: (id) => set({ listenerSessionId: id }),
   setOwnAccessTier: (tier) => set({ ownAccessTier: tier }),
+  // Note: resetRoomState is called when transitioning between different rooms to clear state.
+  // It is NOT called during Listener -> member upgrades to ensure playback and UI continuity.
   resetRoomState: () =>
     set({
       room: null,
