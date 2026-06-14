@@ -15,9 +15,11 @@
     "db:migrate": "pnpm --filter api prisma migrate dev",
     "db:push": "pnpm --filter api prisma db push",
     "db:seed": "pnpm --filter api prisma db seed",
-    "db:studio": "pnpm --filter api prisma studio"
+    "db:studio": "pnpm --filter api prisma studio",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@prisma/client": "6.19.3",
     "prettier": "^3.4.2",
     "prisma": "6.19.3",

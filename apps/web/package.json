@@ -10,7 +10,8 @@
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test --config=../../playwright.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.11",
