@@ -209,7 +209,7 @@ async function checkPerRoomNicknameUniqueness(
     );
 }
 
-function determineRole(
+export function determineRole(
   hostToken: string | undefined,
   room: { hostSecretHash: string },
 ) {
