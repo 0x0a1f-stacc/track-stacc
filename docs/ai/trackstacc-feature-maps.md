@@ -222,14 +222,14 @@
 ## FEAT-PRESENCE — Presence
 
 - **Purpose:** Show active participants and drive DJ-rotation eligibility (FR-090–092).
-- **Dependencies:** `FEAT-MECHANICS` (DJ rotation), `FEAT-LISTEN`/`FEAT-NICKPROT` (tier-scoped visibility). Presence Manager + Frontend Client.
-- **Data Entities:** Redis (presence state), `DATA-SESSIONS`.
-- **APIs:** —.
-- **WebSockets:** `WS-PRESENCE` `presence.heartbeat` (C2S), `presence.updated` (S2C).
-- **Security Controls:** `SEC-TIER` (presence scoped per tier).
-- **Acceptance Criteria:** covered by WS test areas (§37.1 FR-090).
-- **Failure Modes:** Redis down → presence becomes approximate; cross-instance broadcast assumptions avoided (§23.6 Redis rule).
-- **Observability Signals:** §24.1 *active participants* (#2), *WebSocket connections* (#3); §24.3 alert *WebSocket disconnect spikes* (#2), *Redis unavailability* (#4).
+- **Components:** Socket.IO Gateway, Presence Manager, Frontend Client, Identity/Nickname session flow.
+- **Dependencies:** `FEAT-MECHANICS` (DJ rotation), `FEAT-LISTEN` (listen rehydration), `FEAT-NICKPROT` (upgrade/join flow rehydration).
+- **Data Entities:** `DATA-SESSIONS` (`room_sessions`), Redis presence state (ZSET).
+- **APIs/events:** `POST /api/v1/rooms/:roomId/listen`, `POST /api/v1/rooms/:roomId/join`, `room.snapshot`, `presence.heartbeat`, `presence.updated`.
+- **Security Controls:** `SEC-TIER` (tier validated server-side from signed WS token).
+- **Acceptance Criteria:** `AC-PRESENCE-1` to `AC-PRESENCE-9` (Presence Lifecycle acceptance criteria, §31.10).
+- **Failure Modes:** Redis degraded fallback (PostgreSQL `lastSeenAt`/`leftAt` active session query and sweep cleanup), stale sessions (duplicate rows avoided on refresh/reconnect by rehydrating the same session), reconnect convergence (clients replace local state with server-authoritative snapshots/updates), external participants out of scope.
+- **Observability Signals:** §24.1 *active participants* (#2), *WebSocket connections* (#3); §24.3 alert *WebSocket disconnect spikes* (#2), *Redis presence degradation* (logs/metrics).
 - **Decisions:** —
 
 ---

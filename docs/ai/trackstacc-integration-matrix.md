@@ -112,18 +112,18 @@
 - **Errors:** `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
 
 ### `POST /api/v1/rooms/:roomId/listen`
-- **Purpose:** Establish a read-only Listener session (FR-019).
-- **Reads:** `rooms`
-- **Writes:** `room_sessions` (`access_tier = listener`)
-- **Emits:** `WS-CONN` `room.snapshot` (read-only)
-- **Security:** `SEC-TIER` (listener tier in token); `ROOM_PASSWORD_REQUIRED` if protected
-- **Tier:** issues `listener`
+- **Purpose:** Establish a read-only Listener session (FR-019). Primary bootstrap and rehydration path. If client sends a valid session cookie representing an existing host or member session, rehydrates that session and returns the correct access tier and a fresh WebSocket token instead of creating a new Listener session or overwriting the cookie.
+- **Reads:** `rooms`, `room_sessions` (for rehydration)
+- **Writes:** `room_sessions` (`access_tier = listener` / reuses existing session)
+- **Emits:** `WS-CONN` `room.snapshot`
+- **Security:** `SEC-TIER` (tier encoded in token); `ROOM_PASSWORD_REQUIRED` if protected
+- **Tier:** issues `listener` or rehydrates existing tier (`member`/`host`)
 - **Rate limit:** per-session
 - **Acceptance:** `AC-V140-1`, `AC-JOIN-1`
 - **Errors:** `ROOM_PASSWORD_REQUIRED` (401)
 
 ### `POST /api/v1/rooms/:roomId/join`
-- **Purpose:** Establish or upgrade to a member session; authenticate existing or claim new nickname in one protect-and-join step; upgrades a Listener session **in place** (FR-010, FR-014, FR-015).
+- **Purpose:** Establish or upgrade to a member session; authenticate existing or claim new nickname in one protect-and-join step; upgrades a Listener session **in place** (FR-010, FR-014, FR-015). Reuses existing active session and replaces WebSocket token, prompting presence update broadcast.
 - **Reads:** `rooms`, `nickname_claims`
 - **Writes:** `room_sessions` (`access_tier = member`, in-place upgrade), `nickname_claims` (on new claim), Redis (failed-attempt counters)
 - **Emits:** `WS-S2C` `presence.updated`; system `chat.message` (join / protect)
@@ -307,14 +307,14 @@ Client→server interactive events (`WS-C2S`) are gated by minimum tier `member`
 | `playback.clientState` (C2S) | `WS-PLAYBACK` | R/W `queue_items` (advance signal) | server-trusted | — |
 | `playback.skipVote` (C2S) | `WS-PLAYBACK` | W `skip_votes` | `member` | `VOTE_NOT_ALLOWED` |
 | `playback.state`/`playback.resync` (S2C) | `WS-PLAYBACK` | R `queue_items` | — | — |
-| `presence.heartbeat` (C2S) | `WS-PRESENCE` | Redis presence | `listener`+ | — |
-| `presence.updated` (S2C) | `WS-PRESENCE` | — | — | — |
+| `presence.heartbeat` (C2S) | WS-PRESENCE | W `room_sessions` (lastSeenAt), W Redis ZSET, sweeps expired | `listener`+ | — |
+| `presence.updated` (S2C) | WS-PRESENCE | R `room_sessions` active list | — | — |
 | `queue.*` (S2C) | `WS-QUEUE` | R `queue_items`/`queue_votes`/veto tables | — | — |
 | `moderation.action` (C2S) | `WS-MOD` | W `room_moderation_actions`,`room_sessions` | `mod`/`host` | `MODERATOR_REQUIRED`,`HOST_REQUIRED` |
 | `moderation.applied` (S2C) | `WS-MOD` | — | — | — |
 | `integration.command.*` / `external.bot_message.created` / `room.external_settings.changed` (S2C) | `WS-INTEG` | R/W external tables | — | (errors surfaced via command result envelope, §23.2.3) |
 
-**Connection (`WS-CONN`, §16.1):** token validated on connect; `WEBSOCKET_TOKEN_INVALID` (401) on failure; reconnection uses exponential backoff + jitter (§16.1.1, NFR-022); token refresh/rehydration via room bootstrap endpoint `POST /api/rooms/:roomId/listen`. WS errors must **not** disconnect the client unless auth/authorization/protocol-abuse/unrecoverable degradation (§23.2.2).
+**Connection (`WS-CONN`, §16.1):** token validated on connect; `WEBSOCKET_TOKEN_INVALID` (401) on failure; reconnection uses exponential backoff + jitter (§16.1.1, NFR-022); token refresh/rehydration via room bootstrap endpoint `POST /api/rooms/:roomId/listen`. Stale sessions are cleaned up, and active connections are synced to the presence list, avoiding duplicate rows on reconnect. WS errors must **not** disconnect the client unless auth/authorization/protocol-abuse/unrecoverable degradation (§23.2.2).
 
 ---
 
