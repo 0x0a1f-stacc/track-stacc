@@ -5,10 +5,12 @@ import type { Server } from "socket.io";
 import { describe, it, expect, vi } from "vitest";
 import { ZodError } from "zod";
 
+import { verifyPassword } from "../lib/argon2.js";
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
 import { verifyWsToken, setSecret } from "../lib/tokens.js";
 import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
+import { determineRole } from "../modules/nicknames/nicknames.service.js";
 import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 
 const MOCK_SECRET = "test-secret-for-join-upgrade-tests-32chars!";
@@ -219,7 +221,7 @@ function buildTestApp(
           (args.data.normalizedNickname as string | null) ?? null,
         displayNickname: (args.data.displayNickname as string | null) ?? null,
         accessTier: "member",
-        role: "participant",
+        role: (args.data.role as string | null) ?? "participant",
         sessionTokenHash: "new-hashed-token",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -805,6 +807,123 @@ describe("join presence broadcast", () => {
       "presence.updated",
       expect.objectContaining({ type: "presence.updated" }),
     );
+
+    await app.close();
+  });
+});
+
+describe("determineRole unit tests", () => {
+  const room = { hostSecretHash: "hashed-host-secret" };
+
+  it("resolves to 'host' when hostToken is valid", async () => {
+    vi.mocked(verifyPassword).mockResolvedValueOnce(true);
+    const role = await determineRole("correct-password", room);
+    expect(role).toBe("host");
+    expect(verifyPassword).toHaveBeenCalledWith("hashed-host-secret", "correct-password");
+  });
+
+  it("resolves to 'participant' when hostToken is undefined", async () => {
+    const role = await determineRole(undefined, room);
+    expect(role).toBe("participant");
+  });
+
+  it("resolves to 'participant' when hostToken is invalid", async () => {
+    vi.mocked(verifyPassword).mockResolvedValueOnce(false);
+    const role = await determineRole("wrong-password", room);
+    expect(role).toBe("participant");
+    expect(verifyPassword).toHaveBeenCalledWith("hashed-host-secret", "wrong-password");
+  });
+
+  it("resolves to 'participant' and fails safe if verifyPassword throws an error", async () => {
+    vi.mocked(verifyPassword).mockRejectedValueOnce(new Error("Argon2 error"));
+    const role = await determineRole("any-password", room);
+    expect(role).toBe("participant");
+  });
+});
+
+describe("join with host role integration", () => {
+  it("joins as host when the host_token cookie matches the room host secret", async () => {
+    // Mock verifyPassword: first call (nickname authentication) returns true,
+    // second call (host token check) returns true.
+    vi.mocked(verifyPassword)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true);
+
+    const app = buildTestApp({ existingClaim: CLAIM_ALICE });
+    
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      headers: {
+        cookie: "host_token=correct-password",
+      },
+      payload: {
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as Record<string, unknown>;
+    const session = body.session as Record<string, unknown>;
+
+    expect(session.role).toBe("host");
+    expect(session.accessTier).toBe("member");
+
+    await app.close();
+  });
+
+  it("joins as participant when host_token cookie is invalid", async () => {
+    // Mock verifyPassword: first call (nickname authentication) returns true,
+    // second call (host token check) returns false.
+    vi.mocked(verifyPassword)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    const app = buildTestApp({ existingClaim: CLAIM_ALICE });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      headers: {
+        cookie: "host_token=wrong-password",
+      },
+      payload: {
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as Record<string, unknown>;
+    const session = body.session as Record<string, unknown>;
+
+    expect(session.role).toBe("participant");
+    expect(session.accessTier).toBe("member");
+
+    await app.close();
+  });
+
+  it("joins as participant when host_token cookie is missing", async () => {
+    vi.mocked(verifyPassword).mockResolvedValue(true);
+
+    const app = buildTestApp({ existingClaim: CLAIM_ALICE });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      payload: {
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as Record<string, unknown>;
+    const session = body.session as Record<string, unknown>;
+
+    expect(session.role).toBe("participant");
+    expect(session.accessTier).toBe("member");
 
     await app.close();
   });
