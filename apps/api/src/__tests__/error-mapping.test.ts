@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { AppError, toWsErrorAcknowledgement } from "../lib/errors.js";
 
 describe("toWsErrorAcknowledgement", () => {

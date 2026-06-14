@@ -1,8 +1,9 @@
-import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
+import type { FastifyInstance } from "fastify";
 
 import { requireModerator } from "../../auth/guards.js";
 import { verifyPassword } from "../../lib/argon2.js";
+
 import {
   createRoomSchema,
   passwordVerifySchema,

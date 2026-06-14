@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
 import Fastify from "fastify";
 import { nanoid } from "nanoid";
+import { describe, it, expect } from "vitest";
 
 describe("request ID middleware", () => {
   it("provides request.id from genReqId when no header is present", async () => {

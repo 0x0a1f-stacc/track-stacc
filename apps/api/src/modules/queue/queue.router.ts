@@ -3,13 +3,14 @@ import type { Server } from "socket.io";
 
 import { requireMember, requireModerator } from "../../auth/guards.js";
 import { AppError } from "../../lib/errors.js";
+import { maybeAutoStart } from "../playback/playback.coordinator.js";
+
 import {
   addQueueItemSchema,
   rejectSchema,
   voteSchema,
 } from "./queue.schema.js";
 import { addQueueItem, voteQueueItem } from "./queue.service.js";
-import { maybeAutoStart } from "../playback/playback.coordinator.js";
 
 export async function queueRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/queue/items", async (request) => {

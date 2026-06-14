@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { AppError } from "../../lib/errors.js";
+
 import { listenRoomSchema } from "./sessions.schema.js";
 import { listenToRoom } from "./sessions.service.js";
 

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { loadConfig } from "../lib/config.js";
 
 const MINIMAL_ENV: NodeJS.ProcessEnv = {

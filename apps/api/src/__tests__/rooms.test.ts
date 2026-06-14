@@ -1,10 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import cookie from "@fastify/cookie";
-import { ZodError } from "zod";
-
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Redis } from "ioredis";
+import { describe, it, expect, vi } from "vitest";
+import { ZodError } from "zod";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";

@@ -1,5 +1,5 @@
-import type { FastifyInstance } from "fastify";
 import type { Prisma } from "@prisma/client";
+import type { FastifyInstance } from "fastify";
 
 import { AppError } from "../../lib/errors.js";
 import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
