@@ -3,6 +3,7 @@ import type { Server } from "socket.io";
 
 import { requireMember } from "../../auth/guards.js";
 import { AppError } from "../../lib/errors.js";
+
 import {
   autoSkipTrack,
   getPlaybackState,

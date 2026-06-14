@@ -1,6 +1,6 @@
+import { PlaybackStatus, type PlaybackState } from "@trackstacc/types";
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
-import { PlaybackStatus, type PlaybackState } from "@trackstacc/types";
 
 import { AppError } from "../../lib/errors.js";
 import { broadcast } from "../../realtime/broadcast.js";

@@ -8,6 +8,7 @@ import { hashToken } from "../../lib/tokens.js";
 import { broadcast } from "../../realtime/broadcast.js";
 import { getParticipants } from "../../realtime/presence.manager.js";
 import { normalizeNickname } from "../identity/nickname.normalizer.js";
+
 import {
   joinRoomSchema,
   nicknameAuthSchema,

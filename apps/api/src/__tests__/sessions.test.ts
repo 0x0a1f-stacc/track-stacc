@@ -1,14 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import cookie from "@fastify/cookie";
-import { ZodError } from "zod";
-
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
+import { describe, it, expect, vi } from "vitest";
+import { ZodError } from "zod";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
-import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 import { verifyWsToken, hashToken, setSecret } from "../lib/tokens.js";
+import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 import authPlugin from "../plugins/auth.js";
 
 setSecret("test-secret-for-testing-only-1234567890");

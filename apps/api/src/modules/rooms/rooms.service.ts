@@ -1,9 +1,9 @@
-import type { FastifyInstance } from "fastify";
 import type {
   DuplicatePolicy,
   PlaylistMechanic,
   RoomVisibility,
 } from "@prisma/client";
+import type { FastifyInstance } from "fastify";
 import { nanoid } from "nanoid";
 
 import { hashPassword } from "../../lib/argon2.js";

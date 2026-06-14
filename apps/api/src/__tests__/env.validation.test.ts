@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { validateEnv } from "../lib/env.js";
 
 const VALID_ENV: NodeJS.ProcessEnv = {

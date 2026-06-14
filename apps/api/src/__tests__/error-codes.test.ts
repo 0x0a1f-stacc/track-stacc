@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { ERROR_REGISTRY, getErrorDefinition } from "../lib/error-codes.js";
 
 const REGISTERED_CODES = [

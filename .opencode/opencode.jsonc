@@ -44,11 +44,12 @@
   // Verify docs/sdd.md is the correct path; remove sdd.md alias if both resolve the same file.
   "instructions": [
     "AGENTS.md",
-    "README.md",
     "docs/dev/repo-map.md",
+    "README.md",
     "docs/ai/trackstacc-ai-reference.md",
     "docs/ai/trackstacc-ai-index.md",
-    "docs/ai/trackstacc-agent-playbooks.md"
+    "docs/ai/trackstacc-agent-playbooks.md",
+    "docs/ai/trackstacc-security-controls.md"
   ],
   /**
    * Previous instructions
@@ -309,7 +310,7 @@
         "ide",
         "--project-from-cwd"
       ],
-      "enabled": true
+      "enabled": false
     },
 
     // AST structural search/refactor analysis. Requires uvx and ast-grep CLI:
@@ -324,7 +325,7 @@
         "git+https://github.com/ast-grep/ast-grep-mcp",
         "ast-grep-server"
       ],
-      "enabled": true
+      "enabled": false
     },
 
     // Usually redundant with OpenCode's built-in file tools. Keep disabled
@@ -370,3 +371,4 @@
   "snapshot": true,
   "autoupdate": "notify"
 }
+

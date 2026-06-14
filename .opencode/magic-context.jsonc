@@ -1,31 +1,37 @@
 {
-  "$schema": "https://raw.githubusercontent.com/cortexkit/opencode-magic-context/master/assets/magic-context.schema.json",
+  // Fixed: Corrected schema path to match CONFIGURATION.md documentation
+  "$schema": "https://raw.githubusercontent.com/cortexkit/magic-context/master/assets/magic-context.schema.json",
   "enabled": true,
   
-  // Cache: maximize reuse
+  // Cache: maximize reuse (Excellent as-is)
   "cache_ttl": {
     "default": "5m",
-    "opencode-go/deepseek-v4-flash": "58m"
+    "opencode-go/deepseek-v4-flash": "10m"
   },
   
-  // Drop aggressively
+  // Optimized: Relaxed history budget slightly to prevent overflow bottlenecks
   "execute_threshold_percentage": 50,
-  "auto_drop_tool_age": 30,
-  "clear_reasoning_age": 20,
+  "auto_drop_tool_age": 50,        // Increased from 30 to prevent dropping test outputs too fast
+  "clear_reasoning_age": 20,       // Kept aggressive: reasoning blocks are huge, safe to drop early
   "protected_tags": 10,
-  "history_budget_percentage": 0.1,
+  "history_budget_percentage": 0.12, // Increased from 0.1 (10%) to 0.12 (12%) to give the Historian breathing room
   
-  // Background agents: request-priced or free models
+  // FIX: Upgraded the Historian to your reliable fast model
+  // The historian MUST generate strict 4-tier XML structures, facts, and events.
+  // Free models frequently fail validation here, causing background stalls.
   "historian": {
-    "model": "opencode/nemotron-3-ultra-free",
+    "model": "opencode-go/deepseek-v4-flash",
     "fallback_models": [
-      "opencode/deepseek-v4-flash-free"
+      "opencode/nemotron-3-ultra-free"
     ]
   },
+  
+  // KEPT AS-IS: Free models are perfectly fine here
+  // The Dreamer runs idle/overnight. Nobody is waiting. Free models save money.
   "dreamer": {
     "model": "opencode/nemotron-3-ultra-free",
     "fallback_models": [
-      "opencode/deepseek-v4-flash-free"
+      "opencode/mimo-v2.5-free"
     ],
     "schedule": "02:00-06:00",
     "tasks": [
@@ -42,23 +48,28 @@
       "enabled": true
     }
   },
+  
+  // KEPT AS-IS: Sidekick runs on-demand via /ctx-aug, fast/free is ideal
   "sidekick": {
     "model": "opencode/nemotron-3-ultra-free",
     "fallback_models": [
-      "opencode/deepseek-v4-flash-free"
+      "opencode/mimo-v2.5-free"
     ]
   },
   
-  // Free local embeddings
+  // KEPT AS-IS: Zero cost, zero latency, perfect for local RAG
   "embedding": {
     "provider": "local"
   },
   
-  // Memory
+  // KEPT AS-IS: Your tighter 3000 token budget pairs well with a smaller history budget
   "memory": {
     "enabled": true,
-    "injection_budget_tokens": 3000, // tighter than default 4000
+    "injection_budget_tokens": 3000,
     "auto_promote": true
   },
+  
+  // KEPT AS-IS: Crucial for multi-hour/multi-day sessions
   "temporal_awareness": true
 }
+

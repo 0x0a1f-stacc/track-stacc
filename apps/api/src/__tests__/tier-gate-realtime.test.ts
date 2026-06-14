@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { PlaylistMechanic, type ClientEvent } from "@trackstacc/types";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Socket, Server } from "socket.io";
-import { PlaylistMechanic, type ClientEvent } from "@trackstacc/types";
+import { describe, it, expect, vi } from "vitest";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { registerRoomHandlers } from "../realtime/room.gateway.js";

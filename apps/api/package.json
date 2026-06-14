@@ -10,7 +10,7 @@
     "build": "prisma generate --schema ../../prisma/schema.prisma && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src --ext .ts --fix",
     "test": "vitest run",
     "prisma": "node ./scripts/prisma.mjs"
   },

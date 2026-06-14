@@ -1,5 +1,5 @@
-import type { Server } from "socket.io";
 import type { ServerEvent } from "@trackstacc/types";
+import type { Server } from "socket.io";
 
 export function roomChannel(roomId: string) {
   return `room:${roomId}`;

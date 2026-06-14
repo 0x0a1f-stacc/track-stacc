@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { normalizeNickname } from "../modules/identity/nickname.normalizer.js";
 
 describe("normalizeNickname", () => {

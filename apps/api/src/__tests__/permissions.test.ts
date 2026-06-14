@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { assertModerator } from "../modules/moderation/moderation.service.js";
 
 function expectAppErrorCode(fn: () => unknown, expectedCode: string) {

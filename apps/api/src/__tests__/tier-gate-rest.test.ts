@@ -1,18 +1,18 @@
-import { describe, it, expect, vi } from "vitest";
-import Fastify from "fastify";
 import cookie from "@fastify/cookie";
+import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 import type { Server } from "socket.io";
+import { describe, it, expect, vi } from "vitest";
 
 import { createConfigPlugin } from "../lib/config.js";
 import { AppError, toErrorResponse } from "../lib/errors.js";
-import { roomsRouter } from "../modules/rooms/rooms.router.js";
-import { sessionsRouter } from "../modules/sessions/sessions.router.js";
-import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
 import { chatRouter } from "../modules/chat/chat.router.js";
 import { moderationRouter } from "../modules/moderation/moderation.router.js";
+import { nicknamesRouter } from "../modules/nicknames/nicknames.router.js";
 import { playbackRouter } from "../modules/playback/playback.router.js";
 import { queueRouter } from "../modules/queue/queue.router.js";
+import { roomsRouter } from "../modules/rooms/rooms.router.js";
+import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 
 // ---------------------------------------------------------------------------
 // Session fixtures
