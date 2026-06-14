@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as React from "react";
 
 export function ListenerUpgradePrompt({
   roomSlug,
