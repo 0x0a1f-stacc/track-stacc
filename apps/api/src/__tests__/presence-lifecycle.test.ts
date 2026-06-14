@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { AccessTier, Role } from "@trackstacc/types";
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
-import { AccessTier, Role } from "@trackstacc/types";
-import { createConfigPlugin } from "../lib/config.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+import { createConfigPlugin, type ApiConfig } from "../lib/config.js";
 import {
   presenceKey,
   markSessionPresent,
@@ -10,7 +11,22 @@ import {
   getParticipants,
 } from "../realtime/presence.manager.js";
 
-const BASE_CONFIG = {
+interface MockRedis {
+  zadd: ReturnType<typeof vi.fn>;
+  expire: ReturnType<typeof vi.fn>;
+  zrangebyscore: ReturnType<typeof vi.fn>;
+  zremrangebyscore: ReturnType<typeof vi.fn>;
+  zrange: ReturnType<typeof vi.fn>;
+}
+
+interface MockPrisma {
+  roomSession: {
+    updateMany: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
+}
+
+const BASE_CONFIG: ApiConfig = {
   databaseUrl: "postgresql://test:test@localhost:5432/test",
   redisUrl: "redis://localhost:6379",
   sessionSecret: "test-secret-for-testing-only-1234567890",
@@ -21,14 +37,17 @@ const BASE_CONFIG = {
   nodeEnv: "test",
 };
 
+const anyDate = () => expect.any(Date) as unknown as Date;
+const anyString = () => expect.any(String) as unknown as string;
+
 describe("Presence Lifecycle Manager", () => {
   let app: FastifyInstance;
-  let mockRedis: any;
-  let mockPrisma: any;
+  let mockRedis: MockRedis;
+  let mockPrisma: MockPrisma;
 
   beforeEach(() => {
     app = Fastify({ logger: false });
-    app.register(createConfigPlugin(BASE_CONFIG as any));
+    app.register(createConfigPlugin(BASE_CONFIG));
 
     mockRedis = {
       zadd: vi.fn().mockResolvedValue(1),
@@ -45,14 +64,14 @@ describe("Presence Lifecycle Manager", () => {
       },
     };
 
-    app.decorate("redis", mockRedis);
-    app.decorate("prisma", mockPrisma);
+    app.decorate("redis", mockRedis as unknown as typeof app.redis);
+    app.decorate("prisma", mockPrisma as unknown as typeof app.prisma);
   });
 
   it("markSessionPresent ZADDs session ID to ZSET and sets 24h expire", async () => {
     await markSessionPresent(app, "room-1", "session-1");
-    expect(mockRedis.zadd).toHaveBeenCalledWith("room:room-1:presence", expect.any(Number), "session-1");
-    expect(mockRedis.expire).toHaveBeenCalledWith("room:room-1:presence", 86400);
+    expect(mockRedis.zadd).toHaveBeenCalledWith(presenceKey("room-1"), expect.any(Number), "session-1");
+    expect(mockRedis.expire).toHaveBeenCalledWith(presenceKey("room-1"), 86400);
   });
 
   it("cleanupInactiveSessions prunes expired sessions and updates DB leftAt", async () => {
@@ -61,14 +80,14 @@ describe("Presence Lifecycle Manager", () => {
 
     await cleanupInactiveSessions(app, "room-1");
 
-    expect(mockRedis.zrangebyscore).toHaveBeenCalledWith("room:room-1:presence", "-inf", expect.any(Number));
-    expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith("room:room-1:presence", "-inf", expect.any(Number));
+    expect(mockRedis.zrangebyscore).toHaveBeenCalledWith(presenceKey("room-1"), "-inf", expect.any(Number));
+    expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith(presenceKey("room-1"), "-inf", expect.any(Number));
     expect(mockPrisma.roomSession.updateMany).toHaveBeenCalledWith({
       where: {
         id: { in: ["expired-session-1"] },
         leftAt: null,
       },
-      data: { leftAt: expect.any(Date) },
+      data: { leftAt: anyDate() },
     });
   });
 
@@ -80,10 +99,10 @@ describe("Presence Lifecycle Manager", () => {
     expect(mockPrisma.roomSession.updateMany).toHaveBeenCalledWith({
       where: {
         roomId: "room-1",
-        lastSeenAt: { lt: expect.any(Date) },
+        lastSeenAt: { lt: anyDate() },
         leftAt: null,
       },
-      data: { leftAt: expect.any(Date) },
+      data: { leftAt: anyDate() },
     });
   });
 
@@ -105,7 +124,7 @@ describe("Presence Lifecycle Manager", () => {
 
     const participants = await getParticipants(app, "room-1");
 
-    expect(mockRedis.zrange).toHaveBeenCalledWith("room:room-1:presence", 0, -1);
+    expect(mockRedis.zrange).toHaveBeenCalledWith(presenceKey("room-1"), 0, -1);
     expect(mockPrisma.roomSession.findMany).toHaveBeenCalledWith({
       where: {
         id: { in: ["active-session-1"] },
@@ -123,8 +142,8 @@ describe("Presence Lifecycle Manager", () => {
       protectedNickname: true,
       presence: "online",
       isMuted: false,
-      joinedAt: expect.any(String),
-      lastSeenAt: expect.any(String),
+      joinedAt: anyString(),
+      lastSeenAt: anyString(),
     });
   });
 
@@ -149,7 +168,7 @@ describe("Presence Lifecycle Manager", () => {
     expect(mockPrisma.roomSession.findMany).toHaveBeenCalledWith({
       where: {
         roomId: "room-1",
-        lastSeenAt: { gte: expect.any(Date) },
+        lastSeenAt: { gte: anyDate() },
         leftAt: null,
       },
       orderBy: { joinedAt: "asc" },

@@ -1,28 +1,29 @@
-import type { FastifyInstance } from "fastify";
-import type { Socket, Server } from "socket.io";
 import {
   ChatMessageType,
   QueueItemStatus,
   type ClientEvent,
 } from "@trackstacc/types";
+import type { FastifyInstance } from "fastify";
+import type { Socket, Server } from "socket.io";
 
 import { AppError, toWsErrorAcknowledgement } from "../lib/errors.js";
 import { chatSendSchema } from "../modules/chat/chat.schema.js";
 import { sendChatMessage } from "../modules/chat/chat.service.js";
-import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
 import {
   handleClientEnd,
   handleClientBuffering,
   maybeAutoStart,
   clearClientBuffering,
 } from "../modules/playback/playback.coordinator.js";
+import { clientPlaybackStateSchema } from "../modules/playback/playback.schema.js";
 import {
   addQueueItemSchema,
   voteSchema,
 } from "../modules/queue/queue.schema.js";
 import { addQueueItem, voteQueueItem } from "../modules/queue/queue.service.js";
-import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
+
 import { broadcast } from "./broadcast.js";
+import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
 import { generateEventRequestId } from "./request-id.js";
 
 const memberRequiredEventTypes = new Set([

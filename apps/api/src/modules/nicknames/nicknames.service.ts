@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
 
-import { AppError } from "../../lib/errors.js";
 import { hashPassword, verifyPassword } from "../../lib/argon2.js";
+import { AppError } from "../../lib/errors.js";
 import { assertRateLimit, rateLimits } from "../../lib/rateLimit.js";
 import { hashToken, randomToken, signWsToken } from "../../lib/tokens.js";
-import { normalizeNickname } from "../identity/nickname.normalizer.js";
 import { cleanupInactiveSessions } from "../../realtime/presence.manager.js";
+import { normalizeNickname } from "../identity/nickname.normalizer.js";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
