@@ -82,9 +82,13 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 
 ## Testing
 
-- Tests live in `apps/api/src/__tests__/` and use Vitest; web has `--passWithNoTests` (no tests yet).
-- API tests mock external dependencies (DB, Redis, Socket.IO broadcast) — no local services needed to run them.
-- Run focused: `pnpm --filter api test`, `pnpm --filter web test`.
+- API unit and integration tests live in `apps/api/src/__tests__/` (Node environment) and mock external dependencies (no local services required).
+- Web unit/component tests live in `apps/web/src/**/*.test.ts` or `.test.tsx` (JSDOM environment).
+- Web E2E browser tests live in `apps/web/e2e/` and use Playwright (runs against a real local/Docker stack).
+- Run focused:
+  - `pnpm --filter api test` — runs backend Fastify tests.
+  - `pnpm --filter web test` — runs frontend Vitest tests in jsdom.
+  - `pnpm test:e2e` (or `pnpm --filter web test:e2e`) — runs Playwright browser E2E tests (requires local PostgreSQL/Redis services to be running).
 - Standalone nickname endpoint tests are in `apps/api/src/__tests__/nicknames.test.ts` (40+ tests covering check, protect, authenticate).
 - Nickname auth rate limiting uses `assertRateLimit()` from `apps/api/src/lib/rateLimit.ts` with the `rateLimits.nicknameAuth` config.
 

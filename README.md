@@ -130,7 +130,9 @@ Focused commands:
 pnpm --filter api typecheck
 pnpm --filter api test
 pnpm --filter web typecheck
+pnpm --filter web test
 pnpm --filter web build
+pnpm test:e2e
 pnpm --filter api prisma validate
 ```
 

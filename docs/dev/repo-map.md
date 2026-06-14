@@ -96,18 +96,20 @@ Standalone protected-nickname endpoints (`POST /api/nicknames/check`, `/protect`
 | `pnpm install --config.confirmModulesPurge=false` | ~1s (cached) | No | No | Corepack-enforced pnpm 9.15.4. Does not modify lockfile on reinstall. CI uses `pnpm install --frozen-lockfile`. |
 | `pnpm lint` | ~5s | No | No | 5 packages; `packages/config` skipped (no lint script). |
 | `pnpm typecheck` | ~2s (cached) | No | No | 4 packages with TypeScript; `packages/config` skipped. |
-| `pnpm test` | ~1.5s | No | No | 220+ tests (Vitest) across 18 files in `apps/api`; `web`/`types`/`ui` pass with no test files. |
+| `pnpm test` | ~2s | No | No | Runs API Fastify backend tests (Node env) and Web frontend tests (JSDOM env) via Vitest. |
+| `pnpm test:e2e` | ~5s | Yes (implicit) | Yes | Runs Playwright E2E browser tests locally. Will boot/reuse Next.js and Fastify servers. Requires local Postgres & Redis to be active. |
 | `pnpm build` | ~16s (cached) | No | No | Prisma generate → `tsc` for `api`; `next build` for `web`; `tsc` for `types` and `ui`. |
 | `pnpm --filter api prisma validate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Validates root schema via `apps/api/scripts/prisma.mjs`. |
 | `pnpm --filter api prisma generate` | ~2s | No (fallback DATABASE_URL in wrapper) | No | Generates Prisma Client from root schema. |
 
-### Verification results (2026-06-08)
+### Verification results (2026-06-14)
 
 | Command | Result |
 |---------|--------|
 | `pnpm lint` | ✓ All 5 packages clean |
 | `pnpm typecheck` | ✓ 4 packages clean |
-| `pnpm test` | ✓ 30+ tests (16 files), all pass |
+| `pnpm test` | ✓ 330+ tests (29 files), all pass across api and web |
+| `pnpm test:e2e` | ✓ Playwright E2E browser tests pass |
 | `pnpm build` | ✓ 4 packages, Next.js generates 6 static + 2 dynamic routes |
 | `pnpm --filter api prisma validate` | ✓ Schema valid |
 | `pnpm --filter api prisma generate` | ✓ Prisma Client generated |
@@ -166,7 +168,8 @@ pnpm --filter api build         # prisma generate && tsc
 ```bash
 pnpm --filter web lint          # next lint
 pnpm --filter web typecheck     # tsc -p tsconfig.json --noEmit
-pnpm --filter web test          # vitest run --passWithNoTests
+pnpm --filter web test          # vitest run (uses JSDOM environment)
+pnpm --filter web test:e2e      # runs Playwright E2E browser tests for web app
 pnpm --filter web build         # next build
 ```
 
