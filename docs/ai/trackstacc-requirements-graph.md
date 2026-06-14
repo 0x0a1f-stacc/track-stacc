@@ -13,7 +13,7 @@ Implements:     FEAT-* product features this FR realizes
 Workflows:      WF-* user flows (SDD §10) that exercise it
 Components:     COMP services (SDD §13) that own the logic
 Data:           DATA-* tables / columns (SDD §14) touched
-APIs:           API-* group + concrete endpoint(s) (SDD §15.2, /api/v1)
+APIs:           API-* group + concrete endpoint(s) (SDD §15.2, /api)
 WebSockets:     WS-* family + concrete event(s) (SDD §16)
 Security:       SEC-* controls (SDD §19) that protect it
 Errors:         §23.4 error codes returned on failure
@@ -55,7 +55,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-CREATE`
 - **Components:** Room Service (`COMP` §13.2)
 - **Data:** `DATA-ROOMS` (`rooms`)
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`
+- **APIs:** `API-ROOMS` `POST /api/rooms`
 - **WebSockets:** — (room becomes live on first connect: `WS-CONN` `room.snapshot`)
 - **Security:** `SEC-SESSION` (host session issued); deny-by-default `SEC-CORS`
 - **Errors:** `VALIDATION_FAILED`
@@ -69,7 +69,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-CREATE`
 - **Components:** Room Service
 - **Data:** `DATA-ROOMS` (`rooms.playlist_mechanic`)
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`
+- **APIs:** `API-ROOMS` `POST /api/rooms`
 - **WebSockets:** —
 - **Security:** `SEC-SESSION`
 - **Errors:** `VALIDATION_FAILED`
@@ -83,7 +83,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-CREATE`
 - **Components:** Room Service, Identity Service (`COMP` §13.3)
 - **Data:** `DATA-ROOMS` (`rooms.host_secret_hash`)
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `POST /api/v1/rooms/:roomId/join` (cookie-based host upgrade)
+- **APIs:** `API-ROOMS` `POST /api/rooms`, `POST /api/rooms/:roomId/join` (cookie-based host upgrade)
 - **WebSockets:** `WS-CONN` (token rotation on host upgrade/activation)
 - **Security:** `SEC-SESSION` (httpOnly cookie + short-lived WS token; rotate on privilege escalation, §19.4); host secret stored hash-only (`SEC-PWD` pattern, §19.2)
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED`, `NICKNAME_TAKEN`
@@ -97,7 +97,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-CREATE`
 - **Components:** Room Service, Queue Engine (`COMP` §13.4, limit validation)
 - **Data:** `DATA-ROOMS` (incl. `max_song_duration_seconds`, duplicate policy, expiry config)
-- **APIs:** `API-ROOMS` `POST /api/v1/rooms`, `PATCH /api/v1/rooms/:roomId/settings`
+- **APIs:** `API-ROOMS` `POST /api/rooms`, `PATCH /api/rooms/:roomId/settings`
 - **WebSockets:** `WS-S2C` `room.settings.changed`
 - **Security:** `SEC-SESSION`; room password hash (`SEC-PWD`)
 - **Errors:** `VALIDATION_FAILED`, `ROOM_PASSWORD_REQUIRED` (downstream)
@@ -115,7 +115,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-JOIN`, `WF-PROTECT`
 - **Components:** Identity Service (`COMP` §13.3), Auth Middleware
 - **Data:** `DATA-SESSIONS` (`room_sessions.access_tier`), `DATA-NICKNAMES` (`nickname_claims`)
-- **APIs:** `API-NICK` `POST /api/v1/rooms/:roomId/join`
+- **APIs:** `API-NICK` `POST /api/rooms/:roomId/join`
 - **WebSockets:** `WS-C2S` (every interactive event gated by minimum tier `member`)
 - **Security:** `SEC-TIER` (tier re-derived server-side every request/event), `SEC-SESSION`
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `LISTENER_READ_ONLY` (403)
@@ -129,7 +129,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-JOIN`, `WF-PROTECT`
 - **Components:** Identity Service
 - **Data:** `DATA-NICKNAMES`, `DATA-SESSIONS`
-- **APIs:** `API-NICK` `POST /api/v1/rooms/:roomId/join`, `POST /api/v1/nicknames/check`
+- **APIs:** `API-NICK` `POST /api/rooms/:roomId/join`, `POST /api/nicknames/check`
 - **WebSockets:** —
 - **Security:** `SEC-TIER`; reserved/offensive blocking (DL-008)
 - **Errors:** `NICKNAME_TAKEN`, `VALIDATION_FAILED`
@@ -143,7 +143,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-PROTECT`, `WF-JOIN`
 - **Components:** Identity Service, Rate Limit Service (`COMP` §13.9)
 - **Data:** `DATA-NICKNAMES`, `DATA-SESSIONS`
-- **APIs:** `API-NICK` `POST /api/v1/nicknames/authenticate`, `POST /api/v1/rooms/:roomId/join`, `POST /api/v1/rooms/:roomId/nickname/change`
+- **APIs:** `API-NICK` `POST /api/nicknames/authenticate`, `POST /api/rooms/:roomId/join`, `POST /api/rooms/:roomId/nickname/change`
 - **WebSockets:** `WS-S2C` `presence.updated`; system `chat.message` (nickname change)
 - **Security:** `SEC-PWD` (Argon2id, §19.3), `SEC-SESSION`, brute-force rate limits (§19.2)
 - **Errors:** `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
@@ -157,7 +157,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-PROTECT`
 - **Components:** Identity Service
 - **Data:** `DATA-NICKNAMES` (`nickname_claims.password_hash`)
-- **APIs:** `API-NICK` `POST /api/v1/nicknames/protect`, `POST /api/v1/rooms/:roomId/join` (protect-and-join)
+- **APIs:** `API-NICK` `POST /api/nicknames/protect`, `POST /api/rooms/:roomId/join` (protect-and-join)
 - **WebSockets:** `WS-S2C` `presence.updated`; system `chat.message` "protected their nickname"
 - **Security:** `SEC-PWD` (Argon2id, never plaintext/log/return hash — §19.3); password min 10 chars (DL-009)
 - **Errors:** `NICKNAME_TAKEN` (409), `VALIDATION_FAILED` (weak password)
@@ -171,7 +171,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-JOIN`
 - **Components:** Identity Service, Frontend Client (`COMP` §13.1)
 - **Data:** `DATA-SESSIONS` (`room_sessions.access_tier = listener`)
-- **APIs:** `API-NICK` `POST /api/v1/rooms/:roomId/listen`
+- **APIs:** `API-NICK` `POST /api/rooms/:roomId/listen`
 - **WebSockets:** `WS-CONN` `room.snapshot`; `WS-PLAYBACK` `playback.state` (read); `WS-QUEUE` `queue.updated` (read)
 - **Security:** `SEC-TIER` (listener tier issued in token; read-only)
 - **Errors:** `ROOM_PASSWORD_REQUIRED` (if room password-protected)
@@ -199,7 +199,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** all member-tier flows (`WF-ADDSONG`, chat, vote, `WF-STAFF*` native equivalents)
 - **Components:** Auth Middleware, Chat/Queue/Moderation Services
 - **Data:** `DATA-SESSIONS` (`room_sessions.access_tier`)
-- **APIs:** `API-*` `POST /api/v1/rooms/:roomId/*` (all mutating routes), `API-NICK`
+- **APIs:** `API-*` `POST /api/rooms/:roomId/*` (all mutating routes), `API-NICK`
 - **WebSockets:** `WS-C2S` (all client→server interactive events)
 - **Security:** `SEC-TIER` — **must never be weakened**; tier from signed token (`accessTier`, §19.4), DB fallback when absent
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `LISTENER_READ_ONLY` (403)
@@ -230,7 +230,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-ADDSONG`
 - **Components:** Queue Engine, YouTube Metadata Service (`COMP` §13.8)
 - **Data:** `DATA-QUEUE` (`queue_items`), `DATA-TRACKS` (`tracks`)
-- **APIs:** `API-QUEUE` `POST /api/v1/rooms/:roomId/queue/items`
+- **APIs:** `API-QUEUE` `POST /api/rooms/:roomId/queue/items`
 - **WebSockets:** `WS-QUEUE` `queue.item.added`, `queue.updated`
 - **Security:** `SEC-TIER` (member); YouTube API key server-side only (§19.2); add-song cooldown 30s (App. A)
 - **Errors:** `VIDEO_URL_INVALID` (400), `YOUTUBE_METADATA_DEGRADED` (503)
@@ -243,7 +243,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-ADDSONG`
 - **Components:** Queue Engine, YouTube Metadata Service
 - **Data:** `DATA-QUEUE`, `DATA-TRACKS` (`tracks.metadata_status`), `DATA-ROOMS` (`max_song_duration_seconds`)
-- **APIs:** `API-QUEUE` `POST /api/v1/rooms/:roomId/queue/items`
+- **APIs:** `API-QUEUE` `POST /api/rooms/:roomId/queue/items`
 - **WebSockets:** `WS-QUEUE` `queue.item.added` (or rejection ack)
 - **Security:** `SEC-TIER`
 - **Errors:** `VIDEO_TOO_LONG` (422), `DUPLICATE_VIDEO` (409), `VIDEO_UNAVAILABLE` (422)
@@ -272,7 +272,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-NOWPLAYING`, `WF-JOIN`
 - **Components:** Playback Coordinator (`COMP` §13.5)
 - **Data:** `DATA-QUEUE` (`queue_items` state/started/ended)
-- **APIs:** — (state delivered via WS; snapshot via embed `GET /api/v1/rooms/:roomId/.../snapshot`)
+- **APIs:** — (state delivered via WS; snapshot via embed `GET /api/rooms/:roomId/.../snapshot`)
 - **WebSockets:** `WS-PLAYBACK` `playback.state`, `playback.resync`, `room.snapshot` (on connect)
 - **Security:** server-authoritative (`ARCH` §12 server authority); read-only for listeners (`SEC-TIER`)
 - **Errors:** `TRACK_NOT_FOUND`
@@ -285,7 +285,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-STAFFSKIP` (native host skip)
 - **Components:** Playback Coordinator, Moderation Service (`COMP` §13.7)
 - **Data:** `DATA-QUEUE`, `DATA-SKIPVOTES` (`skip_votes`), `DATA-MODACTIONS`
-- **APIs:** `API-QUEUE`/playback `POST /api/v1/rooms/:roomId/playback/skip`, `.../playback/skip-vote`
+- **APIs:** `API-QUEUE`/playback `POST /api/rooms/:roomId/playback/skip`, `.../playback/skip-vote`
 - **WebSockets:** `WS-PLAYBACK` `playback.skipVote`, `playback.state` (on advance)
 - **Security:** `SEC-TIER` (member to vote; `MODERATOR_REQUIRED`/`HOST_REQUIRED` to force-skip)
 - **Errors:** `MODERATOR_REQUIRED` (403), `VOTE_NOT_ALLOWED` (403)
@@ -316,7 +316,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-ADDSONG`, `WF-MECHCHANGE`
 - **Components:** Queue Engine (`ALGO` §17 selection)
 - **Data:** `DATA-QUEUE` (`position`, `score`), `DATA-VOTES` (`queue_votes`), `DATA-ROOMS` (`playlist_mechanic`)
-- **APIs:** `API-QUEUE` `POST /api/v1/rooms/:roomId/queue/items`, vote endpoint
+- **APIs:** `API-QUEUE` `POST /api/rooms/:roomId/queue/items`, vote endpoint
 - **WebSockets:** `WS-QUEUE` `queue.updated`, `queue.vote.updated`
 - **Security:** `SEC-TIER`; DJ-rotation depends on presence (FR-092)
 - **Errors:** `QUEUE_LOCKED`, `VOTE_NOT_ALLOWED`
@@ -330,7 +330,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-MECHCHANGE`
 - **Components:** Room Service, Queue Engine, Playback Coordinator, Chat Service
 - **Data:** `DATA-ROOMS` (`playlist_mechanic`), `DATA-SETTINGSHIST` (`room_settings_history`)
-- **APIs:** `API-ROOMS` `PATCH /api/v1/rooms/:roomId/settings`
+- **APIs:** `API-ROOMS` `PATCH /api/rooms/:roomId/settings`
 - **WebSockets:** `WS-S2C` `room.mechanic.changed`, `chat.message` (system)
 - **Security:** `HOST_REQUIRED`; public-room cooldown (default 5 min, App. A)
 - **Errors:** `MECHANIC_CHANGE_COOLDOWN` (429), `HOST_REQUIRED` (403)
@@ -347,7 +347,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** chat send/receive (member tier)
 - **Components:** Chat Service (`COMP` §13.6), Rate Limit Service
 - **Data:** `DATA-CHAT` (`chat_messages`)
-- **APIs:** `API-CHAT` `GET /api/v1/rooms/:roomId/chat/messages?before=&limit=` (history)
+- **APIs:** `API-CHAT` `GET /api/rooms/:roomId/chat/messages?before=&limit=` (history)
 - **WebSockets:** `WS-CHAT` `chat.send` (C2S), `chat.message` (S2C)
 - **Security:** `SEC-TIER` (member to send); sanitization (XSS, §19.2); chat rate limit 5 msg / 10s (App. A, FR-073)
 - **Errors:** `RATE_LIMITED` (429), `CHAT_LOCKED` (403), `MUTED` (403)
@@ -361,7 +361,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-JOIN`
 - **Components:** Chat Service
 - **Data:** `DATA-ROOMS` (`rooms.listener_chat_visible`), `DATA-SESSIONS` (`access_tier`)
-- **APIs:** `API-ROOMS` `PATCH /api/v1/rooms/:roomId/settings` (toggle visibility)
+- **APIs:** `API-ROOMS` `PATCH /api/rooms/:roomId/settings` (toggle visibility)
 - **WebSockets:** `WS-CHAT` (server filters delivery by tier + setting)
 - **Security:** `SEC-TIER`
 - **Errors:** `LISTENER_READ_ONLY` (on send attempt)
@@ -373,7 +373,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Implements:** `FEAT-CHAT`, `FEAT-MOD`
 - **Components:** Moderation Service, Chat Service
 - **Data:** `DATA-CHAT` (`deleted_at`), `DATA-SESSIONS` (`is_muted`)
-- **APIs:** `API-CHAT` `DELETE /api/v1/rooms/:roomId/chat/messages/:messageId`; `API-MOD` mute
+- **APIs:** `API-CHAT` `DELETE /api/rooms/:roomId/chat/messages/:messageId`; `API-MOD` mute
 - **WebSockets:** `WS-CHAT` `chat.deleted`; `WS-MOD` `moderation.applied`
 - **Security:** `MODERATOR_REQUIRED`
 - **Errors:** `MODERATOR_REQUIRED`, `CHAT_MESSAGE_NOT_FOUND` (404)
@@ -391,7 +391,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** native moderation (analogue of `WF-STAFFRM`/`WF-STAFFSKIP`)
 - **Components:** Moderation Service (`COMP` §13.7)
 - **Data:** `DATA-MODACTIONS` (`room_moderation_actions`), `DATA-SESSIONS` (`is_muted`/`is_banned`), `DATA-CHAT`, `DATA-QUEUE`
-- **APIs:** `API-MOD` `POST /api/v1/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
+- **APIs:** `API-MOD` `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
 - **WebSockets:** `WS-MOD` `moderation.action` (C2S), `moderation.applied` (S2C); system `chat.message`
 - **Security:** `HOST_REQUIRED`/`MODERATOR_REQUIRED`; server-side role check on every write (§19.2); audit logging (NFR-067, §24.2)
 - **Errors:** `MODERATOR_REQUIRED`, `HOST_REQUIRED`, `BANNED`, `MUTED`, `QUEUE_LOCKED`, `CHAT_LOCKED`
@@ -407,7 +407,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Implements:** `FEAT-PRESENCE`
 - **Components:** Socket.IO Gateway, Presence Manager, Frontend Client, Identity/Nickname session flow
 - **Data:** Redis (presence ZSET), `DATA-SESSIONS` (`room_sessions`)
-- **APIs:** `POST /api/v1/rooms/:roomId/listen` (bootstrap/rehydration), `POST /api/v1/rooms/:roomId/join` (in-place upgrade)
+- **APIs:** `POST /api/rooms/:roomId/listen` (bootstrap/rehydration), `POST /api/rooms/:roomId/join` (in-place upgrade)
 - **WebSockets:** `WS-PRESENCE` `presence.heartbeat` (C2S), `presence.updated` (S2C); `WS-CONN` `room.snapshot` (S2C)
 - **Security:** `SEC-TIER` (tier validated server-side from signed token); presence falls back to DB if Redis degraded
 - **Errors:** `SERVICE_DEGRADED` (Redis offline fallback logged)
@@ -420,7 +420,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-MECHCHANGE` (and settings edits)
 - **Components:** Room Service
 - **Data:** `DATA-ROOMS`, `DATA-SETTINGSHIST`
-- **APIs:** `API-ROOMS` `PATCH /api/v1/rooms/:roomId/settings`
+- **APIs:** `API-ROOMS` `PATCH /api/rooms/:roomId/settings`
 - **WebSockets:** `WS-S2C` `room.settings.changed`
 - **Security:** `HOST_REQUIRED`; room password hash (`SEC-PWD`, FR-106 Phase 2)
 - **Errors:** `HOST_REQUIRED`, `VALIDATION_FAILED`
@@ -437,7 +437,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-EXTSETUP`
 - **Components:** External Command Service (`COMP` §13.11), Room Service
 - **Data:** `DATA-INTEGRATIONS` (`site_integrations`), `DATA-EXTCONFIG` (`external_chat_music` JSONB)
-- **APIs:** `API-INTEG` `POST /api/v1/rooms/:roomId/integrations/site`, `PATCH`/`DELETE .../integrations/site/:integrationId`
+- **APIs:** `API-INTEG` `POST /api/rooms/:roomId/integrations/site`, `PATCH`/`DELETE .../integrations/site/:integrationId`
 - **WebSockets:** `WS-INTEG` `room.external_settings.changed`
 - **Security:** **`SEC-EXTINTEG` (authoritative, §19.5)** — one-time secret material, public token ≠ secret; `SEC-CORS` per-integration `allowed_origins`
 - **Errors:** `EXTERNAL_INTEGRATION_NOT_FOUND`, `VALIDATION_FAILED`
@@ -450,7 +450,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** embed render (consumes snapshot)
 - **Components:** Embeddable Room Client (`COMP` §13.10)
 - **Data:** read-only snapshot of `DATA-ROOMS`/`DATA-QUEUE`/`DATA-VETOWIN`
-- **APIs:** `API-INTEG` `GET /api/v1/embed/rooms/:roomSlug`, `GET .../embed/rooms/:roomSlug/snapshot`
+- **APIs:** `API-INTEG` `GET /api/embed/rooms/:roomSlug`, `GET .../embed/rooms/:roomSlug/snapshot`
 - **WebSockets:** `WS-S2C` read-only subscription
 - **Security:** `SEC-CSP` (dynamic `frame-ancestors` per integration, §19.6.4), `SEC-FRAME`; no secrets in embed (§19.6.4)
 - **Errors:** `ROOM_NOT_FOUND`
@@ -464,7 +464,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-EXTSR`, `WF-EXTVOTE`
 - **Components:** External Command Service
 - **Data:** `DATA-INTEGRATIONS`, `DATA-EXTCMD` (`external_commands`)
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command`
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command`
 - **WebSockets:** `WS-INTEG` `integration.command.received/accepted/rejected`
 - **Security:** **`SEC-EXTINTEG` (§19.5)** — HMAC/bearer, timestamp freshness, replay protection, idempotency, strict schema validation
 - **Errors:** `INTEGRATION_AUTH_INVALID` (401), `EXTERNAL_COMMAND_REPLAY` (409), `INVALID_COMMAND_SYNTAX` (400)
@@ -477,7 +477,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-EXTSR`, `WF-EXTVOTE`
 - **Components:** External Command Service, Outbound Bot Webhook Service (`COMP` §13.12)
 - **Data:** `DATA-EXTPART` (`external_participants`), `DATA-EXTREF` (`external_references`)
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (+ outbound webhook egress)
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (+ outbound webhook egress)
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`
 - **Security:** **`SEC-EXTINTEG`** — signed outbound webhooks; sanitization of names/text/refs
 - **Errors:** `WEBHOOK_DELIVERY_DEFERRED` (503)
@@ -495,7 +495,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-VETOANNOUNCE`, `WF-EXTVOTE`, `WF-VETO-VETOED`, `WF-VETO-PASSED`
 - **Components:** Queue Engine (veto logic, `ALGO` §17.6), Playback Coordinator
 - **Data:** `DATA-VETOVOTES` (`preplay_veto_votes`), `DATA-VETOWIN` (`preplay_veto_windows`), `DATA-QUEUE` (`queue_items` state)
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!yay`/`!nay`)
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!yay`/`!nay`)
 - **WebSockets:** `WS-QUEUE` `queue.item.veto_window.opened/.updated`, `queue.item.vetoed`, `queue.item.veto_passed`; `WS-PLAYBACK` `playback.state`
 - **Security:** one vote per stable external user ID (`MOD-EXTVOTE`, §19.2); requester eligibility (DL-013)
 - **Errors:** `NO_VETO_OPEN` (422), `NO_ALTERNATE_FOR_VETO` (422), `VETO_WINDOW_CLOSED` (409), `VOTE_NOT_ALLOWED` (403)
@@ -512,7 +512,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-STAFFRM`, `WF-STAFFSKIP`, `WF-STAFFPOLICY`
 - **Components:** External Command Service, Moderation Service
 - **Data:** `DATA-INTEGRATIONS` (staff allowlist/role map), `DATA-EXTCMD`, `DATA-MODACTIONS`
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command`
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command`
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`
 - **Security:** **`SEC-EXTINTEG`** — server-side allowlist / trusted role mapping, no client-side trust; audit log accepted+rejected privileged commands
 - **Errors:** `EXTERNAL_COMMAND_UNAUTHORIZED` (403), `EXTERNAL_ROLE_UNTRUSTED` (403)
@@ -526,7 +526,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-STAFFRM`, `WF-STAFFSKIP`, `WF-STAFFPOLICY`
 - **Components:** External Command Service, Queue Engine, Playback Coordinator, Room Service
 - **Data:** `DATA-QUEUE`, `DATA-EXTREF`, `DATA-ROOMS`, `DATA-SETTINGSHIST`
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command`
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command`
 - **WebSockets:** `WS-QUEUE` `queue.item.removed`; `WS-PLAYBACK` `playback.state`; `WS-INTEG` `room.external_settings.changed`
 - **Security:** **`SEC-EXTINTEG`**; audit + announce
 - **Errors:** `QUEUE_ITEM_NOT_FOUND` (404), `EXTERNAL_COMMAND_UNAUTHORIZED`
@@ -540,7 +540,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-EXTSR`, `WF-STAFFPOLICY`
 - **Components:** External Command Service, Queue Engine, Rate Limit Service
 - **Data:** `DATA-EXTCONFIG` (`songRequestPolicy` JSONB on `rooms`), `DATA-EXTPART`, `DATA-QUEUE`
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!sr`, policy commands)
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!sr`, policy commands)
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`
 - **Security:** **`SEC-EXTINTEG`**; per-user cooldown (default 90s, App. A); max pending 2, max queue 50
 - **Errors:** `SONG_REQUEST_POLICY_CLOSED` (403), `SONG_REQUEST_COOLDOWN` (429), `MAX_PENDING_PER_USER_REACHED` (409), `QUEUE_FULL` (409)
@@ -554,7 +554,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-STAFFMUTE`, `WF-STAFFUNMUTE`, `WF-MUTEEXPIRE`
 - **Components:** External Command Service, Moderation Service
 - **Data:** `DATA-EXTPART` (mute fields), `DATA-MODACTIONS`
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command` (`!music mute/unmute`)
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command` (`!music mute/unmute`)
 - **WebSockets:** `WS-INTEG` `external.bot_message.created`
 - **Security:** **`SEC-EXTINTEG`**; rate-limit + audit + explicit duration (`MOD-EXTMUTE`, §20.3); lazy TTL check on next command + periodic cleanup (§10.18)
 - **Errors:** `EXTERNAL_USER_MUTED` (403)
@@ -572,7 +572,7 @@ The SDD states acceptance criteria as grouped bullets (§31.0–§31.9) without 
 - **Workflows:** `WF-EXTSR`, `WF-EXTVOTE`, `WF-EXTSETUP`
 - **Components:** Rate Limit Service, External Command Service, Outbound Bot Webhook Service
 - **Data:** `DATA-EXTCMD` (idempotency), `DATA-EXTPART`, `DATA-INTEGRATIONS`, Redis (rate limits)
-- **APIs:** `API-INTEG` `POST /api/v1/integrations/site-command`, embed endpoints
+- **APIs:** `API-INTEG` `POST /api/integrations/site-command`, embed endpoints
 - **WebSockets:** `WS-INTEG` `integration.command.rejected`
 - **Security:** **`SEC-EXTINTEG` (§19.5) — authoritative for ALL of this group**; defense-in-depth list items 1–13; `SEC-CORS`/`SEC-CSP`/`SEC-FRAME` for embeds
 - **Errors:** `INTEGRATION_AUTH_INVALID`, `EXTERNAL_COMMAND_REPLAY`, `EXTERNAL_COMMAND_DUPLICATE`, `RATE_LIMITED`, `VALIDATION_FAILED`
