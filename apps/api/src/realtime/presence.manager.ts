@@ -1,17 +1,6 @@
-import type { FastifyInstance } from "fastify";
+import type { RoomSession } from "@prisma/client";
 import { AccessTier, Role } from "@trackstacc/types";
-
-type PresenceSession = {
-  id: string;
-  displayNickname: string | null;
-  normalizedNickname: string | null;
-  accessTier: "listener" | "member";
-  role: "listener" | "participant" | "moderator" | "host";
-  nicknameClaimId: string | null;
-  isMuted: boolean;
-  joinedAt: Date;
-  lastSeenAt: Date;
-};
+import type { FastifyInstance } from "fastify";
 
 export function presenceKey(roomId: string): string {
   return `room:${roomId}:presence`;
@@ -105,26 +94,26 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     app.log.warn({ err, roomId }, "Failed to get active presence session IDs from Redis");
   }
 
-  let sessions: PresenceSession[];
+  let sessions: RoomSession[];
   if (activeSessionIds !== null) {
-    sessions = (await app.prisma.roomSession.findMany({
+    sessions = await app.prisma.roomSession.findMany({
       where: {
         id: { in: activeSessionIds },
         leftAt: null,
       },
       orderBy: { joinedAt: "asc" },
-    })) as PresenceSession[];
+    });
   } else {
     // Fallback: Query PostgreSQL directly using lastSeenAt index
     const activeLimit = new Date(Date.now() - 60_000);
-    sessions = (await app.prisma.roomSession.findMany({
+    sessions = await app.prisma.roomSession.findMany({
       where: {
         roomId,
         lastSeenAt: { gte: activeLimit },
         leftAt: null,
       },
       orderBy: { joinedAt: "asc" },
-    })) as PresenceSession[];
+    });
   }
 
   const roleMap = {

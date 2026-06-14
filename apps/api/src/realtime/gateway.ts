@@ -1,19 +1,20 @@
 import { createAdapter } from "@socket.io/redis-adapter";
+import { PlaybackStatus } from "@trackstacc/types";
 import type { FastifyInstance } from "fastify";
 import { Server } from "socket.io";
 
 import { AppError } from "../lib/errors.js";
 import { verifyWsToken } from "../lib/tokens.js";
-import { PlaybackStatus } from "@trackstacc/types";
 import {
   destroyAllTimers,
   emitResync,
   getPlaybackState,
 } from "../modules/playback/playback.coordinator.js";
+
 import { roomChannel } from "./broadcast.js";
+import { broadcast } from "./broadcast.js";
 import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
-import { broadcast } from "./broadcast.js";
 
 interface SocketData {
   roomId: string;
