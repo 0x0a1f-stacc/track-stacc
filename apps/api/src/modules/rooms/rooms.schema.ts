@@ -29,6 +29,7 @@ export const settingsSchema = z.object({
     skipVoteThresholdValue: z.number().int().min(1).max(100).optional(),
     queueLocked: z.boolean().optional(),
     chatLocked: z.boolean().optional(),
+    listenerChatVisible: z.boolean().optional(),
   }),
 });
 

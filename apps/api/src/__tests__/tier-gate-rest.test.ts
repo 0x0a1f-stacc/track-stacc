@@ -186,10 +186,13 @@ function buildTestApp(
   } as unknown as Server;
   app.decorate("io", mockIo);
 
-  const currentRoom = overrides?.room ? { ...ROOM, ...overrides.room } : ROOM;
+  const currentRoom = overrides?.room ? { ...ROOM, ...overrides.room } : { ...ROOM };
   const mockRoomFindFirst = vi.fn().mockResolvedValue(currentRoom);
   const mockRoomFindUnique = vi.fn().mockResolvedValue(currentRoom);
-  const mockRoomUpdate = vi.fn().mockResolvedValue(currentRoom);
+  const mockRoomUpdate = vi.fn().mockImplementation(async (args: { data: Record<string, unknown> }) => {
+    Object.assign(currentRoom, args.data);
+    return currentRoom;
+  });
 
   const mockSessionFindUnique = vi.fn().mockResolvedValue(sessionFixture);
   const mockSessionFindFirst = vi.fn().mockResolvedValue(null);
@@ -268,6 +271,13 @@ function buildTestApp(
   app.addHook("preHandler", async (request) => {
     if (sessionFixture) {
       request.session = sessionFixture as never;
+    } else {
+      const token = request.cookies.session_token;
+      if (token === "host-token") {
+        request.session = { ...MEMBER_SESSION, role: "host" } as never;
+      } else if (token === "listener-token") {
+        request.session = LISTENER_SESSION;
+      }
     }
   });
 
@@ -406,6 +416,171 @@ describe("REST tier gate — listener rejection", () => {
         payload: { settings: { queueLocked: true } },
       });
       expectListenerReadOnly(response);
+      await app.close();
+    });
+
+    it("PATCH /api/rooms/:roomId/settings rejects non-host/non-moderator member with MODERATOR_REQUIRED", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        payload: { settings: { listenerChatVisible: true } },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error?: { code: string } };
+      expect(body.error?.code).toBe("MODERATOR_REQUIRED");
+      await app.close();
+    });
+
+    it("PATCH /api/rooms/:roomId/settings allows host to set listenerChatVisible to true", async () => {
+      const hostSession = { ...MEMBER_SESSION, role: "host" as const };
+      const app = buildTestApp(hostSession, { room: { listenerChatVisible: false } });
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        payload: { settings: { listenerChatVisible: true } },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean } };
+      expect(body.room.listenerChatVisible).toBe(true);
+
+      const prisma = app.prisma as unknown as {
+        room: {
+          update: {
+            mock: {
+              calls: Array<[{ data: { listenerChatVisible?: boolean } }]>;
+            };
+          };
+        };
+      };
+      expect(prisma.room.update.mock.calls.length).toBeGreaterThan(0);
+      const lastCall = prisma.room.update.mock.calls.at(-1)?.[0];
+      expect(lastCall?.data.listenerChatVisible).toBe(true);
+      await app.close();
+    });
+
+    it("PATCH /api/rooms/:roomId/settings allows host to set listenerChatVisible to false", async () => {
+      const hostSession = { ...MEMBER_SESSION, role: "host" as const };
+      const app = buildTestApp(hostSession, { room: { listenerChatVisible: true } });
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        payload: { settings: { listenerChatVisible: false } },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean } };
+      expect(body.room.listenerChatVisible).toBe(false);
+
+      const prisma = app.prisma as unknown as {
+        room: {
+          update: {
+            mock: {
+              calls: Array<[{ data: { listenerChatVisible?: boolean } }]>;
+            };
+          };
+        };
+      };
+      expect(prisma.room.update.mock.calls.length).toBeGreaterThan(0);
+      const lastCall = prisma.room.update.mock.calls.at(-1)?.[0];
+      expect(lastCall?.data.listenerChatVisible).toBe(false);
+      await app.close();
+    });
+
+    it("PATCH /api/rooms/:roomId/settings omitting listenerChatVisible does not change the stored value", async () => {
+      const hostSession = { ...MEMBER_SESSION, role: "host" as const };
+      const app = buildTestApp(hostSession, { room: { listenerChatVisible: true } });
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        payload: { settings: { queueLocked: true } },
+      });
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean; queueLocked: boolean } };
+      expect(body.room.listenerChatVisible).toBe(true);
+      expect(body.room.queueLocked).toBe(true);
+
+      const prisma = app.prisma as unknown as {
+        room: {
+          update: {
+            mock: {
+              calls: Array<[{ data: { listenerChatVisible?: boolean } }]>;
+            };
+          };
+        };
+      };
+      const lastCall = prisma.room.update.mock.calls.at(-1)?.[0];
+      expect(lastCall?.data.listenerChatVisible).toBeUndefined();
+      await app.close();
+    });
+
+    it("restricts/allows chat-history reads for listener after host toggles listenerChatVisible", async () => {
+      const app = buildTestApp(null, {
+        room: { listenerChatVisible: false },
+        messages: [
+          {
+            id: "msg-1",
+            roomId: "room-abc-123",
+            senderSessionId: "member-session-1",
+            messageType: "user" as const,
+            body: "Test Message",
+            metadata: {},
+            deletedAt: null,
+            createdAt: new Date(),
+            sender: { displayNickname: "Sender" },
+          },
+        ],
+      });
+
+      // 1. Get messages as listener when listenerChatVisible = false -> returns []
+      const res1 = await app.inject({
+        method: "GET",
+        url: "/api/rooms/room-abc-123/chat/messages",
+        cookies: { session_token: "listener-token" },
+      });
+      expect(res1.statusCode).toBe(200);
+      const body1 = JSON.parse(res1.body) as { messages: unknown[] };
+      expect(body1.messages).toEqual([]);
+
+      // 2. Toggle settings to true as host
+      const res2 = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        cookies: { session_token: "host-token" },
+        payload: { settings: { listenerChatVisible: true } },
+      });
+      expect(res2.statusCode).toBe(200);
+
+      // 3. Get messages as listener when listenerChatVisible = true -> returns the message
+      const res3 = await app.inject({
+        method: "GET",
+        url: "/api/rooms/room-abc-123/chat/messages",
+        cookies: { session_token: "listener-token" },
+      });
+      expect(res3.statusCode).toBe(200);
+      const body3 = JSON.parse(res3.body) as { messages: Array<{ id: string; body: string }> };
+      expect(body3.messages).toHaveLength(1);
+      expect(body3.messages[0]?.id).toBe("msg-1");
+      expect(body3.messages[0]?.body).toBe("Test Message");
+
+      // 4. Toggle settings to false as host again
+      const res4 = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/room-abc-123/settings",
+        cookies: { session_token: "host-token" },
+        payload: { settings: { listenerChatVisible: false } },
+      });
+      expect(res4.statusCode).toBe(200);
+
+      // 5. Get messages as listener when listenerChatVisible = false -> returns [] again
+      const res5 = await app.inject({
+        method: "GET",
+        url: "/api/rooms/room-abc-123/chat/messages",
+        cookies: { session_token: "listener-token" },
+      });
+      expect(res5.statusCode).toBe(200);
+      const body5 = JSON.parse(res5.body) as { messages: unknown[] };
+      expect(body5.messages).toEqual([]);
+
       await app.close();
     });
   });
