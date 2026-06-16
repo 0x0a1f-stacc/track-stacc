@@ -35,5 +35,12 @@ export async function sendChatMessage(
       body,
       metadata: metadata as Prisma.InputJsonValue,
     },
+    include: {
+      sender: {
+        select: {
+          displayNickname: true,
+        },
+      },
+    },
   });
 }

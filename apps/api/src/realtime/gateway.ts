@@ -110,6 +110,13 @@ export async function registerRealtime(app: FastifyInstance) {
             where: { roomId, deletedAt: null },
             orderBy: { createdAt: "desc" },
             take: 50,
+            include: {
+              sender: {
+                select: {
+                  displayNickname: true,
+                },
+              },
+            },
           })
         : [];
     socket.emit("room.snapshot", {
@@ -157,7 +164,7 @@ export async function registerRealtime(app: FastifyInstance) {
           id: msg.id,
           roomId,
           senderSessionId: msg.senderSessionId,
-          senderNickname: null,
+          senderNickname: msg.sender?.displayNickname ?? null,
           type: msg.messageType,
           body: msg.body,
           metadata: msg.metadata as Record<string, unknown>,
