@@ -37,14 +37,15 @@ function mockSession(overrides?: {
   roomId?: string;
   isBanned?: boolean;
 }) {
+  const isMember = (overrides?.accessTier ?? "listener") === "member";
   return {
     id: SESSION_ID,
     roomId: overrides?.roomId ?? ROOM_ID,
     accessTier: overrides?.accessTier ?? "listener",
     role: overrides?.role ?? "listener",
-    normalizedNickname: null,
-    displayNickname: null,
-    nicknameClaimId: null,
+    normalizedNickname: isMember ? "membername" : null,
+    displayNickname: isMember ? "MemberName" : null,
+    nicknameClaimId: isMember ? "claim-xyz" : null,
     sessionTokenHash: "hashed-token",
     isMuted: false,
     isBanned: overrides?.isBanned ?? false,
@@ -83,12 +84,14 @@ function mockChatMessages(count = 2) {
     id: `msg-${i}`,
     roomId: ROOM_ID,
     senderSessionId: SESSION_ID,
-    senderNickname: null,
     messageType: "user" as const,
     body: `Message ${i}`,
     metadata: {},
     deletedAt: null,
     createdAt: new Date(),
+    sender: {
+      displayNickname: "MemberName",
+    },
   }));
 }
 
@@ -167,6 +170,7 @@ async function setupTest(overrides?: {
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     room: {
+      findUnique: vi.fn().mockResolvedValue(room),
       findUniqueOrThrow: vi.fn().mockResolvedValue(room),
     },
     queueItem: {
@@ -174,6 +178,30 @@ async function setupTest(overrides?: {
     },
     chatMessage: {
       findMany: vi.fn().mockResolvedValue(mockChatMessages(3)),
+      create: vi.fn().mockImplementation((args: {
+        data: {
+          roomId: string;
+          senderSessionId?: string | null;
+          messageType?: "user" | "system";
+          body: string;
+          metadata?: Record<string, unknown> | null;
+        };
+      }) => {
+        const data = args.data;
+        return Promise.resolve({
+          id: "msg-created-123",
+          roomId: data.roomId,
+          senderSessionId: data.senderSessionId ?? null,
+          messageType: data.messageType ?? "user",
+          body: data.body,
+          metadata: data.metadata ?? {},
+          deletedAt: null,
+          createdAt: new Date(),
+          sender: session.displayNickname
+            ? { displayNickname: session.displayNickname }
+            : null,
+        });
+      }),
     },
     $disconnect: vi.fn(),
     $queryRaw: vi.fn().mockResolvedValue([{ "1": 1 }]),
@@ -358,6 +386,64 @@ describe("WebSocket gateway", () => {
 
       const snapshot = data as { payload: { recentMessages: unknown[] } };
       expect(snapshot.payload.recentMessages.length).toBeGreaterThan(0);
+    });
+
+    it("resolves correct senderNickname in snapshot recentMessages", async () => {
+      const { app, io, port } = await setupTest({
+        accessTier: "member",
+        role: "participant",
+        listenerChatVisible: false,
+      });
+      const token = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: SESSION_ID,
+        accessTier: "member",
+      });
+
+      const { client, data } = await connectClient(port, token);
+      client.close();
+      await teardownTest(io, app);
+
+      const snapshot = data as {
+        payload: { recentMessages: Array<{ senderNickname: string | null }> };
+      };
+      expect(snapshot.payload.recentMessages.length).toBeGreaterThan(0);
+      for (const msg of snapshot.payload.recentMessages) {
+        expect(msg.senderNickname).toBe("MemberName");
+      }
+    });
+
+    it("broadcasts chat.message with senderNickname to clients", async () => {
+      const { app, io, port } = await setupTest({
+        accessTier: "member",
+        role: "participant",
+        listenerChatVisible: true,
+      });
+      const token = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: SESSION_ID,
+        accessTier: "member",
+      });
+
+      const { client } = await connectClient(port, token);
+
+      const messagePromise = new Promise<{ message: { senderNickname: string | null } }>((resolve, reject) => {
+        client.on("chat.message", (data: unknown) => {
+          resolve(data as { message: { senderNickname: string | null } });
+        });
+        client.on("error", (err: unknown) => {
+          reject(new Error(`Socket error: ${JSON.stringify(err)}`));
+        });
+      });
+
+      client.emit("chat.send", { type: "chat.send", body: "Hello World", tempId: "temp-123" });
+
+      const received = await messagePromise;
+      client.close();
+      await teardownTest(io, app);
+
+      expect(received.message).toBeDefined();
+      expect(received.message.senderNickname).toBe("MemberName");
     });
   });
 

@@ -247,6 +247,7 @@ function buildTestApp(): FastifyInstance {
         id: "msg-123",
         body: "hello",
         createdAt: new Date(),
+        sender: null,
       }),
     },
   } as never);
