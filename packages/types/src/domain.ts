@@ -72,6 +72,7 @@ export interface RoomSettings {
   skipVoteThresholdValue: number;
   queueLocked: boolean;
   chatLocked: boolean;
+  listenerChatVisible: boolean;
 }
 
 export interface Room extends RoomSettings {
