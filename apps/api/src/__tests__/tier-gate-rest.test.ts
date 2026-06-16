@@ -142,7 +142,18 @@ type TestSession = {
   updatedAt: Date;
 };
 
-function buildTestApp(sessionFixture: TestSession | null): FastifyInstance {
+function buildTestApp(
+  sessionFixture: TestSession | null,
+  overrides?: {
+    room?: Partial<typeof ROOM>;
+    messages?: Array<
+      Omit<Partial<typeof CHAT_MESSAGE>, "deletedAt"> & {
+        deletedAt?: Date | null;
+        sender?: { displayNickname: string | null } | null;
+      }
+    >;
+  },
+): FastifyInstance {
   const app = Fastify({ logger: false });
 
   app.register(
@@ -175,9 +186,10 @@ function buildTestApp(sessionFixture: TestSession | null): FastifyInstance {
   } as unknown as Server;
   app.decorate("io", mockIo);
 
-  const mockRoomFindFirst = vi.fn().mockResolvedValue(ROOM);
-  const mockRoomFindUnique = vi.fn().mockResolvedValue(ROOM);
-  const mockRoomUpdate = vi.fn().mockResolvedValue(ROOM);
+  const currentRoom = overrides?.room ? { ...ROOM, ...overrides.room } : ROOM;
+  const mockRoomFindFirst = vi.fn().mockResolvedValue(currentRoom);
+  const mockRoomFindUnique = vi.fn().mockResolvedValue(currentRoom);
+  const mockRoomUpdate = vi.fn().mockResolvedValue(currentRoom);
 
   const mockSessionFindUnique = vi.fn().mockResolvedValue(sessionFixture);
   const mockSessionFindFirst = vi.fn().mockResolvedValue(null);
@@ -191,7 +203,21 @@ function buildTestApp(sessionFixture: TestSession | null): FastifyInstance {
   const mockQueueItemUpdate = vi.fn().mockResolvedValue(QUEUE_ITEM);
   const mockQueueItemCreate = vi.fn().mockResolvedValue(QUEUE_ITEM);
 
-  const mockChatMessageFindMany = vi.fn().mockResolvedValue([CHAT_MESSAGE]);
+  const currentMessages = overrides?.messages !== undefined ? overrides.messages : [CHAT_MESSAGE];
+  const mockChatMessageFindMany = vi.fn().mockImplementation(async (args?: { where?: { roomId?: string; deletedAt?: null } }) => {
+    const where = args?.where;
+    return currentMessages.filter((msg) => {
+      if (where) {
+        if (where.roomId !== undefined && msg.roomId !== where.roomId) {
+          return false;
+        }
+        if (where.deletedAt === null && msg.deletedAt !== null) {
+          return false;
+        }
+      }
+      return true;
+    });
+  });
   const mockChatMessageUpdate = vi.fn().mockResolvedValue(CHAT_MESSAGE);
 
   const mockSkipVoteUpsert = vi.fn().mockResolvedValue({});
@@ -205,6 +231,7 @@ function buildTestApp(sessionFixture: TestSession | null): FastifyInstance {
     room: {
       findFirst: mockRoomFindFirst,
       findUnique: mockRoomFindUnique,
+      findUniqueOrThrow: mockRoomFindUnique,
       update: mockRoomUpdate,
     },
     roomSession: {
@@ -216,6 +243,7 @@ function buildTestApp(sessionFixture: TestSession | null): FastifyInstance {
     queueItem: {
       findMany: mockQueueItemFindMany,
       findUnique: mockQueueItemFindUnique,
+      findUniqueOrThrow: mockQueueItemFindUnique,
       update: mockQueueItemUpdate,
       create: mockQueueItemCreate,
     },
@@ -549,6 +577,149 @@ describe("REST tier gate — host/mod role requires member tier", () => {
       payload: { settings: { queueLocked: true } },
     });
     expectListenerReadOnly(response);
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat messages route access control
+// ---------------------------------------------------------------------------
+
+describe("GET /api/rooms/:roomId/chat/messages", () => {
+  it("rejects anonymous client without session with 401 AUTH_REQUIRED", async () => {
+    const app = buildTestApp(null);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expectAuthRequired(response);
+    await app.close();
+  });
+
+  it("rejects session from a different room with 403 FORBIDDEN", async () => {
+    const sessionForDifferentRoom = { ...MEMBER_SESSION, roomId: "different-room" };
+    const app = buildTestApp(sessionForDifferentRoom);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(403);
+    const body = JSON.parse(response.body) as { error?: { code: string } };
+    expect(body.error?.code).toBe("FORBIDDEN");
+    await app.close();
+  });
+
+  it("returns empty array for listener when listenerChatVisible is false", async () => {
+    const app = buildTestApp(LISTENER_SESSION, {
+      room: { listenerChatVisible: false },
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { messages: unknown[] };
+    expect(body.messages).toEqual([]);
+    await app.close();
+  });
+
+  it("returns messages for listener when listenerChatVisible is true (excluding deleted and other rooms)", async () => {
+    const mockMessages = [
+      {
+        id: "msg-valid",
+        roomId: "room-abc-123",
+        senderSessionId: "member-session-1",
+        messageType: "user" as const,
+        body: "Visible message",
+        metadata: {},
+        deletedAt: null,
+        createdAt: new Date(),
+        sender: { displayNickname: "Sender" },
+      },
+      {
+        id: "msg-deleted",
+        roomId: "room-abc-123",
+        senderSessionId: "member-session-1",
+        messageType: "user" as const,
+        body: "Deleted message",
+        metadata: {},
+        deletedAt: new Date(),
+        createdAt: new Date(),
+        sender: { displayNickname: "Sender" },
+      },
+      {
+        id: "msg-other-room",
+        roomId: "other-room",
+        senderSessionId: "member-session-1",
+        messageType: "user" as const,
+        body: "Other room message",
+        metadata: {},
+        deletedAt: null,
+        createdAt: new Date(),
+        sender: { displayNickname: "Sender" },
+      },
+    ];
+
+    const app = buildTestApp(LISTENER_SESSION, {
+      room: { listenerChatVisible: true },
+      messages: mockMessages,
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { messages: Array<{ id: string; body: string }> };
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]?.id).toBe("msg-valid");
+    expect(body.messages[0]?.body).toBe("Visible message");
+    await app.close();
+  });
+
+  it("returns messages for member regardless of listenerChatVisible", async () => {
+    const app = buildTestApp(MEMBER_SESSION, {
+      room: { listenerChatVisible: false },
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]?.body).toBe("Hello");
+    await app.close();
+  });
+
+  it("returns messages for moderator regardless of listenerChatVisible", async () => {
+    const moderatorSession = { ...MEMBER_SESSION, role: "moderator" as const };
+    const app = buildTestApp(moderatorSession, {
+      room: { listenerChatVisible: false },
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]?.body).toBe("Hello");
+    await app.close();
+  });
+
+  it("returns messages for host regardless of listenerChatVisible", async () => {
+    const hostSession = { ...MEMBER_SESSION, role: "host" as const };
+    const app = buildTestApp(hostSession, {
+      room: { listenerChatVisible: false },
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/rooms/room-abc-123/chat/messages",
+    });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]?.body).toBe("Hello");
     await app.close();
   });
 });
