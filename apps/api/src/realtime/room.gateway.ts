@@ -103,7 +103,7 @@ export function registerRoomHandlers(
           id: message.id,
           roomId,
           senderSessionId: sessionId,
-          senderNickname: null,
+          senderNickname: message.sender?.displayNickname ?? null,
           type: ChatMessageType.User,
           body: message.body,
           metadata: {},
