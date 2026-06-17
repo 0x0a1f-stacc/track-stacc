@@ -1,7 +1,7 @@
 # trackstacc-feature-maps.md
 
 > **Engineering Knowledge-Graph Layer — Deliverable 2 of 7**
-> One dependency map per major product feature. Answers: *"What parts of the system implement this feature, and how does it fail?"*
+> One dependency map per major product feature. Answers: _"What parts of the system implement this feature, and how does it fail?"_
 > Uses the `FEAT-*` IDs from `trackstacc-ai-documentation-plan.md` §2.3 and links components (§13), data (§14), APIs (§15), WS (§16), security (§19), acceptance (§31 via the AC-MAP in `trackstacc-requirements-graph.md`), error codes (§23.4), and observability signals (§24).
 > **Failure Modes** combine the §23.4 error registry, §23.6 circuit-breaker degradation, and §32 risks. **Observability Signals** are drawn verbatim-in-spirit from §24.1 metrics / §24.3 alerts.
 
@@ -19,7 +19,7 @@
 - **Security Controls:** `SEC-TIER` (listener tier encoded in signed token, re-derived server-side); `ROOM_PASSWORD_REQUIRED` if room is password-protected.
 - **Acceptance Criteria:** `AC-V140-1`, `AC-V140-6`, `AC-JOIN-1`.
 - **Failure Modes:** Listener attempts interactive action → `LISTENER_READ_ONLY` (403) with upgrade prompt (never silent failure); PostgreSQL down → snapshot may serve stale read-only state if marked stale and secret-free (§23.6 PG rule); room not found → `ROOM_NOT_FOUND`.
-- **Observability Signals:** Listener→member conversion via *nickname protection rate* (§24.1 #10), *active participants* (#2), *room creation rate* (#9). Risk watch: low conversion (§32 LIM-007).
+- **Observability Signals:** Listener→member conversion via _nickname protection rate_ (§24.1 #10), _active participants_ (#2), _room creation rate_ (#9). Risk watch: low conversion (§32 LIM-007).
 - **Decisions:** DL-019 (mandatory protection), DL-020 (listener chat hidden default).
 
 ---
@@ -34,7 +34,7 @@
 - **Security Controls:** `SEC-TIER` (**must never be weakened**; tier from signed token `accessTier`, DB fallback — §19.4), `SEC-PWD` (Argon2id, never plaintext/logged/returned — §19.3), brute-force rate limits by nickname/IP/global (§19.2).
 - **Acceptance Criteria:** `AC-V140-2`, `AC-V140-3`, `AC-V140-5`, `AC-V140-7`, `AC-JOIN-1`…`AC-JOIN-4`.
 - **Failure Modes:** Unprotected interaction → `NICKNAME_PROTECTION_REQUIRED` (409) / `LISTENER_READ_ONLY` (403); taken name → `NICKNAME_TAKEN` (409); wrong password → `NICKNAME_PASSWORD_INCORRECT` (403) → repeated → `NICKNAME_PASSWORD_RATE_LIMITED` (429); forgotten password unrecoverable in MVP (LIM-001); Redis down → password attempts **fail closed** (§23.6 Redis rule).
-- **Observability Signals:** §24.1 *nickname protection rate* (#10), *failed nickname password attempts* (#11); §24.3 alert *high password brute-force signals* (#8).
+- **Observability Signals:** §24.1 _nickname protection rate_ (#10), _failed nickname password attempts_ (#11); §24.3 alert _high password brute-force signals_ (#8).
 - **Decisions:** DL-001 (global nicknames), DL-008 (reserved-name blocking), DL-009 (10-char password), DL-019.
 
 ---
@@ -49,7 +49,7 @@
 - **Security Controls:** `SEC-SESSION` (httpOnly cookie + WS token, rotate on host upgrade/activation — §19.4); host secret stored hash-only (`SEC-PWD` pattern); room password hash.
 - **Acceptance Criteria:** `AC-RC-1`…`AC-RC-4`.
 - **Failure Modes:** Invalid config → `VALIDATION_FAILED`; non-host claim → `HOST_REQUIRED` (403); wrong room password → `ROOM_PASSWORD_INCORRECT`; room-creation burst fails closed if Redis down (§23.6).
-- **Observability Signals:** §24.1 *room creation rate* (#9), *active rooms* (#1); §24.3 alert *sudden room creation spam* (#7).
+- **Observability Signals:** §24.1 _room creation rate_ (#9), _active rooms_ (#1); §24.3 alert _sudden room creation spam_ (#7).
 - **Decisions:** DL-002 (host authority model), DL-003 (14-day expiry).
 
 ---
@@ -64,7 +64,7 @@
 - **Security Controls:** `SEC-TIER` (member); YouTube API key server-side only (§19.2); add-song cooldown 30s, per-user queue limits (App. A).
 - **Acceptance Criteria:** `AC-QUEUE-1`…`AC-QUEUE-4`.
 - **Failure Modes:** `VIDEO_URL_INVALID` (400), `VIDEO_UNAVAILABLE` (422), `VIDEO_TOO_LONG` (422), `DUPLICATE_VIDEO` (409), `QUEUE_LOCKED` (403), `QUEUE_FULL` (409); YouTube breaker open → `YOUTUBE_METADATA_DEGRADED` (503), may accept with `metadata_status=partial` when room policy permits, search disabled (§23.6.2 #1).
-- **Observability Signals:** §24.1 *queue additions per minute* (#5), *YouTube API quota usage* (#6), *YouTube metadata failure rate* (#7); §24.3 alert *YouTube quota exhaustion* (#5).
+- **Observability Signals:** §24.1 _queue additions per minute_ (#5), _YouTube API quota usage_ (#6), _YouTube metadata failure rate_ (#7); §24.3 alert _YouTube quota exhaustion_ (#5).
 - **Decisions:** DL-006 (upvote-only MVP), DL-007 (host-curated suggestions).
 
 ---
@@ -79,7 +79,7 @@
 - **Security Controls:** server-authoritative for all playback decisions (`ARCH` §12); `MODERATOR_REQUIRED`/`HOST_REQUIRED` to force-skip; skip-vote requires member tier.
 - **Acceptance Criteria:** `AC-PLAY-1`…`AC-PLAY-4`.
 - **Failure Modes:** Embedded player fails → client reports, server may mark failed/skip (FR-046); drift beyond target → resync (LIM-004, §32); `TRACK_NOT_FOUND`; `VIDEO_UNAVAILABLE` on advance.
-- **Observability Signals:** §24.1 *playback error rate* (#8), *WebSocket connections* (#3); §24.3 alert *high playback failure rate* (#6).
+- **Observability Signals:** §24.1 _playback error rate_ (#8), _WebSocket connections_ (#3); §24.3 alert _high playback failure rate_ (#6).
 - **Decisions:** DL-010 (3s sync), DL-014 (play last candidate on veto exhaustion).
 
 ---
@@ -94,7 +94,7 @@
 - **Security Controls:** `HOST_REQUIRED`; public-room mechanic-change cooldown (default 5 min, App. A).
 - **Acceptance Criteria:** `AC-MECH-1`…`AC-MECH-6`.
 - **Failure Modes:** `MECHANIC_CHANGE_COOLDOWN` (429), `HOST_REQUIRED` (403); queue preserved by default (FR-058) — optional recalc/clear is Phase 2 with confirmation (FR-059).
-- **Observability Signals:** settings changes appear in *moderation actions*/audit (§24.1 #12, §24.2 logs); sequence diagram §12.6.
+- **Observability Signals:** settings changes appear in _moderation actions_/audit (§24.1 #12, §24.2 logs); sequence diagram §12.6.
 - **Decisions:** DL-006, DL-007.
 
 ---
@@ -108,8 +108,8 @@
 - **WebSockets:** `WS-CHAT` `chat.send` (C2S), `chat.message`/`chat.deleted` (S2C).
 - **Security Controls:** `SEC-TIER` (member to send); content sanitization/escape + CSP (XSS, §19.2/§19.6); chat rate limit 5 msg / 10s (App. A, FR-073).
 - **Acceptance Criteria:** `AC-CHAT-1`…`AC-CHAT-5`, `AC-V140-6`.
-- **Failure Modes:** `LISTENER_READ_ONLY` (send/delete/moderate by listener), `MUTED` (403), `CHAT_LOCKED` (403), `RATE_LIMITED` (429); history capped at 100 (DL-004). Note that `GET /api/rooms/:roomId/chat/messages` returns `200 OK` with an empty messages list `[]` for listeners if `listenerChatVisible` is disabled (does not return `403` error).
-- **Observability Signals:** §24.1 *messages per second* (#4), *rate-limit triggers* (#13); §24.3 alert *API error rate spikes* (#1).
+- **Failure Modes:** `LISTENER_READ_ONLY` (send/delete/moderate by listener), `MUTED` (403), `CHAT_LOCKED` (403), `RATE_LIMITED` (429); history capped at 100 (DL-004). Note that `GET /api/rooms/:roomId/chat/messages` returns `200 OK` with an empty messages list `[]` for listeners if `listenerChatVisible` is disabled (does not return `403` error). Realtime `chat.message`/`chat.deleted` delivery follows the same listener privacy boundary — chat events are broadcast to a dedicated Socket.IO sub-channel (`room:${roomId}:chat`) that listeners only join when `listenerChatVisible` enables it.
+- **Observability Signals:** §24.1 _messages per second_ (#4), _rate-limit triggers_ (#13); §24.3 alert _API error rate spikes_ (#1).
 - **Decisions:** DL-004 (100-message history), DL-020 (listener chat hidden default).
 
 ---
@@ -124,7 +124,7 @@
 - **Security Controls:** `HOST_REQUIRED`/`MODERATOR_REQUIRED`; server-side role check on every write (§19.2 #7); audit logging (NFR-067).
 - **Acceptance Criteria:** `AC-CHAT-3` + moderation-action criteria (`MOD-NATIVE`).
 - **Failure Modes:** `MODERATOR_REQUIRED`/`HOST_REQUIRED` (403), `BANNED` (403), `MUTED` (403), `CHAT_MESSAGE_NOT_FOUND` (404), `QUEUE_ITEM_NOT_FOUND` (404).
-- **Observability Signals:** §24.1 *moderation actions* (#12); §24.2 logs include action type + reason.
+- **Observability Signals:** §24.1 _moderation actions_ (#12); §24.2 logs include action type + reason.
 - **Decisions:** —
 
 ---
@@ -139,7 +139,7 @@
 - **Security Controls:** **`SEC-EXTINTEG` (§19.5, authoritative)**; `SEC-CSP` dynamic `frame-ancestors` per integration (§19.6.4); `SEC-CORS` per-integration origins; `SEC-FRAME`; **no secrets in iframe URL / JS / storage / postMessage / snapshot** (§19.6.4).
 - **Acceptance Criteria:** `AC-EXT-3`, `AC-STAFF-7`.
 - **Failure Modes:** Disallowed origin → CSP/CORS rejection (logged, §19.6.2 #9); `ROOM_NOT_FOUND`; no privileged mutation callable from embed (FR-114).
-- **Observability Signals:** rejected-origin logs (§19.6.2); §24.1 *integration abuse/rate-limit triggers* (#19).
+- **Observability Signals:** rejected-origin logs (§19.6.2); §24.1 _integration abuse/rate-limit triggers_ (#19).
 - **Decisions:** Default embed mode `player_and_queue_readonly` (App. A). Note: §14.2 `embedMode` enum vs §13.10 — see plan §1.4.
 
 ---
@@ -154,7 +154,7 @@
 - **Security Controls:** **`SEC-EXTINTEG` (§19.5, authoritative)** — HMAC/bearer auth, timestamp freshness, replay protection, idempotency by message ID, strict schema validation, multi-level rate limits, sanitization, signed outbound webhooks (defense-in-depth items 1–13).
 - **Acceptance Criteria:** `AC-EXT-4`…`AC-EXT-8`, `AC-STAFF-6`.
 - **Failure Modes:** `INTEGRATION_AUTH_INVALID` (401), `EXTERNAL_COMMAND_REPLAY` (409), `EXTERNAL_COMMAND_DUPLICATE` (409, returns original result), `INVALID_COMMAND_SYNTAX` (400), `RATE_LIMITED` (429); webhook breaker open → accepted state preserved, `WEBHOOK_DELIVERY_DEFERRED` (503), bounded retries → DLQ (§23.6 webhook rule, DL-017).
-- **Observability Signals:** §24.1 *external command volume* (#14), *external command rejection rate by result code* (#15), *outbound webhook failures/retries* (#18), *integration abuse triggers* (#19); §24.3 alerts *external command rejection spikes* (#9), *outbound webhook failure spikes* (#10).
+- **Observability Signals:** §24.1 _external command volume_ (#14), _external command rejection rate by result code_ (#15), _outbound webhook failures/retries_ (#18), _integration abuse triggers_ (#19); §24.3 alerts _external command rejection spikes_ (#9), _outbound webhook failure spikes_ (#10).
 - **Decisions:** DL-011, DL-012, DL-015, DL-017, DL-018.
 
 ---
@@ -169,7 +169,7 @@
 - **Security Controls:** one vote per stable external user ID (`MOD-EXTVOTE`, §19.2); requester eligibility (DL-013); no anonymous embed votes by default.
 - **Acceptance Criteria:** `AC-VETO-1`…`AC-VETO-7`.
 - **Failure Modes:** `NO_VETO_OPEN` (422), `NO_ALTERNATE_FOR_VETO` (422), `VETO_WINDOW_CLOSED` (409), `VOTE_NOT_ALLOWED` (403); on exhaustion play last candidate (DL-014).
-- **Observability Signals:** §24.1 *veto windows opened/passed/vetoed* (#16), *vote volume + rejected attempts* (#17); §24.3 alert *veto abuse signals / repeated exhaustion in public room* (#11).
+- **Observability Signals:** §24.1 _veto windows opened/passed/vetoed_ (#16), _vote volume + rejected attempts_ (#17); §24.3 alert _veto abuse signals / repeated exhaustion in public room_ (#11).
 - **Decisions:** DL-013, DL-014; defaults 20s window, hybrid 25%/min-3 net nays (App. A); sequence diagram §12.6.
 
 ---
@@ -184,7 +184,7 @@
 - **Security Controls:** **`SEC-EXTINTEG`**; per-user cooldown by external user ID (default 90s, App. A); max pending 2; max queue 50; blocked-content policy.
 - **Acceptance Criteria:** `AC-EXT-6`, `AC-STAFF-4`.
 - **Failure Modes:** `SONG_REQUEST_POLICY_CLOSED` (403), `SONG_REQUEST_COOLDOWN` (429), `MAX_PENDING_PER_USER_REACHED` (409), `QUEUE_FULL` (409).
-- **Observability Signals:** §24.1 *external command volume / rejection rate* (#14/#15); §24.1 *external staff command volume & settings changes* (#20).
+- **Observability Signals:** §24.1 _external command volume / rejection rate_ (#14/#15); §24.1 _external staff command volume & settings changes_ (#20).
 - **Decisions:** Note: §14.2 `songRequestPolicy.mode` enum (`open|cooldown|allowlist|closed`) differs from §11.10 product modes — see plan §1.4.
 
 ---
@@ -199,7 +199,7 @@
 - **Security Controls:** **`SEC-EXTINTEG`** — server-side authorization, no client-side trust; staff-only failure reasons must not reveal allowlists/secrets/role claims (§23.5 #3); audit accepted+rejected privileged commands.
 - **Acceptance Criteria:** `AC-STAFF-1`…`AC-STAFF-5`.
 - **Failure Modes:** `EXTERNAL_COMMAND_UNAUTHORIZED` (403), `EXTERNAL_ROLE_UNTRUSTED` (403), `QUEUE_ITEM_NOT_FOUND` (404).
-- **Observability Signals:** §24.1 *external staff command volume & settings changes* (#20); §24.3 alert *staff command anomalies / excessive settings changes* (#12).
+- **Observability Signals:** §24.1 _external staff command volume & settings changes_ (#20); §24.3 alert _staff command anomalies / excessive settings changes_ (#12).
 - **Decisions:** DL-016 (Phase-2 staff confirmation).
 
 ---
@@ -214,7 +214,7 @@
 - **Security Controls:** **`SEC-EXTINTEG`**; rate-limit + audit + explicit duration (`MOD-EXTMUTE`, §20.3); lazy TTL check on next command + periodic cleanup (§10.18, §20.3).
 - **Acceptance Criteria:** `AC-STAFF-8`…`AC-STAFF-11`.
 - **Failure Modes:** Muted user `!sr`/`!yay`/`!nay` → `EXTERNAL_USER_MUTED` (403); read-only `!song`/`!queue` still allowed (FR-168); TTL auto-expiry race mitigated by lazy check (§32).
-- **Observability Signals:** §24.1 *external mute/unmute actions + active mute counts* (#21); §24.2 logs include mute reason + duration.
+- **Observability Signals:** §24.1 _external mute/unmute actions + active mute counts_ (#21); §24.2 logs include mute reason + duration.
 - **Decisions:** —
 
 ---
@@ -229,7 +229,7 @@
 - **Security Controls:** `SEC-TIER` (tier validated server-side from signed WS token).
 - **Acceptance Criteria:** `AC-PRESENCE-1` to `AC-PRESENCE-9` (Presence Lifecycle acceptance criteria, §31.10).
 - **Failure Modes:** Redis degraded fallback (PostgreSQL `lastSeenAt`/`leftAt` active session query and sweep cleanup), stale sessions (duplicate rows avoided on refresh/reconnect by rehydrating the same session), reconnect convergence (clients replace local state with server-authoritative snapshots/updates), external participants out of scope.
-- **Observability Signals:** §24.1 *active participants* (#2), *WebSocket connections* (#3); §24.3 alert *WebSocket disconnect spikes* (#2), *Redis presence degradation* (logs/metrics).
+- **Observability Signals:** §24.1 _active participants_ (#2), _WebSocket connections_ (#3); §24.3 alert _WebSocket disconnect spikes_ (#2), _Redis presence degradation_ (logs/metrics).
 - **Decisions:** —
 
 ---

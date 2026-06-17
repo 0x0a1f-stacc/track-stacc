@@ -20,6 +20,7 @@
 ## API-ROOMS — Room endpoints (§15.2)
 
 ### `POST /api/rooms`
+
 - **Purpose:** Create a room without registration (FR-001–006).
 - **Reads:** — (validates input)
 - **Writes:** `rooms` (`DATA-ROOMS`: `host_secret_hash`, `playlist_mechanic`, config, optional `password_hash`)
@@ -31,6 +32,7 @@
 - **Errors:** `VALIDATION_FAILED`
 
 ### `GET /api/rooms/:roomId`
+
 - **Purpose:** Fetch room state/config.
 - **Reads:** `rooms`, `room_settings_history` (effective settings); `queue_items`/`tracks` for preview where included
 - **Writes:** —
@@ -42,6 +44,7 @@
 - **Errors:** `ROOM_NOT_FOUND` (404)
 
 ### `PATCH /api/rooms/:roomId/settings`
+
 - **Purpose:** Update room settings incl. playlist mechanic, duration, duplicate policy, skip threshold, `listener_chat_visible`, visibility (FR-055–060, FR-078, FR-100–106).
 - **Reads:** `rooms`
 - **Writes:** `rooms`, `room_settings_history` (`DATA-SETTINGSHIST`)
@@ -53,6 +56,7 @@
 - **Errors:** `HOST_REQUIRED` (403), `MECHANIC_CHANGE_COOLDOWN` (429), `VALIDATION_FAILED`
 
 ### `POST /api/rooms/:roomId/join` (Host Activation Flow)
+
 - **Purpose:** Claim host authority via host secret/cookie during protected nickname join/upgrade (FR-003).
 - **Reads:** `rooms` (`host_secret_hash`)
 - **Writes:** `room_sessions` (upgrades session to member tier and sets role to host); token rotation
@@ -64,6 +68,7 @@
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `NICKNAME_TAKEN` (409)
 
 ### `POST /api/rooms/:roomId/password/verify`
+
 - **Purpose:** Verify room password to gain entry (FR-004/106).
 - **Reads:** `rooms` (`password_hash`)
 - **Writes:** `room_sessions` (entry grant)
@@ -79,6 +84,7 @@
 ## API-NICK — Nickname & session endpoints (§15.2) — the `SEC-TIER` surface
 
 ### `POST /api/nicknames/check`
+
 - **Purpose:** Check nickname availability/normalization before claim (FR-012, FR-018).
 - **Reads:** `nickname_claims` (`DATA-NICKNAMES`)
 - **Writes:** —
@@ -90,6 +96,7 @@
 - **Errors:** `NICKNAME_TAKEN` (409), `VALIDATION_FAILED`
 
 ### `POST /api/nicknames/protect`
+
 - **Purpose:** Claim/protect a nickname by setting a password (FR-020, FR-021).
 - **Reads:** `nickname_claims`
 - **Writes:** `nickname_claims` (`password_hash` via Argon2id)
@@ -101,6 +108,7 @@
 - **Errors:** `NICKNAME_TAKEN` (409), `VALIDATION_FAILED` (weak password)
 
 ### `POST /api/nicknames/authenticate`
+
 - **Purpose:** Authenticate an existing protected nickname (FR-014, FR-022).
 - **Reads:** `nickname_claims`
 - **Writes:** Redis (failed-attempt counters)
@@ -112,6 +120,7 @@
 - **Errors:** `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
 
 ### `POST /api/rooms/:roomId/listen`
+
 - **Purpose:** Establish a read-only Listener session (FR-019). Primary bootstrap and rehydration path. If client sends a valid session cookie representing an existing host or member session, rehydrates that session and returns the correct access tier and a fresh WebSocket token instead of creating a new Listener session or overwriting the cookie.
 - **Reads:** `rooms`, `room_sessions` (for rehydration)
 - **Writes:** `room_sessions` (`access_tier = listener` / reuses existing session)
@@ -123,6 +132,7 @@
 - **Errors:** `ROOM_PASSWORD_REQUIRED` (401)
 
 ### `POST /api/rooms/:roomId/join`
+
 - **Purpose:** Establish or upgrade to a member session; authenticate existing or claim new nickname in one protect-and-join step; upgrades a Listener session **in place** (FR-010, FR-014, FR-015). Reuses existing active session and replaces WebSocket token, prompting presence update broadcast.
 - **Reads:** `rooms`, `nickname_claims`
 - **Writes:** `room_sessions` (`access_tier = member`, in-place upgrade), `nickname_claims` (on new claim), Redis (failed-attempt counters)
@@ -134,6 +144,7 @@
 - **Errors:** `NICKNAME_PROTECTION_REQUIRED` (409), `NICKNAME_PROTECTED` (409), `NICKNAME_PASSWORD_INCORRECT` (403), `NICKNAME_TAKEN` (409), `NICKNAME_PASSWORD_RATE_LIMITED` (429)
 
 ### `POST /api/rooms/:roomId/nickname/change`
+
 - **Purpose:** Change to another protected nickname (FR-017).
 - **Reads:** `nickname_claims`
 - **Writes:** `room_sessions`, Redis (rate counters)
@@ -149,6 +160,7 @@
 ## API-QUEUE — Queue & playback endpoints (§15.2)
 
 ### `POST /api/rooms/:roomId/queue/items`
+
 - **Purpose:** Add a song by YouTube URL with validation/dedup/duration checks (FR-030–034, FR-050–053).
 - **Reads:** `rooms` (`max_song_duration_seconds`, duplicate/lock policy), `queue_items` (dedup), `tracks` (cache)
 - **Writes:** `queue_items` (`DATA-QUEUE`), `tracks` (`DATA-TRACKS`, metadata cache)
@@ -160,6 +172,7 @@
 - **Errors:** `VIDEO_URL_INVALID` (400), `VIDEO_UNAVAILABLE` (422), `VIDEO_TOO_LONG` (422), `DUPLICATE_VIDEO` (409), `QUEUE_LOCKED` (403), `QUEUE_FULL` (409), `YOUTUBE_METADATA_DEGRADED` (503), `LISTENER_READ_ONLY` (403)
 
 ### `DELETE /api/rooms/:roomId/queue/items/:queueItemId`
+
 - **Purpose:** Remove a queue item (host/mod, FR-082).
 - **Reads:** `queue_items`
 - **Writes:** `queue_items` (removed state), `room_moderation_actions` (audit)
@@ -171,6 +184,7 @@
 - **Errors:** `MODERATOR_REQUIRED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
 ### `POST /api/rooms/:roomId/queue/items/:queueItemId/vote`
+
 - **Purpose:** Cast a queue vote (voting mechanic, FR-051).
 - **Reads:** `queue_items`, `queue_votes`
 - **Writes:** `queue_votes` (`DATA-VOTES`), `queue_items.score`
@@ -182,6 +196,7 @@
 - **Errors:** `VOTE_NOT_ALLOWED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
 ### `POST /api/rooms/:roomId/queue/items/:queueItemId/approve` · `.../reject`
+
 - **Purpose:** Host-curated / moderated-suggestion approval flow (FR-053, FR-054 Phase 2).
 - **Reads:** `queue_items`
 - **Writes:** `queue_items` (state)
@@ -193,6 +208,7 @@
 - **Errors:** `MODERATOR_REQUIRED` (403), `QUEUE_ITEM_NOT_FOUND` (404)
 
 ### `POST /api/rooms/:roomId/playback/skip`
+
 - **Purpose:** Host/mod force-skip current track (FR-042).
 - **Reads:** `queue_items` (current)
 - **Writes:** `queue_items` (advance), `room_moderation_actions` (audit)
@@ -204,6 +220,7 @@
 - **Errors:** `MODERATOR_REQUIRED` (403), `TRACK_NOT_FOUND` (404)
 
 ### `POST /api/rooms/:roomId/playback/skip-vote`
+
 - **Purpose:** Participant vote-to-skip (FR-043).
 - **Reads:** `skip_votes`, `room_sessions` (active non-muted count)
 - **Writes:** `skip_votes` (`DATA-SKIPVOTES`)
@@ -219,6 +236,7 @@
 ## API-CHAT — Chat endpoints (§15.2)
 
 ### `GET /api/rooms/:roomId/chat/messages?before=<cursor>&limit=<n>`
+
 - **Purpose:** Paginated chat history (FR-070, cursor pagination per §15.1; cap 100, DL-004).
 - **Reads:** `chat_messages` (`DATA-CHAT`)
 - **Writes:** —
@@ -229,9 +247,10 @@
 - **Acceptance:** `AC-CHAT-1`, `AC-CHAT-2`
 - **Errors:** `AUTH_REQUIRED` (401), `FORBIDDEN` (403, room mismatch)
 
-> **Note:** Real-time chat *send* is a WebSocket event (`WS-CHAT` `chat.send`), not a REST endpoint — see WS section. The chat rate limit (5 msg/10s, App. A) applies there.
+> **Note:** Real-time chat _send_ is a WebSocket event (`WS-CHAT` `chat.send`), not a REST endpoint — see WS section. The chat rate limit (5 msg/10s, App. A) applies there.
 
 ### `DELETE /api/rooms/:roomId/chat/messages/:messageId`
+
 - **Purpose:** Host/mod delete a message (FR-075).
 - **Reads:** `chat_messages`
 - **Writes:** `chat_messages` (`deleted_at`), `room_moderation_actions` (audit)
@@ -247,6 +266,7 @@
 ## API-MOD — Moderation endpoints (§15.2)
 
 ### `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
+
 - **Purpose:** Native moderation suite (FR-080–085).
 - **Reads:** `room_sessions`, `room_moderation_actions`
 - **Writes:** `room_sessions` (`is_muted`/`is_banned`/role), `room_moderation_actions` (`DATA-MODACTIONS`, audit)
@@ -262,6 +282,7 @@
 ## API-INTEG — External integration, embed & site-command endpoints (§15.2) — `SEC-EXTINTEG` authoritative (§19.5)
 
 ### `POST /api/rooms/:roomId/integrations/site` · `PATCH`/`DELETE .../integrations/site/:integrationId`
+
 - **Purpose:** Create/update/delete a site integration: origins, channel ID, command prefix, webhook URL, enabled commands, staff mappings (FR-110, FR-111).
 - **Reads:** `rooms`, `site_integrations`
 - **Writes:** `site_integrations` (`DATA-INTEGRATIONS`, secret hashes), `rooms.external_chat_music` (`DATA-EXTCONFIG` JSONB)
@@ -272,7 +293,8 @@
 - **Acceptance:** `AC-EXT-1`, `AC-EXT-2`
 - **Errors:** `HOST_REQUIRED` (403), `EXTERNAL_INTEGRATION_NOT_FOUND` (404), `VALIDATION_FAILED`
 
-### `POST /api/integrations/site-command`  ★ server-to-server, the external command spine
+### `POST /api/integrations/site-command` ★ server-to-server, the external command spine
+
 - **Purpose:** Single ingress for all external chat commands — `!sr`, `!yay`/`!nay`, `!song`/`!np`, `!queue`, `!rm`, `!skip`, `!music ...` (FR-115–119, FR-130–168, FR-170–179).
 - **Reads:** `site_integrations` (auth/config), `external_participants` (identity/mute), `external_commands` (idempotency), `external_references`, `rooms`/`external_chat_music` (policy), `queue_items`, `preplay_veto_windows`/`preplay_veto_votes`, Redis (rate counters)
 - **Writes (command-dependent):** `external_commands` (always, audit + idempotency), `external_participants` (mute/identity), `queue_items` (`!sr`/`!rm`), `queue_votes`/`preplay_veto_votes` (votes), `preplay_veto_windows`, `rooms`/`external_chat_music` (`!music` settings), `room_settings_history`, `room_moderation_actions` (mute/skip)
@@ -284,6 +306,7 @@
 - **Errors:** `INTEGRATION_AUTH_INVALID` (401), `EXTERNAL_COMMAND_REPLAY` (409), `EXTERNAL_COMMAND_DUPLICATE` (409, returns original), `INVALID_COMMAND_SYNTAX` (400), `EXTERNAL_COMMAND_UNAUTHORIZED` (403), `EXTERNAL_ROLE_UNTRUSTED` (403), `EXTERNAL_USER_MUTED` (403), `SONG_REQUEST_POLICY_CLOSED` (403), `SONG_REQUEST_COOLDOWN` (429), `MAX_PENDING_PER_USER_REACHED` (409), `QUEUE_FULL` (409), `NO_VETO_OPEN` (422), `NO_ALTERNATE_FOR_VETO` (422), `VETO_WINDOW_CLOSED` (409), `RATE_LIMITED` (429), `WEBHOOK_DELIVERY_DEFERRED` (503)
 
 ### `GET /api/embed/rooms/:roomSlug` · `GET .../embed/rooms/:roomSlug/snapshot`
+
 - **Purpose:** Read-only embeddable view + state snapshot (current track, queue, veto status, command hints) (FR-112, FR-113).
 - **Reads:** `rooms`, `queue_items`, `tracks`, `preplay_veto_windows`, `external_chat_music` (policy display)
 - **Writes:** —
@@ -300,19 +323,21 @@
 
 Client→server interactive events (`WS-C2S`) are gated by minimum tier `member` (`SEC-TIER`); listeners may only subscribe to read-only server→client events.
 
-| Event (direction) | Family | Reads/Writes | Tier | Errors |
-| --- | --- | --- | --- | --- |
-| `chat.send` (C2S) | `WS-CHAT` | W `chat_messages`; Redis rate (5/10s) | `member` | `LISTENER_READ_ONLY`, `MUTED`, `CHAT_LOCKED`, `RATE_LIMITED` |
-| `chat.message`/`chat.deleted` (S2C) | `WS-CHAT` | — | — | — |
-| `playback.clientState` (C2S) | `WS-PLAYBACK` | R/W `queue_items` (advance signal) | server-trusted | — |
-| `playback.skipVote` (C2S) | `WS-PLAYBACK` | W `skip_votes` | `member` | `VOTE_NOT_ALLOWED` |
-| `playback.state`/`playback.resync` (S2C) | `WS-PLAYBACK` | R `queue_items` | — | — |
-| `presence.heartbeat` (C2S) | WS-PRESENCE | W `room_sessions` (lastSeenAt), W Redis ZSET, sweeps expired | `listener`+ | — |
-| `presence.updated` (S2C) | WS-PRESENCE | R `room_sessions` active list | — | — |
-| `queue.*` (S2C) | `WS-QUEUE` | R `queue_items`/`queue_votes`/veto tables | — | — |
-| `moderation.action` (C2S) | `WS-MOD` | W `room_moderation_actions`,`room_sessions` | `mod`/`host` | `MODERATOR_REQUIRED`,`HOST_REQUIRED` |
-| `moderation.applied` (S2C) | `WS-MOD` | — | — | — |
-| `integration.command.*` / `external.bot_message.created` / `room.external_settings.changed` (S2C) | `WS-INTEG` | R/W external tables | — | (errors surfaced via command result envelope, §23.2.3) |
+**Channel routing:** All room events are broadcast via `broadcast()` in `apps/api/src/realtime/broadcast.ts`. Chat events (`chat.message`, `chat.deleted`) are routed to the segmented sub-channel `room:${roomId}:chat`; all other events (presence, queue, playback, settings, moderation) stay on the global `room:${roomId}` channel. Listener sockets join the chat sub-channel only when `rooms.listener_chat_visible` is true. See `SEC-001` for the access-tier invariant.
+
+| Event (direction)                                                                                 | Family        | Reads/Writes                                                 | Tier           | Errors                                                       |
+| ------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------ | -------------- | ------------------------------------------------------------ |
+| `chat.send` (C2S)                                                                                 | `WS-CHAT`     | W `chat_messages`; Redis rate (5/10s)                        | `member`       | `LISTENER_READ_ONLY`, `MUTED`, `CHAT_LOCKED`, `RATE_LIMITED` |
+| `chat.message`/`chat.deleted` (S2C)                                                               | `WS-CHAT`     | —                                                            | —              | —                                                            |
+| `playback.clientState` (C2S)                                                                      | `WS-PLAYBACK` | R/W `queue_items` (advance signal)                           | server-trusted | —                                                            |
+| `playback.skipVote` (C2S)                                                                         | `WS-PLAYBACK` | W `skip_votes`                                               | `member`       | `VOTE_NOT_ALLOWED`                                           |
+| `playback.state`/`playback.resync` (S2C)                                                          | `WS-PLAYBACK` | R `queue_items`                                              | —              | —                                                            |
+| `presence.heartbeat` (C2S)                                                                        | WS-PRESENCE   | W `room_sessions` (lastSeenAt), W Redis ZSET, sweeps expired | `listener`+    | —                                                            |
+| `presence.updated` (S2C)                                                                          | WS-PRESENCE   | R `room_sessions` active list                                | —              | —                                                            |
+| `queue.*` (S2C)                                                                                   | `WS-QUEUE`    | R `queue_items`/`queue_votes`/veto tables                    | —              | —                                                            |
+| `moderation.action` (C2S)                                                                         | `WS-MOD`      | W `room_moderation_actions`,`room_sessions`                  | `mod`/`host`   | `MODERATOR_REQUIRED`,`HOST_REQUIRED`                         |
+| `moderation.applied` (S2C)                                                                        | `WS-MOD`      | —                                                            | —              | —                                                            |
+| `integration.command.*` / `external.bot_message.created` / `room.external_settings.changed` (S2C) | `WS-INTEG`    | R/W external tables                                          | —              | (errors surfaced via command result envelope, §23.2.3)       |
 
 **Connection (`WS-CONN`, §16.1):** token validated on connect; `WEBSOCKET_TOKEN_INVALID` (401) on failure; reconnection uses exponential backoff + jitter (§16.1.1, NFR-022); token refresh/rehydration via room bootstrap endpoint `POST /api/rooms/:roomId/listen`. Stale sessions are cleaned up, and active connections are synced to the presence list, avoiding duplicate rows on reconnect. WS errors must **not** disconnect the client unless auth/authorization/protocol-abuse/unrecoverable degradation (§23.2.2).
 
@@ -320,20 +345,20 @@ Client→server interactive events (`WS-C2S`) are gated by minimum tier `member`
 
 ## Cross-cutting matrix — endpoints by table written (reverse lookup)
 
-| Table (`DATA-*`) | Written by |
-| --- | --- |
-| `rooms` (`DATA-ROOMS`) | `POST /rooms`, `PATCH /rooms/:id/settings`, `site-command` (`!music`) |
-| `room_sessions` (`DATA-SESSIONS`) | `/listen`, `/join`, `/password/verify`, `/nickname/change`, moderation/* |
-| `nickname_claims` (`DATA-NICKNAMES`) | `/nicknames/protect`, `/join` (new claim) |
-| `queue_items` (`DATA-QUEUE`) | `POST/DELETE /queue/items`, `/approve`/`/reject`, `/playback/skip`, `site-command` (`!sr`/`!rm`/advance) |
-| `queue_votes` (`DATA-VOTES`) | `/queue/items/:id/vote` |
-| `skip_votes` (`DATA-SKIPVOTES`) | `/playback/skip-vote` |
-| `chat_messages` (`DATA-CHAT`) | WS `chat.send`, `DELETE /chat/messages/:id`, system messages |
-| `room_moderation_actions` (`DATA-MODACTIONS`) | moderation/*, `/playback/skip`, `DELETE /queue/items`, `site-command` (`!skip`/mute) |
-| `room_settings_history` (`DATA-SETTINGSHIST`) | `PATCH /rooms/:id/settings`, `site-command` (settings) |
-| `site_integrations` (`DATA-INTEGRATIONS`) | `POST/PATCH/DELETE /integrations/site` |
-| `external_participants` (`DATA-EXTPART`) | `site-command` (identity map, mute/unmute) |
-| `external_commands` (`DATA-EXTCMD`) | `site-command` (always — audit + idempotency) |
-| `external_references` (`DATA-EXTREF`) | `site-command` (`!sr` ref minting) |
-| `preplay_veto_votes` / `preplay_veto_windows` | `site-command` (`!yay`/`!nay`), server window open/close |
-| Redis (rate / presence / idempotency) | `/authenticate`, `/join`, `chat.send`, `site-command`, presence |
+| Table (`DATA-*`)                              | Written by                                                                                               |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `rooms` (`DATA-ROOMS`)                        | `POST /rooms`, `PATCH /rooms/:id/settings`, `site-command` (`!music`)                                    |
+| `room_sessions` (`DATA-SESSIONS`)             | `/listen`, `/join`, `/password/verify`, `/nickname/change`, moderation/\*                                |
+| `nickname_claims` (`DATA-NICKNAMES`)          | `/nicknames/protect`, `/join` (new claim)                                                                |
+| `queue_items` (`DATA-QUEUE`)                  | `POST/DELETE /queue/items`, `/approve`/`/reject`, `/playback/skip`, `site-command` (`!sr`/`!rm`/advance) |
+| `queue_votes` (`DATA-VOTES`)                  | `/queue/items/:id/vote`                                                                                  |
+| `skip_votes` (`DATA-SKIPVOTES`)               | `/playback/skip-vote`                                                                                    |
+| `chat_messages` (`DATA-CHAT`)                 | WS `chat.send`, `DELETE /chat/messages/:id`, system messages                                             |
+| `room_moderation_actions` (`DATA-MODACTIONS`) | moderation/\*, `/playback/skip`, `DELETE /queue/items`, `site-command` (`!skip`/mute)                    |
+| `room_settings_history` (`DATA-SETTINGSHIST`) | `PATCH /rooms/:id/settings`, `site-command` (settings)                                                   |
+| `site_integrations` (`DATA-INTEGRATIONS`)     | `POST/PATCH/DELETE /integrations/site`                                                                   |
+| `external_participants` (`DATA-EXTPART`)      | `site-command` (identity map, mute/unmute)                                                               |
+| `external_commands` (`DATA-EXTCMD`)           | `site-command` (always — audit + idempotency)                                                            |
+| `external_references` (`DATA-EXTREF`)         | `site-command` (`!sr` ref minting)                                                                       |
+| `preplay_veto_votes` / `preplay_veto_windows` | `site-command` (`!yay`/`!nay`), server window open/close                                                 |
+| Redis (rate / presence / idempotency)         | `/authenticate`, `/join`, `chat.send`, `site-command`, presence                                          |

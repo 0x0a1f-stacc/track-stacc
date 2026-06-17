@@ -59,6 +59,7 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 ## Runtime Boundaries
 
 - The API is authoritative for sessions, permissions, queue/playback state, nickname auth, and rate limits; never trust client role/playback/session signals.
+- Realtime chat delivery must respect the same listener visibility boundary as REST chat history. `chat.message` and `chat.deleted` events must be broadcast to `roomChatChannel(roomId)` (`room:${roomId}:chat`), never to the global `roomChannel(roomId)`. Non-chat room events (presence, queue, playback, settings) remain on the global channel. Listener sockets join the chat channel only when `rooms.listener_chat_visible` allows it (see `apps/api/src/realtime/broadcast.ts`).
 - YouTube integration is metadata-only server-side plus client IFrame playback; do not download, proxy, cache, or re-stream audiovisual content.
 - Passwords and room/host/nickname secrets use Argon2id wrappers in `apps/api/src/lib/argon2.ts`; do not introduce bcrypt or plaintext secrets.
 

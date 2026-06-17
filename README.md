@@ -29,6 +29,7 @@ Implemented and exercised locally:
 - Docker builds for both API and web
 - Listener-to-member join upgrade via `POST /api/rooms/:roomId/join` with `listenerSessionId` — upgrades a Listener session to `member` in place with a replacement WebSocket token carrying `accessTier: "member"`
 - Listener UI for read-only room shell implemented; WebSocket C2S and REST access-tier enforcement implemented server-side (Issue #41) — Listener-tier interactive writes return `403 LISTENER_READ_ONLY`
+- Realtime chat delivery respects room-scoped session validation and listener visibility settings in parity with REST chat history — `chat.message` events reach listener sockets only when `listenerChatVisible` is enabled, and listeners are dynamically synced when the setting toggles (Issue #82)
 - REST chat-history fetch respects room-scoped session validation and listener visibility settings, returning empty messages for listeners by default
 
 Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
