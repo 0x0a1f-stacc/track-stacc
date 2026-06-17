@@ -2319,6 +2319,38 @@ Every API request is assigned a unique request ID. If the client sends an `X-Req
 | Enum display text | Title Case or descriptive | "First Come, First Served", "Voting Queue" |
 | Error codes | `UPPER_SNAKE_CASE` | `VIDEO_TOO_LONG`, `QUEUE_LOCKED` |
 
+#### 15.1.7 Room-Scoped Resource Binding and Cross-Room Protection
+
+To prevent cross-room session spoofing and unauthorized resource access, all mutating REST endpoints (and privacy-sensitive read endpoints) enforce room-scoped resource-binding validations:
+
+1. **Session-to-Room Scoping:** Endpoints check that the request's authenticated session matches the room specified in the URL path:
+   ```typescript
+   if (session.roomId !== roomId) {
+     throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+   }
+   ```
+   If there is a mismatch, the request is immediately rejected with `403 FORBIDDEN`. This applies to all queue mutations, playback skip/skip-vote actions, chat deletions, moderation actions, settings updates, and nickname changes.
+2. **Resource-to-Room Scoping:** When targeting a nested resource (such as a queue item or a chat message) via a path parameter, the server verifies that the resource exists within the specified room. For example:
+   ```typescript
+   const item = await prisma.queueItem.findFirst({
+     where: { id: queueItemId, roomId }
+   });
+   if (!item) {
+     throw new AppError("QUEUE_ITEM_NOT_FOUND", "That queue item was not found.", 404);
+   }
+   ```
+   If the resource does not exist or belongs to a different room, the route returns `404 NOT_FOUND` (e.g., `QUEUE_ITEM_NOT_FOUND`, `CHAT_MESSAGE_NOT_FOUND`) rather than permitting cross-room leakage or mutation.
+3. **Moderation Target Scoping:** For room moderation actions (mute, ban), the targeted session must belong to the room:
+   ```typescript
+   const target = await prisma.roomSession.findFirst({
+     where: { id: targetSessionId, roomId }
+   });
+   if (!target) {
+     throw new AppError("FORBIDDEN", "Target session not found in this room.", 403);
+   }
+   ```
+   If the target session is in another room or does not exist, the action is rejected with `403 FORBIDDEN`.
+
 ### 15.2 REST Endpoints
 
 #### Room Endpoints
@@ -2461,12 +2493,55 @@ Response:
 
 #### Chat Endpoints
 
-Most chat should flow through WebSocket. REST may be used for history.
+Most chat flows through WebSocket events (Section 16). REST endpoints are provided to retrieve chat history and for moderation.
 
 ```http
-GET /api/rooms/:roomId/chat/messages?before=:cursor
+GET /api/rooms/:roomId/chat/messages
+```
+
+Retrieve the 50 most recent undeleted chat messages in a room.
+
+- **Request Headers:**
+  - `Cookie`: must include a valid room session token (`session_token`).
+- **Path Parameters:**
+  - `roomId` (string, UUID): the canonical UUID of the room.
+- **Query Parameters:**
+  - `before` (string, optional): cursor pagination (not yet implemented in route but reserved).
+  - `limit` (number, optional): limit output (defaults to 50, reserved).
+- **Access Control and Security:**
+  - Requires an active session in the specified room (`session.roomId === roomId`). Mismatched room sessions are rejected with `403 FORBIDDEN`.
+  - Missing room session is rejected with `401 AUTH_REQUIRED`.
+  - For `member`, `host`, and `moderator` access tiers, returns the chat history.
+  - For the `listener` access tier, chat visibility is filtered by the room's `listener_chat_visible` setting:
+    - If `listener_chat_visible = true`, returns the chat history.
+    - If `listener_chat_visible = false`, returns a `200 OK` response with an empty messages list (`"messages": []`).
+- **Response Format (`200 OK`):**
+  ```json
+  {
+    "messages": [
+      {
+        "id": "chat-message-uuid",
+        "roomId": "room-uuid",
+        "senderSessionId": "sender-session-uuid",
+        "senderNickname": "SenderNickname",
+        "type": "user",
+        "body": "Hello world!",
+        "metadata": {},
+        "deletedAt": null,
+        "createdAt": "2026-06-17T01:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+```http
 DELETE /api/rooms/:roomId/chat/messages/:messageId
 ```
+
+Delete a chat message (soft delete).
+
+- **Access Control:** Requires `host` or `moderator` role on a member-tier session. Mismatched room sessions are rejected with `403 FORBIDDEN`.
+- **Resource Binding:** The targeted chat message must exist and belong to the room specified by `:roomId`. Mismatched chat messages return `404 CHAT_MESSAGE_NOT_FOUND`.
 
 #### Moderation Endpoints
 

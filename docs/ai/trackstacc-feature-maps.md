@@ -101,14 +101,14 @@
 
 ## FEAT-CHAT — Real-time chat
 
-- **Purpose:** Member-tier real-time messaging with system announcements, rate limits, and listener-read controls (FR-070–078).
+- **Purpose:** Member-tier real-time messaging with system announcements, rate limits, and listener-read controls. Listener chat read access is controlled by the room setting `listener_chat_visible` (defaulting to hidden/false), returning empty chat history to listeners unless enabled (FR-070–078).
 - **Dependencies:** `FEAT-NICKPROT` (send gate), `FEAT-LISTEN` (conditional read), `FEAT-MOD` (delete/mute/lock). Chat Service (§13.6) + Rate Limit Service.
 - **Data Entities:** `DATA-CHAT` (`chat_messages`, `deleted_at`), `DATA-ROOMS` (`listener_chat_visible`), `DATA-SESSIONS` (`is_muted`).
 - **APIs:** `API-CHAT` `GET /api/rooms/:roomId/chat/messages?before=&limit=`, `DELETE .../chat/messages/:messageId`.
 - **WebSockets:** `WS-CHAT` `chat.send` (C2S), `chat.message`/`chat.deleted` (S2C).
 - **Security Controls:** `SEC-TIER` (member to send); content sanitization/escape + CSP (XSS, §19.2/§19.6); chat rate limit 5 msg / 10s (App. A, FR-073).
 - **Acceptance Criteria:** `AC-CHAT-1`…`AC-CHAT-5`, `AC-V140-6`.
-- **Failure Modes:** `LISTENER_READ_ONLY` (send by listener), `MUTED` (403), `CHAT_LOCKED` (403), `RATE_LIMITED` (429); history capped at 100 (DL-004).
+- **Failure Modes:** `LISTENER_READ_ONLY` (send/delete/moderate by listener), `MUTED` (403), `CHAT_LOCKED` (403), `RATE_LIMITED` (429); history capped at 100 (DL-004). Note that `GET /api/rooms/:roomId/chat/messages` returns `200 OK` with an empty messages list `[]` for listeners if `listenerChatVisible` is disabled (does not return `403` error).
 - **Observability Signals:** §24.1 *messages per second* (#4), *rate-limit triggers* (#13); §24.3 alert *API error rate spikes* (#1).
 - **Decisions:** DL-004 (100-message history), DL-020 (listener chat hidden default).
 

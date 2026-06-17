@@ -37,13 +37,13 @@
 ### SEC-001 — Native access-tier enforcement (listener gate)  ★ must never weaken
 - **Area ID:** `SEC-TIER`
 - **Threat Addressed:** Listener-tier privilege escalation (§19.1 #16)
-- **Components Protected:** Auth Middleware, every domain service handling a native mutation; all `WS-C2S` events
-- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2). Shared guard primitives in `apps/api/src/auth/guards.ts` (REST) and `apps/api/src/realtime/guards.ts` (WebSocket). REST guards integrated into all mutating route handlers. WebSocket guard in `apps/api/src/realtime/room.gateway.ts` `onAny` dispatch.
+- **Components Protected:** Auth Middleware, every domain service handling a native mutation; all `WS-C2S` events; privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`)
+- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2). Shared guard primitives in `apps/api/src/auth/guards.ts` (REST) and `apps/api/src/realtime/guards.ts` (WebSocket). REST guards integrated into all mutating route handlers. WebSocket guard in `apps/api/src/realtime/room.gateway.ts` `onAny` dispatch. Privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`) check that the session's roomId matches the URL path (`session.roomId === roomId`) and filter returned history to `[]` for listeners if `listenerChatVisible` is disabled.
 - **Verification Method:** Unit: `apps/api/src/__tests__/tier-guards.test.ts` (18 tests); REST integration: `apps/api/src/__tests__/tier-gate-rest.test.ts` (19 tests); WebSocket integration: `apps/api/src/__tests__/tier-gate-realtime.test.ts` (16 tests); acceptance: `apps/api/src/__tests__/tier-gate-acceptance.test.ts` (34 tests). See Issue #41.
 - **Related Requirements:** FR-010, FR-019, FR-028, NFR-038
 - **Related Acceptance:** `AC-V140-2`, `AC-V140-5`
 - **Related Risks:** Listener privilege escalation (§32)
-- **Errors:** `LISTENER_READ_ONLY` (403), `NICKNAME_PROTECTION_REQUIRED` (409)
+- **Errors:** `LISTENER_READ_ONLY` (403), `NICKNAME_PROTECTION_REQUIRED` (409), `FORBIDDEN` (403, room mismatch), `AUTH_REQUIRED` (401)
 
 ### SEC-002 — Server-side authorization on every write
 - **Area ID:** `SEC-TIER` / role checks (§19.2)
