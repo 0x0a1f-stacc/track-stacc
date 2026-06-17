@@ -1,9 +1,11 @@
 import type { Prisma } from "@prisma/client";
+import type { RoomSettings } from "@trackstacc/types";
 import type { FastifyInstance } from "fastify";
 
 import { requireModerator } from "../../auth/guards.js";
 import { verifyPassword } from "../../lib/argon2.js";
 import { AppError } from "../../lib/errors.js";
+import { broadcast, syncListenerChatChannelMembership } from "../../realtime/broadcast.js";
 
 import {
   createRoomSchema,
@@ -44,9 +46,10 @@ export async function roomsRouter(app: FastifyInstance) {
       throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
     }
     const { settings } = settingsSchema.parse(request.body);
-    const data = Object.fromEntries(
+    const filteredSettings: Partial<RoomSettings> = Object.fromEntries(
       Object.entries(settings).filter(([, value]) => value !== undefined),
-    ) as Prisma.RoomUpdateInput;
+    );
+    const data: Prisma.RoomUpdateInput = filteredSettings;
     const room = await app.prisma.room.update({
       where: { id: roomId },
       data,
@@ -60,8 +63,24 @@ export async function roomsRouter(app: FastifyInstance) {
         newValue: settings,
       },
     });
+
+    if (settings.listenerChatVisible !== undefined) {
+      await syncListenerChatChannelMembership(
+        app.io,
+        roomId,
+        settings.listenerChatVisible,
+      );
+    }
+
+    broadcast(app.io, roomId, {
+      type: "room.settings.changed",
+      settings: filteredSettings,
+    });
+
     return { room };
   });
+
+
 
   app.post("/api/rooms/:roomId/password/verify", async (request) => {
     const { roomId } = request.params as { roomId: string };
