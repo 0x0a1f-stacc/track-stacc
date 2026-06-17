@@ -11,7 +11,7 @@ import {
   getPlaybackState,
 } from "../modules/playback/playback.coordinator.js";
 
-import { roomChannel } from "./broadcast.js";
+import { roomChannel, roomChatChannel } from "./broadcast.js";
 import { broadcast } from "./broadcast.js";
 import { getParticipants, markSessionPresent, cleanupInactiveSessions } from "./presence.manager.js";
 import { registerRoomHandlers } from "./room.gateway.js";
@@ -96,6 +96,9 @@ export async function registerRealtime(app: FastifyInstance) {
     const room = await app.prisma.room.findUniqueOrThrow({
       where: { id: roomId },
     });
+    if (data.accessTier !== "listener" || room.listenerChatVisible) {
+      await socket.join(roomChatChannel(roomId));
+    }
     const [queueItems, currentPlayback] = await Promise.all([
       app.prisma.queueItem.findMany({
         where: { roomId, status: { in: ["queued", "playing", "suggested"] } },
