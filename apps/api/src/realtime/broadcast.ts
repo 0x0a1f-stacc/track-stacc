@@ -10,6 +10,13 @@ export function roomChatChannel(roomId: string) {
 }
 
 export function broadcast(io: Server, roomId: string, event: ServerEvent) {
+  // Chat events are intentionally segmented to a sub-channel
+  // (room:${roomId}:chat) so listener-tier sockets only receive them
+  // when rooms.listenerChatVisible is true.  All other room events
+  // (presence, queue, playback, settings, etc.) remain on the global
+  // room:${roomId} channel.  This routing is security-sensitive:
+  // broadcasting chat.message or chat.deleted to the global channel
+  // would leak chat to listeners who should not see it.
   const targetChannel =
     event.type === "chat.message" || event.type === "chat.deleted"
       ? roomChatChannel(roomId)
@@ -39,4 +46,3 @@ export async function syncListenerChatChannelMembership(
     }
   }
 }
-

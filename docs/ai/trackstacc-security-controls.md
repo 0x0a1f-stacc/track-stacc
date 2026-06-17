@@ -11,34 +11,35 @@
 
 ## 1. Threat → control coverage (SDD §19.1, 16 threats)
 
-| # | Threat (§19.1) | Primary control(s) |
-| --- | --- | --- |
-| 1 | Nickname impersonation | `SEC-005` |
-| 2 | Protected nickname brute force | `SEC-004`, `SEC-006` |
-| 3 | Room host secret leakage | `SEC-003` |
-| 4 | Chat spam | `SEC-006`, `SEC-011` |
-| 5 | Queue spam | `SEC-006`, `SEC-011` |
-| 6 | XSS (chat/nickname/room name/metadata) | `SEC-007`, `SEC-012` |
-| 7 | Unauthorized moderator/host actions | `SEC-002`, `SEC-011` |
-| 8 | WebSocket event forgery | `SEC-008`, `SEC-002` |
-| 9 | Abuse via public rooms | `SEC-006`, `SEC-011`, `SEC-013`, `SEC-020` |
-| 10 | API key exposure | `SEC-009` |
-| 11 | Forged external chat commands | `SEC-014`, `SEC-021` |
-| 12 | Replay / duplicate external delivery | `SEC-015`, `SEC-016` |
-| 13 | External role spoofing | `SEC-017` |
-| 14 | Vote manipulation (unstable identity) | `SEC-018` |
-| 15 | Secret leakage via iframe/JS | `SEC-019`, `SEC-022` |
-| 16 | Listener-tier privilege escalation | `SEC-001` |
+| #   | Threat (§19.1)                         | Primary control(s)                         |
+| --- | -------------------------------------- | ------------------------------------------ |
+| 1   | Nickname impersonation                 | `SEC-005`                                  |
+| 2   | Protected nickname brute force         | `SEC-004`, `SEC-006`                       |
+| 3   | Room host secret leakage               | `SEC-003`                                  |
+| 4   | Chat spam                              | `SEC-006`, `SEC-011`                       |
+| 5   | Queue spam                             | `SEC-006`, `SEC-011`                       |
+| 6   | XSS (chat/nickname/room name/metadata) | `SEC-007`, `SEC-012`                       |
+| 7   | Unauthorized moderator/host actions    | `SEC-002`, `SEC-011`                       |
+| 8   | WebSocket event forgery                | `SEC-008`, `SEC-002`                       |
+| 9   | Abuse via public rooms                 | `SEC-006`, `SEC-011`, `SEC-013`, `SEC-020` |
+| 10  | API key exposure                       | `SEC-009`                                  |
+| 11  | Forged external chat commands          | `SEC-014`, `SEC-021`                       |
+| 12  | Replay / duplicate external delivery   | `SEC-015`, `SEC-016`                       |
+| 13  | External role spoofing                 | `SEC-017`                                  |
+| 14  | Vote manipulation (unstable identity)  | `SEC-018`                                  |
+| 15  | Secret leakage via iframe/JS           | `SEC-019`, `SEC-022`                       |
+| 16  | Listener-tier privilege escalation     | `SEC-001`                                  |
 
 ---
 
 ## 2. Control matrix
 
-### SEC-001 — Native access-tier enforcement (listener gate)  ★ must never weaken
+### SEC-001 — Native access-tier enforcement (listener gate) ★ must never weaken
+
 - **Area ID:** `SEC-TIER`
 - **Threat Addressed:** Listener-tier privilege escalation (§19.1 #16)
-- **Components Protected:** Auth Middleware, every domain service handling a native mutation; all `WS-C2S` events; privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`)
-- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2). Shared guard primitives in `apps/api/src/auth/guards.ts` (REST) and `apps/api/src/realtime/guards.ts` (WebSocket). REST guards integrated into all mutating route handlers. WebSocket guard in `apps/api/src/realtime/room.gateway.ts` `onAny` dispatch. Privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`) check that the session's roomId matches the URL path (`session.roomId === roomId`) and filter returned history to `[]` for listeners if `listenerChatVisible` is disabled.
+- **Components Protected:** Auth Middleware, every domain service handling a native mutation; all `WS-C2S` events; privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`); realtime chat delivery channel
+- **Implementation Location:** access tier encoded in signed session token (`WsTokenPayload.accessTier`, §19.4); re-derived server-side on every REST request and WS event; DB fallback to `room_sessions.access_tier` when token field absent (§14.2). Shared guard primitives in `apps/api/src/auth/guards.ts` (REST) and `apps/api/src/realtime/guards.ts` (WebSocket). REST guards integrated into all mutating route handlers. WebSocket guard in `apps/api/src/realtime/room.gateway.ts` `onAny` dispatch. Privacy-sensitive REST reads (`GET /api/rooms/:roomId/chat/messages`) check that the session's roomId matches the URL path (`session.roomId === roomId`) and filter returned history to `[]` for listeners if `listenerChatVisible` is disabled. Realtime chat delivery enforces the same boundary via Socket.IO channel segmentation (`broadcast()` in `broadcast.ts` routes `chat.message`/`chat.deleted` to `room:${roomId}:chat`; listeners only join that sub-channel when `listenerChatVisible` allows it).
 - **Verification Method:** Unit: `apps/api/src/__tests__/tier-guards.test.ts` (18 tests); REST integration: `apps/api/src/__tests__/tier-gate-rest.test.ts` (19 tests); WebSocket integration: `apps/api/src/__tests__/tier-gate-realtime.test.ts` (16 tests); acceptance: `apps/api/src/__tests__/tier-gate-acceptance.test.ts` (34 tests). See Issue #41.
 - **Related Requirements:** FR-010, FR-019, FR-028, NFR-038
 - **Related Acceptance:** `AC-V140-2`, `AC-V140-5`
@@ -46,6 +47,7 @@
 - **Errors:** `LISTENER_READ_ONLY` (403), `NICKNAME_PROTECTION_REQUIRED` (409), `FORBIDDEN` (403, room mismatch), `AUTH_REQUIRED` (401)
 
 ### SEC-002 — Server-side authorization on every write
+
 - **Area ID:** `SEC-TIER` / role checks (§19.2)
 - **Threat Addressed:** Unauthorized moderator/host actions (#7); event forgery (#8)
 - **Components Protected:** Room, Queue, Chat, Moderation, Playback, External Command services
@@ -57,6 +59,7 @@
 - **Errors:** `FORBIDDEN`, `HOST_REQUIRED`, `MODERATOR_REQUIRED`
 
 ### SEC-003 — Host secret hashing & rotation
+
 - **Area ID:** `SEC-SESSION` / `SEC-PWD`
 - **Threat Addressed:** Host secret leakage / room takeover (#3)
 - **Components Protected:** Room Service, Identity Service
@@ -68,6 +71,7 @@
 - **Errors:** `HOST_REQUIRED`, `SESSION_INVALID`
 
 ### SEC-004 — Password storage (Argon2id)
+
 - **Area ID:** `SEC-PWD`
 - **Threat Addressed:** Brute force (#2); credential compromise
 - **Components Protected:** Identity Service
@@ -79,6 +83,7 @@
 - **Errors:** `NICKNAME_PASSWORD_INCORRECT`
 
 ### SEC-005 — Nickname uniqueness & reserved-name blocking
+
 - **Area ID:** `SEC-PWD` (claim integrity) / `COMP` §13.3
 - **Threat Addressed:** Nickname impersonation (#1)
 - **Components Protected:** Identity Service
@@ -90,6 +95,7 @@
 - **Errors:** `NICKNAME_TAKEN`, `NICKNAME_PROTECTED`
 
 ### SEC-006 — Rate limiting (native)
+
 - **Area ID:** rate limiting (`COMP` §13.9)
 - **Threat Addressed:** Brute force (#2), chat spam (#4), queue spam (#5), public-room abuse (#9)
 - **Components Protected:** Rate Limit Service → Chat, Queue, Identity
@@ -101,6 +107,7 @@
 - **Errors:** `RATE_LIMITED`, `NICKNAME_PASSWORD_RATE_LIMITED`, `SONG_REQUEST_COOLDOWN`, `MECHANIC_CHANGE_COOLDOWN`
 
 ### SEC-007 — Output sanitization / escaping (XSS)
+
 - **Area ID:** sanitization (§19.2) / `SEC-CSP`
 - **Threat Addressed:** XSS via chat, nickname, room name, video metadata (#6)
 - **Components Protected:** Chat Service, Room Service, External Command Service, Frontend/Embed Clients
@@ -112,6 +119,7 @@
 - **Errors:** `VALIDATION_FAILED`
 
 ### SEC-008 — Signed WebSocket tokens & session tokens
+
 - **Area ID:** `SEC-SESSION`
 - **Threat Addressed:** WebSocket event forgery (#8)
 - **Components Protected:** Socket.IO Gateway, all realtime handlers
@@ -123,6 +131,7 @@
 - **Errors:** `WEBSOCKET_TOKEN_INVALID`, `SESSION_INVALID`, `AUTH_REQUIRED`
 
 ### SEC-009 — Server-side YouTube API key isolation
+
 - **Area ID:** secrets handling (§19.2)
 - **Threat Addressed:** API key exposure (#10)
 - **Components Protected:** YouTube Metadata Service
@@ -134,6 +143,7 @@
 - **Errors:** `YOUTUBE_METADATA_DEGRADED`
 
 ### SEC-010 — Audit logging of privileged actions
+
 - **Area ID:** audit logging (§24.2)
 - **Threat Addressed:** Repudiation / unaccountable moderation (supports #7, #13)
 - **Components Protected:** Moderation Service, External Command Service
@@ -145,6 +155,7 @@
 - **Errors:** — (audit non-blocking; never logs secrets/passwords/tokens, §24.2)
 
 ### SEC-011 — Moderation controls (mute/ban/lock)
+
 - **Area ID:** `MOD-NATIVE`
 - **Threat Addressed:** Chat/queue spam (#4, #5), public-room abuse (#9), unauthorized participation
 - **Components Protected:** Moderation Service → Chat, Queue
@@ -156,6 +167,7 @@
 - **Errors:** `MUTED`, `BANNED`, `CHAT_LOCKED`, `QUEUE_LOCKED`
 
 ### SEC-012 — Content Security Policy (native + embed)
+
 - **Area ID:** `SEC-CSP`
 - **Threat Addressed:** XSS (#6), secret/clickjacking via framing (#15)
 - **Components Protected:** native pages, embed pages
@@ -167,6 +179,7 @@
 - **Errors:** — (browser-enforced)
 
 ### SEC-013 — CORS deny-by-default with per-surface allowlists
+
 - **Area ID:** `SEC-CORS`
 - **Threat Addressed:** Cross-origin abuse, public-room abuse (#9)
 - **Components Protected:** REST API, Socket.IO gateway, embed pages, external command endpoint
@@ -178,6 +191,7 @@
 - **Errors:** rejected origins logged (no tokens/secrets/signatures, §19.6.2 #9)
 
 ### SEC-014 — Inbound external command authentication (HMAC/bearer + freshness) ★ §19.5 authoritative
+
 - **Area ID:** `SEC-EXTINTEG`
 - **Threat Addressed:** Forged external chat commands (#11)
 - **Components Protected:** External Command Service
@@ -189,6 +203,7 @@
 - **Errors:** `INTEGRATION_AUTH_INVALID` (401)
 
 ### SEC-015 — Replay protection
+
 - **Area ID:** `SEC-EXTINTEG`
 - **Threat Addressed:** Replay of signed external payloads (#12)
 - **Components Protected:** External Command Service
@@ -200,6 +215,7 @@
 - **Errors:** `EXTERNAL_COMMAND_REPLAY` (409)
 
 ### SEC-016 — Idempotency by external message ID
+
 - **Area ID:** `SEC-EXTINTEG`
 - **Threat Addressed:** Duplicate external delivery (#12)
 - **Components Protected:** External Command Service
@@ -211,6 +227,7 @@
 - **Errors:** `EXTERNAL_COMMAND_DUPLICATE` (409)
 
 ### SEC-017 — Trusted external role mapping & staff allowlist
+
 - **Area ID:** `SEC-EXTINTEG` / `MOD-EXTSTAFF`
 - **Threat Addressed:** External role spoofing (#13)
 - **Components Protected:** External Command Service, Moderation Service
@@ -222,6 +239,7 @@
 - **Errors:** `EXTERNAL_COMMAND_UNAUTHORIZED` (403), `EXTERNAL_ROLE_UNTRUSTED` (403)
 
 ### SEC-018 — Stable-identity vote integrity
+
 - **Area ID:** `SEC-EXTINTEG` / `MOD-EXTVOTE`
 - **Threat Addressed:** Vote manipulation via unstable/browser-provided identity (#14)
 - **Components Protected:** External Command Service, Queue Engine (veto)
@@ -233,6 +251,7 @@
 - **Errors:** `VOTE_NOT_ALLOWED` (403)
 
 ### SEC-019 — Public-token / secret separation
+
 - **Area ID:** `SEC-EXTINTEG`
 - **Threat Addressed:** Secret leakage via iframe URLs / browser JS (#15)
 - **Components Protected:** Embeddable Room Client, External Command Service
@@ -244,6 +263,7 @@
 - **Errors:** —
 
 ### SEC-020 — Multi-level external rate limiting
+
 - **Area ID:** `SEC-EXTINTEG` / rate limiting
 - **Threat Addressed:** External command flooding (#9, #11)
 - **Components Protected:** Rate Limit Service, External Command Service
@@ -255,6 +275,7 @@
 - **Errors:** `RATE_LIMITED` (429), `SONG_REQUEST_COOLDOWN` (429), `MAX_PENDING_PER_USER_REACHED` (409)
 
 ### SEC-021 — Strict schema validation of external payloads
+
 - **Area ID:** `SEC-EXTINTEG`
 - **Threat Addressed:** Malformed/injection via command payloads (#6, #11)
 - **Components Protected:** External Command Service
@@ -266,6 +287,7 @@
 - **Errors:** `VALIDATION_FAILED` (400), `INVALID_COMMAND_SYNTAX` (400)
 
 ### SEC-022 — Signed outbound webhooks + embed origin allowlist + frame policy
+
 - **Area ID:** `SEC-EXTINTEG` / `SEC-FRAME`
 - **Threat Addressed:** Outbound spoofing; embed framing abuse (#15)
 - **Components Protected:** Outbound Bot Webhook Service, embed pages
@@ -277,6 +299,7 @@
 - **Errors:** —
 
 ### SEC-023 — Pseudonymous external-identity handling
+
 - **Area ID:** `SEC-EXTINTEG` / `PRIV`
 - **Threat Addressed:** Over-retention / PII exposure of external users
 - **Components Protected:** External Command Service, data layer
@@ -288,6 +311,7 @@
 - **Errors:** —
 
 ### SEC-024 — Circuit breakers & graceful degradation (resilience / fail-closed control)
+
 - **Area ID:** `ERR-CIRCUIT`
 - **Threat Addressed:** Cascading failure and unsafe writes under dependency outage (availability + security: fail-closed for abuse-sensitive paths)
 - **Components Protected:** all services depending on PostgreSQL, Redis, YouTube API, outbound webhooks
@@ -302,40 +326,40 @@
 
 ## 3. Control → component coverage (reverse lookup)
 
-| Component | Controls applied |
-| --- | --- |
-| Identity / Nickname Service | `SEC-001`, `SEC-002`, `SEC-004`, `SEC-005`, `SEC-006` |
-| Auth Middleware | `SEC-001`, `SEC-002`, `SEC-008` |
-| Room Service | `SEC-002`, `SEC-003` |
-| Queue Engine | `SEC-002`, `SEC-006`, `SEC-018` |
-| Chat Service | `SEC-002`, `SEC-006`, `SEC-007`, `SEC-011` |
-| Moderation Service | `SEC-002`, `SEC-010`, `SEC-011`, `SEC-017` |
-| Playback Coordinator | `SEC-002`, `SEC-024` |
-| Rate Limit Service | `SEC-006`, `SEC-020`, `SEC-024` |
-| External Command Service | `SEC-014`–`SEC-018`, `SEC-020`, `SEC-021`, `SEC-023` (all under `SEC-EXTINTEG`) |
-| Outbound Bot Webhook Service | `SEC-022`, `SEC-024` |
-| YouTube Metadata Service | `SEC-009`, `SEC-024` |
-| Socket.IO Gateway | `SEC-008`, `SEC-013` |
-| Frontend Client | `SEC-007`, `SEC-012` |
-| Embeddable Room Client | `SEC-012`, `SEC-013`, `SEC-019`, `SEC-022` |
+| Component                    | Controls applied                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| Identity / Nickname Service  | `SEC-001`, `SEC-002`, `SEC-004`, `SEC-005`, `SEC-006`                           |
+| Auth Middleware              | `SEC-001`, `SEC-002`, `SEC-008`                                                 |
+| Room Service                 | `SEC-002`, `SEC-003`                                                            |
+| Queue Engine                 | `SEC-002`, `SEC-006`, `SEC-018`                                                 |
+| Chat Service                 | `SEC-002`, `SEC-006`, `SEC-007`, `SEC-011`                                      |
+| Moderation Service           | `SEC-002`, `SEC-010`, `SEC-011`, `SEC-017`                                      |
+| Playback Coordinator         | `SEC-002`, `SEC-024`                                                            |
+| Rate Limit Service           | `SEC-006`, `SEC-020`, `SEC-024`                                                 |
+| External Command Service     | `SEC-014`–`SEC-018`, `SEC-020`, `SEC-021`, `SEC-023` (all under `SEC-EXTINTEG`) |
+| Outbound Bot Webhook Service | `SEC-022`, `SEC-024`                                                            |
+| YouTube Metadata Service     | `SEC-009`, `SEC-024`                                                            |
+| Socket.IO Gateway            | `SEC-008`, `SEC-013`                                                            |
+| Frontend Client              | `SEC-007`, `SEC-012`                                                            |
+| Embeddable Room Client       | `SEC-012`, `SEC-013`, `SEC-019`, `SEC-022`                                      |
 
 ---
 
 ## 4. Control → acceptance-criteria coverage (audit checklist)
 
-| Control | Verifying AC (see AC-MAP in requirements-graph) |
-| --- | --- |
-| `SEC-001`, `SEC-002` | `AC-V140-2`, `AC-V140-5`, `AC-CHAT-3`, `AC-STAFF-1` |
-| `SEC-003`, `SEC-008` | `AC-RC-2`, `AC-V140-7` |
-| `SEC-004`, `SEC-005`, `SEC-006` | `AC-JOIN-2`, `AC-JOIN-3`, `AC-JOIN-4`, `AC-CHAT-4` |
-| `SEC-007`, `SEC-011` | `AC-CHAT-3`, `AC-CHAT-4`, `AC-CHAT-5` |
-| `SEC-012`, `SEC-013` | `AC-P1-3`, `AC-EXT-3`, `AC-STAFF-7` |
-| `SEC-014`–`SEC-016`, `SEC-021` | `AC-EXT-4`, `AC-EXT-5` |
-| `SEC-017` | `AC-STAFF-1`, `AC-STAFF-5` |
-| `SEC-018` | `AC-VETO-3` |
-| `SEC-019`, `SEC-022` | `AC-STAFF-6`, `AC-STAFF-7` |
-| `SEC-020` | `AC-STAFF-6` |
-| `SEC-024` | `AC-P1-4` |
+| Control                         | Verifying AC (see AC-MAP in requirements-graph)     |
+| ------------------------------- | --------------------------------------------------- |
+| `SEC-001`, `SEC-002`            | `AC-V140-2`, `AC-V140-5`, `AC-CHAT-3`, `AC-STAFF-1` |
+| `SEC-003`, `SEC-008`            | `AC-RC-2`, `AC-V140-7`                              |
+| `SEC-004`, `SEC-005`, `SEC-006` | `AC-JOIN-2`, `AC-JOIN-3`, `AC-JOIN-4`, `AC-CHAT-4`  |
+| `SEC-007`, `SEC-011`            | `AC-CHAT-3`, `AC-CHAT-4`, `AC-CHAT-5`               |
+| `SEC-012`, `SEC-013`            | `AC-P1-3`, `AC-EXT-3`, `AC-STAFF-7`                 |
+| `SEC-014`–`SEC-016`, `SEC-021`  | `AC-EXT-4`, `AC-EXT-5`                              |
+| `SEC-017`                       | `AC-STAFF-1`, `AC-STAFF-5`                          |
+| `SEC-018`                       | `AC-VETO-3`                                         |
+| `SEC-019`, `SEC-022`            | `AC-STAFF-6`, `AC-STAFF-7`                          |
+| `SEC-020`                       | `AC-STAFF-6`                                        |
+| `SEC-024`                       | `AC-P1-4`                                           |
 
 ---
 

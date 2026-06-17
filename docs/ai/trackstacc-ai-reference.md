@@ -70,6 +70,7 @@ Connect with signed token; server validates signature, room, session, ban/mute, 
 
 - **Client→server** (`WS-C2S`), with minimum tier: `chat.send` (member), `queue.add` (member), `queue.vote` (member), `playback.skipVote` (member), `room.settings.update` (host/mod), `room.mechanic.change` (host), `moderation.action` (host/mod); `playback.clientState` and `presence.heartbeat` allowed for `listener`. Member-only events on a listener connection → `error` ack `LISTENER_READ_ONLY`.
 - **Server→client** (`WS-S2C`): `room.snapshot`, `presence.updated`, `chat.message`/`chat.deleted`, `queue.updated`/`queue.item.added`/`queue.item.removed`/`queue.vote.updated`, veto events `queue.item.veto_window.opened`/`.updated`/`queue.item.vetoed`/`queue.item.veto_passed`, `playback.state`/`playback.resync`, `room.settings.changed`/`room.mechanic.changed`/`room.external_settings.changed`, integration `integration.command.received`/`.accepted`/`.rejected`, `external.bot_message.created`, `moderation.applied`, `error`.
+- **Channel segmentation:** `chat.message` and `chat.deleted` are broadcast to a dedicated sub-channel `room:${roomId}:chat` (via `roomChatChannel()`). Listener sockets join this sub-channel only when `rooms.listener_chat_visible` is true. All other room events use the global `room:${roomId}` channel (`roomChannel()`). Toggling `listener_chat_visible` dynamically syncs connected listener sockets via `syncListenerChatChannelMembership()`.
 
 ---
 
@@ -142,4 +143,4 @@ FIFO (private) / voting (public) mechanic; max song 10 min; block-if-queued dupl
 
 ---
 
-*Authority reminders for agents: §19.5 (`SEC-EXTINTEG`) overrides any external-security reference copy; §23.4 (`ERR-REGISTRY`) is the canonical error list; §4 (`DEF`) is canonical terminology; `/api/` is the authoritative API version; never weaken the server-side tier gate (`SEC-TIER`, NFR-038, FR-028). See `trackstacc-ai-documentation-plan.md` §1.4/§6.5 for flagged source discrepancies — surface, don't silently reconcile.*
+_Authority reminders for agents: §19.5 (`SEC-EXTINTEG`) overrides any external-security reference copy; §23.4 (`ERR-REGISTRY`) is the canonical error list; §4 (`DEF`) is canonical terminology; `/api/` is the authoritative API version; never weaken the server-side tier gate (`SEC-TIER`, NFR-038, FR-028). See `trackstacc-ai-documentation-plan.md` §1.4/§6.5 for flagged source discrepancies — surface, don't silently reconcile._
