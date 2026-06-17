@@ -223,11 +223,11 @@
 - **Reads:** `chat_messages` (`DATA-CHAT`)
 - **Writes:** —
 - **Emits:** —
-- **Security:** `SEC-TIER` — listeners read only if `listener_chat_visible = true` (FR-078)
-- **Tier:** `member` (or `listener` when visibility enabled)
+- **Security:** `SEC-TIER` — room-bound session required (`session.roomId === roomId`). Listeners can read chat history only if `listener_chat_visible = true` on the room, otherwise returning an empty array `[]` with `200 OK`.
+- **Tier:** `member` (or `listener` returning empty list when visibility is disabled)
 - **Rate limit:** per-session read
 - **Acceptance:** `AC-CHAT-1`, `AC-CHAT-2`
-- **Errors:** `LISTENER_READ_ONLY` (403, when visibility disabled)
+- **Errors:** `AUTH_REQUIRED` (401), `FORBIDDEN` (403, room mismatch)
 
 > **Note:** Real-time chat *send* is a WebSocket event (`WS-CHAT` `chat.send`), not a REST endpoint — see WS section. The chat rate limit (5 msg/10s, App. A) applies there.
 

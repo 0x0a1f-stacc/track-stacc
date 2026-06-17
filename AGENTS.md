@@ -102,6 +102,9 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 
 - `/api/rooms/:roomId/join` and `/api/rooms/:roomId/password/verify` accept room slug **or** UUID.
 - All other room routes (queue, playback, chat, moderation, settings) accept **UUID only**. Do not pass slugs to these routes.
+- Privacy-sensitive read endpoints like `GET /api/rooms/:roomId/chat/messages` require session room IDs matching the URL path (`session.roomId === roomId`).
+- For listeners, if `listenerChatVisible` is disabled (default), history requests return `200 OK` with an empty history list (`messages: []`).
+- All mutating endpoints (and sensitive reads) enforce room-scoped resource-binding validations: session room ID must match URL path (`FORBIDDEN` / 403), and target resources (such as queue items or chat messages) must belong to the room (`QUEUE_ITEM_NOT_FOUND` / 404 or `CHAT_MESSAGE_NOT_FOUND` / 404). Moderation targets must belong to the room (`FORBIDDEN` / 403 / "Target session not found in this room.").
 
 ## Realtime / Snapshot Notes
 

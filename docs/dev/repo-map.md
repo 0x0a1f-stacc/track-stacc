@@ -85,6 +85,15 @@ apps/api (Fastify 5)       apps/web (Next.js 14)
 
 Standalone protected-nickname endpoints (`POST /api/nicknames/check`, `/protect`, `/authenticate`) are implemented in `apps/api/src/modules/nicknames/` and consumed by the room join flow in `apps/api/src/modules/identity/`. Tests cover normalization, hash-only password storage, reserved-name blocking, wrong-password denial, and failed-attempt rate limiting. Test file: `apps/api/src/__tests__/nicknames.test.ts`.
 
+### Key file: REST tier gating and cross-room protection tests
+
+Comprehensive verification of native access-tier gating, session validations, and room-scoped resource binding is implemented in `apps/api/src/__tests__/tier-gate-rest.test.ts`. This test suite validates that:
+- Listeners attempting mutations receive `LISTENER_READ_ONLY` (403) errors.
+- Unauthenticated requests receive `AUTH_REQUIRED` (401) errors.
+- Mutating routes (and sensitive reads like chat history fetch) require session room IDs matching the URL path (`session.roomId === roomId`), throwing `FORBIDDEN` (403) on mismatches.
+- Resource mutations (queue deletions, voting, suggestion moderation, and chat deletions) verify that the target entity belongs to the room (`roomId`), throwing `404 NOT_FOUND` (e.g. `QUEUE_ITEM_NOT_FOUND`, `CHAT_MESSAGE_NOT_FOUND`) on mismatches.
+- Chat history requests returning `200 OK` yield empty results (`messages: []`) for Listeners when `listenerChatVisible` is disabled, and actual history when enabled.
+
 ---
 
 ## Command Reference
