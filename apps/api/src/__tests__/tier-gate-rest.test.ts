@@ -180,9 +180,23 @@ function buildTestApp(
   } as never;
   app.decorate("redis", mockRedis);
 
+  const mockListenerSocket = {
+    data: { accessTier: "listener" },
+    join: vi.fn(),
+    leave: vi.fn(),
+  };
+  const mockMemberSocket = {
+    data: { accessTier: "member" },
+    join: vi.fn(),
+    leave: vi.fn(),
+  };
   const mockIo = {
     to: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
     emit: vi.fn(),
+    fetchSockets: vi.fn().mockResolvedValue([mockListenerSocket, mockMemberSocket]),
+    _mockListenerSocket: mockListenerSocket,
+    _mockMemberSocket: mockMemberSocket,
   } as unknown as Server;
   app.decorate("io", mockIo);
 
@@ -456,6 +470,30 @@ describe("REST tier gate — listener rejection", () => {
       expect(prisma.room.update.mock.calls.length).toBeGreaterThan(0);
       const lastCall = prisma.room.update.mock.calls.at(-1)?.[0];
       expect(lastCall?.data.listenerChatVisible).toBe(true);
+
+      // Verify sockets join/leave chat channel
+      const io = app.io as unknown as {
+        _mockListenerSocket: {
+          join: ReturnType<typeof vi.fn>;
+          leave: ReturnType<typeof vi.fn>;
+        };
+        _mockMemberSocket: {
+          join: ReturnType<typeof vi.fn>;
+          leave: ReturnType<typeof vi.fn>;
+        };
+        to: ReturnType<typeof vi.fn>;
+        emit: ReturnType<typeof vi.fn>;
+      };
+      expect(io._mockListenerSocket.join).toHaveBeenCalledWith("room:room-abc-123:chat");
+      expect(io._mockMemberSocket.join).not.toHaveBeenCalled();
+
+      // Verify settings.changed broadcast to global channel
+      expect(io.to).toHaveBeenCalledWith("room:room-abc-123");
+      expect(io.emit).toHaveBeenCalledWith("room.settings.changed", {
+        type: "room.settings.changed",
+        settings: { listenerChatVisible: true },
+      });
+
       await app.close();
     });
 
@@ -483,6 +521,30 @@ describe("REST tier gate — listener rejection", () => {
       expect(prisma.room.update.mock.calls.length).toBeGreaterThan(0);
       const lastCall = prisma.room.update.mock.calls.at(-1)?.[0];
       expect(lastCall?.data.listenerChatVisible).toBe(false);
+
+      // Verify sockets join/leave chat channel
+      const io = app.io as unknown as {
+        _mockListenerSocket: {
+          join: ReturnType<typeof vi.fn>;
+          leave: ReturnType<typeof vi.fn>;
+        };
+        _mockMemberSocket: {
+          join: ReturnType<typeof vi.fn>;
+          leave: ReturnType<typeof vi.fn>;
+        };
+        to: ReturnType<typeof vi.fn>;
+        emit: ReturnType<typeof vi.fn>;
+      };
+      expect(io._mockListenerSocket.leave).toHaveBeenCalledWith("room:room-abc-123:chat");
+      expect(io._mockMemberSocket.leave).not.toHaveBeenCalled();
+
+      // Verify settings.changed broadcast to global channel
+      expect(io.to).toHaveBeenCalledWith("room:room-abc-123");
+      expect(io.emit).toHaveBeenCalledWith("room.settings.changed", {
+        type: "room.settings.changed",
+        settings: { listenerChatVisible: false },
+      });
+
       await app.close();
     });
 
