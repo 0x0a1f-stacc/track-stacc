@@ -528,4 +528,137 @@ describe("WebSocket gateway", () => {
       expect(() => verifyWsToken(token)).toThrow();
     });
   });
+
+  describe("Segmented chat channel routing", () => {
+    function mockSessionWithId(id: string, accessTier: string) {
+      const isMember = accessTier === "member";
+      return {
+        id,
+        roomId: ROOM_ID,
+        accessTier,
+        role: isMember ? "participant" : "listener",
+        normalizedNickname: isMember ? "membername" : null,
+        displayNickname: isMember ? "MemberName" : null,
+        nicknameClaimId: isMember ? "claim-xyz" : null,
+        sessionTokenHash: "hashed-token",
+        isMuted: false,
+        isBanned: false,
+        joinedAt: new Date(),
+        lastSeenAt: new Date(),
+        leftAt: null,
+      };
+    }
+
+    it("does not deliver chat.message or chat.deleted to listener when listenerChatVisible is false", async () => {
+      const { app, io, port } = await setupTest({
+        listenerChatVisible: false,
+      });
+
+      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === "session-member") {
+          return Promise.resolve(mockSessionWithId("session-member", "member"));
+        }
+        return Promise.resolve(mockSessionWithId("session-listener", "listener"));
+      });
+
+      const memberToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-member",
+        accessTier: "member",
+      });
+      const listenerToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener",
+        accessTier: "listener",
+      });
+
+      const { client: memberClient } = await connectClient(port, memberToken);
+      const { client: listenerClient } = await connectClient(port, listenerToken);
+
+      let memberReceived = false;
+      let listenerReceived = false;
+      let listenerReceivedDeleted = false;
+
+      memberClient.on("chat.message", () => {
+        memberReceived = true;
+      });
+      listenerClient.on("chat.message", () => {
+        listenerReceived = true;
+      });
+      listenerClient.on("chat.deleted", () => {
+        listenerReceivedDeleted = true;
+      });
+
+      memberClient.emit("chat.send", { type: "chat.send", body: "Hello Room", tempId: "temp-1" });
+
+      const { broadcast } = await import("../realtime/broadcast.js");
+      broadcast(io, ROOM_ID, { type: "chat.deleted", messageId: "msg-1" });
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      memberClient.close();
+      listenerClient.close();
+      await teardownTest(io, app);
+
+      expect(memberReceived).toBe(true);
+      expect(listenerReceived).toBe(false);
+      expect(listenerReceivedDeleted).toBe(false);
+    });
+
+    it("delivers chat.message and chat.deleted to listener when listenerChatVisible is true", async () => {
+      const { app, io, port } = await setupTest({
+        listenerChatVisible: true,
+      });
+
+      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === "session-member") {
+          return Promise.resolve(mockSessionWithId("session-member", "member"));
+        }
+        return Promise.resolve(mockSessionWithId("session-listener", "listener"));
+      });
+
+      const memberToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-member",
+        accessTier: "member",
+      });
+      const listenerToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener",
+        accessTier: "listener",
+      });
+
+      const { client: memberClient } = await connectClient(port, memberToken);
+      const { client: listenerClient } = await connectClient(port, listenerToken);
+
+      let memberReceived = false;
+      let listenerReceived = false;
+      let listenerReceivedDeleted = false;
+
+      memberClient.on("chat.message", () => {
+        memberReceived = true;
+      });
+      listenerClient.on("chat.message", () => {
+        listenerReceived = true;
+      });
+      listenerClient.on("chat.deleted", () => {
+        listenerReceivedDeleted = true;
+      });
+
+      memberClient.emit("chat.send", { type: "chat.send", body: "Hello Room Visible", tempId: "temp-2" });
+
+      const { broadcast } = await import("../realtime/broadcast.js");
+      broadcast(io, ROOM_ID, { type: "chat.deleted", messageId: "msg-2" });
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      memberClient.close();
+      listenerClient.close();
+      await teardownTest(io, app);
+
+      expect(memberReceived).toBe(true);
+      expect(listenerReceived).toBe(true);
+      expect(listenerReceivedDeleted).toBe(true);
+    });
+  });
 });
