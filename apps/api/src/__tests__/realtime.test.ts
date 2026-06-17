@@ -137,7 +137,9 @@ async function setupTest(overrides?: {
   app.register(cookie);
 
   app.decorate("redis", {
-    duplicate: vi.fn().mockReturnValue({ quit: vi.fn().mockResolvedValue(undefined) }),
+    duplicate: vi
+      .fn()
+      .mockReturnValue({ quit: vi.fn().mockResolvedValue(undefined) }),
     get: vi.fn().mockResolvedValue(null),
     set: vi.fn().mockResolvedValue("OK"),
     incr: vi.fn().mockResolvedValue(1),
@@ -148,10 +150,16 @@ async function setupTest(overrides?: {
   const session = mockSession(
     overrides
       ? {
-          ...(overrides.accessTier !== undefined && { accessTier: overrides.accessTier }),
+          ...(overrides.accessTier !== undefined && {
+            accessTier: overrides.accessTier,
+          }),
           ...(overrides.role !== undefined && { role: overrides.role }),
-          ...(overrides.sessionRoomId !== undefined && { roomId: overrides.sessionRoomId }),
-          ...(overrides.sessionBanned !== undefined && { isBanned: overrides.sessionBanned }),
+          ...(overrides.sessionRoomId !== undefined && {
+            roomId: overrides.sessionRoomId,
+          }),
+          ...(overrides.sessionBanned !== undefined && {
+            isBanned: overrides.sessionBanned,
+          }),
         }
       : undefined,
   );
@@ -178,30 +186,32 @@ async function setupTest(overrides?: {
     },
     chatMessage: {
       findMany: vi.fn().mockResolvedValue(mockChatMessages(3)),
-      create: vi.fn().mockImplementation((args: {
-        data: {
-          roomId: string;
-          senderSessionId?: string | null;
-          messageType?: "user" | "system";
-          body: string;
-          metadata?: Record<string, unknown> | null;
-        };
-      }) => {
-        const data = args.data;
-        return Promise.resolve({
-          id: "msg-created-123",
-          roomId: data.roomId,
-          senderSessionId: data.senderSessionId ?? null,
-          messageType: data.messageType ?? "user",
-          body: data.body,
-          metadata: data.metadata ?? {},
-          deletedAt: null,
-          createdAt: new Date(),
-          sender: session.displayNickname
-            ? { displayNickname: session.displayNickname }
-            : null,
-        });
-      }),
+      create: vi.fn().mockImplementation(
+        (args: {
+          data: {
+            roomId: string;
+            senderSessionId?: string | null;
+            messageType?: "user" | "system";
+            body: string;
+            metadata?: Record<string, unknown> | null;
+          };
+        }) => {
+          const data = args.data;
+          return Promise.resolve({
+            id: "msg-created-123",
+            roomId: data.roomId,
+            senderSessionId: data.senderSessionId ?? null,
+            messageType: data.messageType ?? "user",
+            body: data.body,
+            metadata: data.metadata ?? {},
+            deletedAt: null,
+            createdAt: new Date(),
+            sender: session.displayNickname
+              ? { displayNickname: session.displayNickname }
+              : null,
+          });
+        },
+      ),
     },
     $disconnect: vi.fn(),
     $queryRaw: vi.fn().mockResolvedValue([{ "1": 1 }]),
@@ -427,7 +437,9 @@ describe("WebSocket gateway", () => {
 
       const { client } = await connectClient(port, token);
 
-      const messagePromise = new Promise<{ message: { senderNickname: string | null } }>((resolve, reject) => {
+      const messagePromise = new Promise<{
+        message: { senderNickname: string | null };
+      }>((resolve, reject) => {
         client.on("chat.message", (data: unknown) => {
           resolve(data as { message: { senderNickname: string | null } });
         });
@@ -436,7 +448,11 @@ describe("WebSocket gateway", () => {
         });
       });
 
-      client.emit("chat.send", { type: "chat.send", body: "Hello World", tempId: "temp-123" });
+      client.emit("chat.send", {
+        type: "chat.send",
+        body: "Hello World",
+        tempId: "temp-123",
+      });
 
       const received = await messagePromise;
       client.close();
@@ -465,7 +481,9 @@ describe("WebSocket gateway", () => {
       app.register(cookie);
 
       app.decorate("redis", {
-        duplicate: vi.fn().mockReturnValue({ quit: vi.fn().mockResolvedValue(undefined) }),
+        duplicate: vi
+          .fn()
+          .mockReturnValue({ quit: vi.fn().mockResolvedValue(undefined) }),
         get: vi.fn().mockResolvedValue(null),
         set: vi.fn().mockResolvedValue("OK"),
         incr: vi.fn().mockResolvedValue(1),
@@ -554,12 +572,18 @@ describe("WebSocket gateway", () => {
         listenerChatVisible: false,
       });
 
-      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
-        if (args.where.id === "session-member") {
-          return Promise.resolve(mockSessionWithId("session-member", "member"));
-        }
-        return Promise.resolve(mockSessionWithId("session-listener", "listener"));
-      });
+      app.prisma.roomSession.findUnique = vi
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) => {
+          if (args.where.id === "session-member") {
+            return Promise.resolve(
+              mockSessionWithId("session-member", "member"),
+            );
+          }
+          return Promise.resolve(
+            mockSessionWithId("session-listener", "listener"),
+          );
+        });
 
       const memberToken = signWsToken({
         roomId: ROOM_ID,
@@ -573,7 +597,10 @@ describe("WebSocket gateway", () => {
       });
 
       const { client: memberClient } = await connectClient(port, memberToken);
-      const { client: listenerClient } = await connectClient(port, listenerToken);
+      const { client: listenerClient } = await connectClient(
+        port,
+        listenerToken,
+      );
 
       let memberReceived = false;
       let listenerReceived = false;
@@ -589,7 +616,11 @@ describe("WebSocket gateway", () => {
         listenerReceivedDeleted = true;
       });
 
-      memberClient.emit("chat.send", { type: "chat.send", body: "Hello Room", tempId: "temp-1" });
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "Hello Room",
+        tempId: "temp-1",
+      });
 
       const { broadcast } = await import("../realtime/broadcast.js");
       broadcast(io, ROOM_ID, { type: "chat.deleted", messageId: "msg-1" });
@@ -610,12 +641,18 @@ describe("WebSocket gateway", () => {
         listenerChatVisible: true,
       });
 
-      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
-        if (args.where.id === "session-member") {
-          return Promise.resolve(mockSessionWithId("session-member", "member"));
-        }
-        return Promise.resolve(mockSessionWithId("session-listener", "listener"));
-      });
+      app.prisma.roomSession.findUnique = vi
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) => {
+          if (args.where.id === "session-member") {
+            return Promise.resolve(
+              mockSessionWithId("session-member", "member"),
+            );
+          }
+          return Promise.resolve(
+            mockSessionWithId("session-listener", "listener"),
+          );
+        });
 
       const memberToken = signWsToken({
         roomId: ROOM_ID,
@@ -629,7 +666,10 @@ describe("WebSocket gateway", () => {
       });
 
       const { client: memberClient } = await connectClient(port, memberToken);
-      const { client: listenerClient } = await connectClient(port, listenerToken);
+      const { client: listenerClient } = await connectClient(
+        port,
+        listenerToken,
+      );
 
       let memberReceived = false;
       let listenerReceived = false;
@@ -645,7 +685,11 @@ describe("WebSocket gateway", () => {
         listenerReceivedDeleted = true;
       });
 
-      memberClient.emit("chat.send", { type: "chat.send", body: "Hello Room Visible", tempId: "temp-2" });
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "Hello Room Visible",
+        tempId: "temp-2",
+      });
 
       const { broadcast } = await import("../realtime/broadcast.js");
       broadcast(io, ROOM_ID, { type: "chat.deleted", messageId: "msg-2" });
@@ -659,6 +703,243 @@ describe("WebSocket gateway", () => {
       expect(memberReceived).toBe(true);
       expect(listenerReceived).toBe(true);
       expect(listenerReceivedDeleted).toBe(true);
+    });
+
+    it("toggling listenerChatVisible from false to true dynamically joins connected listener sockets", async () => {
+      const { app, io, port } = await setupTest({
+        listenerChatVisible: false,
+      });
+
+      app.prisma.roomSession.findUnique = vi
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) => {
+          if (args.where.id === "session-member") {
+            return Promise.resolve(
+              mockSessionWithId("session-member", "member"),
+            );
+          }
+          return Promise.resolve(
+            mockSessionWithId("session-listener", "listener"),
+          );
+        });
+
+      const memberToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-member",
+        accessTier: "member",
+      });
+      const listenerToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener",
+        accessTier: "listener",
+      });
+
+      const { client: memberClient } = await connectClient(port, memberToken);
+      const { client: listenerClient } = await connectClient(
+        port,
+        listenerToken,
+      );
+
+      let memberChats = 0;
+      let listenerChats = 0;
+
+      memberClient.on("chat.message", () => {
+        memberChats++;
+      });
+      listenerClient.on("chat.message", () => {
+        listenerChats++;
+      });
+
+      // Phase 1: chat before toggle — listener should NOT receive
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "Before toggle",
+        tempId: "temp-before-toggle-1",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      expect(memberChats).toBe(1);
+      expect(listenerChats).toBe(0);
+
+      // Phase 2: toggle visibility ON
+      const { syncListenerChatChannelMembership } =
+        await import("../realtime/broadcast.js");
+      await syncListenerChatChannelMembership(io, ROOM_ID, true);
+
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "After toggle",
+        tempId: "temp-after-toggle-1",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      memberClient.close();
+      listenerClient.close();
+      await teardownTest(io, app);
+
+      expect(memberChats).toBe(2);
+      expect(listenerChats).toBe(1);
+    });
+
+    it("toggling listenerChatVisible from true to false dynamically removes connected listener sockets from chat delivery", async () => {
+      const { app, io, port } = await setupTest({
+        listenerChatVisible: true,
+      });
+
+      app.prisma.roomSession.findUnique = vi
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) => {
+          if (args.where.id === "session-member") {
+            return Promise.resolve(
+              mockSessionWithId("session-member", "member"),
+            );
+          }
+          return Promise.resolve(
+            mockSessionWithId("session-listener", "listener"),
+          );
+        });
+
+      const memberToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-member",
+        accessTier: "member",
+      });
+      const listenerToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener",
+        accessTier: "listener",
+      });
+
+      const { client: memberClient } = await connectClient(port, memberToken);
+      const { client: listenerClient } = await connectClient(
+        port,
+        listenerToken,
+      );
+
+      let memberChats = 0;
+      let listenerChats = 0;
+
+      memberClient.on("chat.message", () => {
+        memberChats++;
+      });
+      listenerClient.on("chat.message", () => {
+        listenerChats++;
+      });
+
+      // Phase 1: chat before toggle — both should receive
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "Before toggle",
+        tempId: "temp-before-toggle-2",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      expect(memberChats).toBe(1);
+      expect(listenerChats).toBe(1);
+
+      // Phase 2: toggle visibility OFF
+      const { syncListenerChatChannelMembership } =
+        await import("../realtime/broadcast.js");
+      await syncListenerChatChannelMembership(io, ROOM_ID, false);
+
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "After toggle",
+        tempId: "temp-after-toggle-2",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      memberClient.close();
+      listenerClient.close();
+      await teardownTest(io, app);
+
+      expect(memberChats).toBe(2);
+      expect(listenerChats).toBe(1);
+    });
+
+    it("toggling listenerChatVisible synced across multiple listener sockets", async () => {
+      const { app, io, port } = await setupTest({
+        listenerChatVisible: false,
+      });
+
+      app.prisma.roomSession.findUnique = vi
+        .fn()
+        .mockImplementation((args: { where: { id: string } }) => {
+          if (args.where.id === "session-member") {
+            return Promise.resolve(
+              mockSessionWithId("session-member", "member"),
+            );
+          }
+          if (args.where.id === "session-listener-1") {
+            return Promise.resolve(
+              mockSessionWithId("session-listener-1", "listener"),
+            );
+          }
+          return Promise.resolve(
+            mockSessionWithId("session-listener-2", "listener"),
+          );
+        });
+
+      const memberToken = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-member",
+        accessTier: "member",
+      });
+      const listener1Token = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener-1",
+        accessTier: "listener",
+      });
+      const listener2Token = signWsToken({
+        roomId: ROOM_ID,
+        sessionId: "session-listener-2",
+        accessTier: "listener",
+      });
+
+      const { client: memberClient } = await connectClient(port, memberToken);
+      const { client: listener1Client } = await connectClient(
+        port,
+        listener1Token,
+      );
+      const { client: listener2Client } = await connectClient(
+        port,
+        listener2Token,
+      );
+
+      let memberChats = 0;
+      let listener1Chats = 0;
+      let listener2Chats = 0;
+
+      memberClient.on("chat.message", () => {
+        memberChats++;
+      });
+      listener1Client.on("chat.message", () => {
+        listener1Chats++;
+      });
+      listener2Client.on("chat.message", () => {
+        listener2Chats++;
+      });
+
+      // Toggle ON — both listeners should join chat channel
+      const { syncListenerChatChannelMembership } =
+        await import("../realtime/broadcast.js");
+      await syncListenerChatChannelMembership(io, ROOM_ID, true);
+
+      memberClient.emit("chat.send", {
+        type: "chat.send",
+        body: "After toggle",
+        tempId: "temp-multi-toggle",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      memberClient.close();
+      listener1Client.close();
+      listener2Client.close();
+      await teardownTest(io, app);
+
+      expect(memberChats).toBe(1);
+      expect(listener1Chats).toBe(1);
+      expect(listener2Chats).toBe(1);
     });
   });
 });
