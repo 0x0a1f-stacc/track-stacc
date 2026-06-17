@@ -152,6 +152,7 @@ export function registerRoomHandlers(
         const body = voteSchema.parse(event);
         const item = await voteQueueItem(
           app,
+          roomId,
           event.queueItemId,
           sessionId,
           body.vote,

@@ -245,3 +245,112 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
     expect(body.messages).toHaveLength(2);
   });
 });
+
+describe("DELETE /api/rooms/:roomId/chat/messages/:messageId", () => {
+  it("allows moderator to delete message in their own room", async () => {
+    const mockUpdate = vi.fn().mockResolvedValue({ id: "msg-1", body: "deleted" });
+    const mockFindFirst = vi.fn().mockResolvedValue({ id: "msg-1", roomId: "room-abc" });
+
+    const app = buildTestApp({
+      session: {
+        id: "session-xyz",
+        roomId: "room-abc",
+        accessTier: "member",
+        role: "moderator",
+        displayNickname: "Mod",
+      },
+    });
+
+    const mockPrisma = app.prisma as unknown as {
+      chatMessage: {
+        findFirst: typeof mockFindFirst;
+        update: typeof mockUpdate;
+      };
+    };
+    mockPrisma.chatMessage.findFirst = mockFindFirst;
+    mockPrisma.chatMessage.update = mockUpdate;
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/rooms/room-abc/chat/messages/msg-1",
+      cookies: { session_token: "test-token" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { id: "msg-1", roomId: "room-abc" },
+    });
+    expect(mockUpdate).toHaveBeenCalled();
+  });
+
+  it("blocks deleting a message from a different room (cross-room)", async () => {
+    const mockUpdate = vi.fn();
+    const mockFindFirst = vi.fn().mockResolvedValue(null);
+
+    const app = buildTestApp({
+      session: {
+        id: "session-xyz",
+        roomId: "room-abc",
+        accessTier: "member",
+        role: "moderator",
+        displayNickname: "Mod",
+      },
+    });
+
+    const mockPrisma = app.prisma as unknown as {
+      chatMessage: {
+        findFirst: typeof mockFindFirst;
+        update: typeof mockUpdate;
+      };
+    };
+    mockPrisma.chatMessage.findFirst = mockFindFirst;
+    mockPrisma.chatMessage.update = mockUpdate;
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/rooms/room-abc/chat/messages/msg-from-room-def",
+      cookies: { session_token: "test-token" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.body) as TestErrorResponse;
+    expect(body.error.code).toBe("CHAT_MESSAGE_NOT_FOUND");
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("blocks deleting a message when session roomId does not match URL roomId", async () => {
+    const mockUpdate = vi.fn();
+    const mockFindFirst = vi.fn();
+
+    const app = buildTestApp({
+      session: {
+        id: "session-xyz",
+        roomId: "room-abc",
+        accessTier: "member",
+        role: "moderator",
+        displayNickname: "Mod",
+      },
+    });
+
+    const mockPrisma = app.prisma as unknown as {
+      chatMessage: {
+        findFirst: typeof mockFindFirst;
+        update: typeof mockUpdate;
+      };
+    };
+    mockPrisma.chatMessage.findFirst = mockFindFirst;
+    mockPrisma.chatMessage.update = mockUpdate;
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/rooms/room-def/chat/messages/msg-1",
+      cookies: { session_token: "test-token" },
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = JSON.parse(res.body) as TestErrorResponse;
+    expect(body.error.code).toBe("FORBIDDEN");
+    expect(mockFindFirst).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});

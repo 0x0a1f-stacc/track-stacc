@@ -9,6 +9,7 @@ export interface SessionGuard {
   id: string;
   accessTier: string;
   role: string;
+  roomId: string;
 }
 
 export function createListenerReadOnlyError(): AppError {

@@ -14,10 +14,10 @@ function expectAppErrorCode(fn: () => unknown, expectedCode: string) {
 describe("permissions", () => {
   it("requires member access tier for moderator actions", () => {
     expect(() =>
-      assertModerator({ id: "s1", accessTier: "member", role: "host" }),
+      assertModerator({ id: "s1", accessTier: "member", role: "host", roomId: "room-1" }),
     ).not.toThrow();
     expect(() =>
-      assertModerator({ id: "s2", accessTier: "member", role: "moderator" }),
+      assertModerator({ id: "s2", accessTier: "member", role: "moderator", roomId: "room-1" }),
     ).not.toThrow();
     expectAppErrorCode(
       () =>
@@ -25,6 +25,7 @@ describe("permissions", () => {
           id: "s3",
           accessTier: "member",
           role: "participant",
+          roomId: "room-1",
         }),
       "MODERATOR_REQUIRED",
     );
@@ -32,7 +33,7 @@ describe("permissions", () => {
 
   it("rejects listener-tier sessions regardless of role", () => {
     expectAppErrorCode(
-      () => assertModerator({ id: "s4", accessTier: "listener", role: "host" }),
+      () => assertModerator({ id: "s4", accessTier: "listener", role: "host", roomId: "room-1" }),
       "LISTENER_READ_ONLY",
     );
     expectAppErrorCode(
@@ -41,6 +42,7 @@ describe("permissions", () => {
           id: "s5",
           accessTier: "listener",
           role: "moderator",
+          roomId: "room-1",
         }),
       "LISTENER_READ_ONLY",
     );

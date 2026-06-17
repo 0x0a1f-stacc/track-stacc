@@ -133,6 +133,10 @@ export async function nicknamesRouter(app: FastifyInstance) {
   });
   app.post("/api/rooms/:roomId/nickname/change", async (request) => {
     const session = requireMember(request.session);
+    const { roomId } = request.params as { roomId: string };
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
     const body = request.body as {
       displayNickname?: string;
       nicknamePassword?: string;

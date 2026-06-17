@@ -51,11 +51,17 @@ export async function playbackRouter(app: FastifyInstance, io: Server) {
   app.post("/api/rooms/:roomId/playback/skip", async (request) => {
     const session = requireMember(request.session);
     const { roomId } = request.params as { roomId: string };
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
     return { state: await skipTrack(app, io, roomId, session.id) };
   });
   app.post("/api/rooms/:roomId/playback/skip-vote", async (request) => {
     const session = requireMember(request.session);
     const { roomId } = request.params as { roomId: string };
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
     const state = await getPlaybackState(app, roomId);
     if (!state.queueItemId)
       throw new AppError("NO_TRACK_PLAYING", "No track is playing.");

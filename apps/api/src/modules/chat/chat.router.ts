@@ -54,10 +54,30 @@ export async function chatRouter(app: FastifyInstance) {
   });
   app.delete("/api/rooms/:roomId/chat/messages/:messageId", async (request) => {
     const session = requireModerator(request.session);
-    const { messageId } = request.params as { messageId: string };
+    const { roomId, messageId } = request.params as {
+      roomId: string;
+      messageId: string;
+    };
+
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
+
+    const message = await app.prisma.chatMessage.findFirst({
+      where: { id: messageId, roomId },
+    });
+
+    if (!message) {
+      throw new AppError(
+        "CHAT_MESSAGE_NOT_FOUND",
+        "That chat message was not found.",
+        404,
+      );
+    }
+
     return {
       message: await app.prisma.chatMessage.update({
-        where: { id: messageId },
+        where: { id: message.id },
         data: { deletedAt: new Date(), deletedBySessionId: session.id },
       }),
     };
