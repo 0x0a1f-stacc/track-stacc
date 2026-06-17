@@ -898,3 +898,234 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
     await app.close();
   });
 });
+
+describe("Cross-Room Resource Protection", () => {
+  const HOST_SESSION = { ...MEMBER_SESSION, role: "host" as const };
+
+  describe("Queue cross-room protection", () => {
+    it("blocks DELETE queue item when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "DELETE",
+        url: "/api/rooms/different-room/queue/items/queue-item-1",
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks DELETE queue item when item belongs to a different room", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const mockFindFirst = vi.fn().mockResolvedValue(null);
+      const mockPrisma = app.prisma as unknown as {
+        queueItem: {
+          findFirst: typeof mockFindFirst;
+        };
+      };
+      mockPrisma.queueItem.findFirst = mockFindFirst;
+
+      const response = await app.inject({
+        method: "DELETE",
+        url: "/api/rooms/room-abc-123/queue/items/item-from-other-room",
+      });
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("QUEUE_ITEM_NOT_FOUND");
+      await app.close();
+    });
+
+    it("blocks POST vote when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/queue/items/queue-item-1/vote",
+        payload: { vote: 1 },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks POST vote when item belongs to a different room", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const mockFindFirst = vi.fn().mockResolvedValue(null);
+      const mockPrisma = app.prisma as unknown as {
+        queueItem: {
+          findFirst: typeof mockFindFirst;
+        };
+      };
+      mockPrisma.queueItem.findFirst = mockFindFirst;
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/queue/items/item-from-other-room/vote",
+        payload: { vote: 1 },
+      });
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("QUEUE_ITEM_NOT_FOUND");
+      await app.close();
+    });
+
+    it("blocks POST approve suggestion when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/queue/items/queue-item-1/approve",
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks POST approve suggestion when item belongs to a different room", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const mockFindFirst = vi.fn().mockResolvedValue(null);
+      const mockPrisma = app.prisma as unknown as {
+        queueItem: {
+          findFirst: typeof mockFindFirst;
+        };
+      };
+      mockPrisma.queueItem.findFirst = mockFindFirst;
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/queue/items/item-from-other-room/approve",
+      });
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("QUEUE_ITEM_NOT_FOUND");
+      await app.close();
+    });
+
+    it("blocks POST reject suggestion when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/queue/items/queue-item-1/reject",
+        payload: { reason: "duplicate" },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks POST reject suggestion when item belongs to a different room", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const mockFindFirst = vi.fn().mockResolvedValue(null);
+      const mockPrisma = app.prisma as unknown as {
+        queueItem: {
+          findFirst: typeof mockFindFirst;
+        };
+      };
+      mockPrisma.queueItem.findFirst = mockFindFirst;
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/queue/items/item-from-other-room/reject",
+        payload: { reason: "duplicate" },
+      });
+      expect(response.statusCode).toBe(404);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("QUEUE_ITEM_NOT_FOUND");
+      await app.close();
+    });
+  });
+
+  describe("Moderation cross-room protection", () => {
+    it("blocks moderation action when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/moderation/mute",
+        payload: { targetSessionId: "00000000-0000-0000-0000-000000000000" },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks moderation action when target session belongs to a different room", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const mockFindFirst = vi.fn().mockResolvedValue(null);
+      const mockPrisma = app.prisma as unknown as {
+        roomSession: {
+          findFirst: typeof mockFindFirst;
+        };
+      };
+      mockPrisma.roomSession.findFirst = mockFindFirst;
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/mute",
+        payload: { targetSessionId: "00000000-0000-0000-0000-000000000001" },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string; message: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      expect(body.error.message).toBe("Target session not found in this room.");
+      await app.close();
+    });
+  });
+
+  describe("Settings cross-room protection", () => {
+    it("blocks patching settings when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(HOST_SESSION);
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/rooms/different-room/settings",
+        payload: { settings: { queueLocked: true } },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+  });
+
+  describe("Playback cross-room protection", () => {
+    it("blocks skip when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/playback/skip",
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+
+    it("blocks skip-vote when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/playback/skip-vote",
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+  });
+
+  describe("Nickname change cross-room protection", () => {
+    it("blocks nickname change when session roomId does not match URL roomId", async () => {
+      const app = buildTestApp(MEMBER_SESSION);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/different-room/nickname/change",
+        payload: { displayNickname: "NewName" },
+      });
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as { error: { code: string } };
+      expect(body.error.code).toBe("FORBIDDEN");
+      await app.close();
+    });
+  });
+});

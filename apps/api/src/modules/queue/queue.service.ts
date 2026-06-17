@@ -121,12 +121,13 @@ export async function addQueueItem(
 
 export async function voteQueueItem(
   app: FastifyInstance,
+  roomId: string,
   queueItemId: string,
   sessionId: string,
   vote: 1 | -1,
 ) {
-  const item = await app.prisma.queueItem.findUnique({
-    where: { id: queueItemId },
+  const item = await app.prisma.queueItem.findFirst({
+    where: { id: queueItemId, roomId },
   });
   if (!item)
     throw new AppError("QUEUE_ITEM_NOT_FOUND", "Queue item not found.", 404);

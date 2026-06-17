@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 
 import { requireModerator } from "../../auth/guards.js";
 import { verifyPassword } from "../../lib/argon2.js";
+import { AppError } from "../../lib/errors.js";
 
 import {
   createRoomSchema,
@@ -39,6 +40,9 @@ export async function roomsRouter(app: FastifyInstance) {
   app.patch("/api/rooms/:roomId/settings", async (request) => {
     const session = requireModerator(request.session);
     const { roomId } = request.params as { roomId: string };
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
     const { settings } = settingsSchema.parse(request.body);
     const data = Object.fromEntries(
       Object.entries(settings).filter(([, value]) => value !== undefined),

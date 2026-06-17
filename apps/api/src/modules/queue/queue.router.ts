@@ -43,10 +43,27 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
   });
   app.delete("/api/rooms/:roomId/queue/items/:queueItemId", async (request) => {
     const session = requireMember(request.session);
-    const { queueItemId } = request.params as { queueItemId: string };
-    const item = await app.prisma.queueItem.findUniqueOrThrow({
-      where: { id: queueItemId },
+    const { roomId, queueItemId } = request.params as {
+      roomId: string;
+      queueItemId: string;
+    };
+
+    if (session.roomId !== roomId) {
+      throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+    }
+
+    const item = await app.prisma.queueItem.findFirst({
+      where: { id: queueItemId, roomId },
     });
+
+    if (!item) {
+      throw new AppError(
+        "QUEUE_ITEM_NOT_FOUND",
+        "That queue item was not found.",
+        404,
+      );
+    }
+
     if (
       item.addedBySessionId !== session.id &&
       !["host", "moderator"].includes(session.role)
@@ -56,9 +73,10 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
         "You cannot remove that queue item.",
         403,
       );
+
     return {
       queueItem: await app.prisma.queueItem.update({
-        where: { id: queueItemId },
+        where: { id: item.id },
         data: { status: "removed" },
       }),
     };
@@ -67,21 +85,55 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
     "/api/rooms/:roomId/queue/items/:queueItemId/vote",
     async (request) => {
       const session = requireMember(request.session);
-      const { queueItemId } = request.params as { queueItemId: string };
+      const { roomId, queueItemId } = request.params as {
+        roomId: string;
+        queueItemId: string;
+      };
+
+      if (session.roomId !== roomId) {
+        throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+      }
+
       const body = voteSchema.parse(request.body);
       return {
-        queueItem: await voteQueueItem(app, queueItemId, session.id, body.vote),
+        queueItem: await voteQueueItem(
+          app,
+          roomId,
+          queueItemId,
+          session.id,
+          body.vote,
+        ),
       };
     },
   );
   app.post(
     "/api/rooms/:roomId/queue/items/:queueItemId/approve",
     async (request) => {
-      requireModerator(request.session);
-      const { queueItemId } = request.params as { queueItemId: string };
+      const session = requireModerator(request.session);
+      const { roomId, queueItemId } = request.params as {
+        roomId: string;
+        queueItemId: string;
+      };
+
+      if (session.roomId !== roomId) {
+        throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+      }
+
+      const item = await app.prisma.queueItem.findFirst({
+        where: { id: queueItemId, roomId },
+      });
+
+      if (!item) {
+        throw new AppError(
+          "QUEUE_ITEM_NOT_FOUND",
+          "That queue item was not found.",
+          404,
+        );
+      }
+
       return {
         queueItem: await app.prisma.queueItem.update({
-          where: { id: queueItemId },
+          where: { id: item.id },
           data: { status: "queued" },
         }),
       };
@@ -91,11 +143,31 @@ export async function queueRouter(app: FastifyInstance, io: Server) {
     "/api/rooms/:roomId/queue/items/:queueItemId/reject",
     async (request) => {
       rejectSchema.parse(request.body);
-      requireModerator(request.session);
-      const { queueItemId } = request.params as { queueItemId: string };
+      const session = requireModerator(request.session);
+      const { roomId, queueItemId } = request.params as {
+        roomId: string;
+        queueItemId: string;
+      };
+
+      if (session.roomId !== roomId) {
+        throw new AppError("FORBIDDEN", "You are not allowed to do that.", 403);
+      }
+
+      const item = await app.prisma.queueItem.findFirst({
+        where: { id: queueItemId, roomId },
+      });
+
+      if (!item) {
+        throw new AppError(
+          "QUEUE_ITEM_NOT_FOUND",
+          "That queue item was not found.",
+          404,
+        );
+      }
+
       return {
         queueItem: await app.prisma.queueItem.update({
-          where: { id: queueItemId },
+          where: { id: item.id },
           data: { status: "rejected" },
         }),
       };
