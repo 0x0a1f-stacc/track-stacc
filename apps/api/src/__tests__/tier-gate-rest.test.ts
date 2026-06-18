@@ -347,6 +347,20 @@ function expectAuthRequired(
   expect(body.error?.code).toBe("AUTH_REQUIRED");
 }
 
+const anyDate = () => expect.any(Date) as unknown as Date;
+
+function getMockPrisma(app: FastifyInstance) {
+  return app.prisma as unknown as {
+    roomSession: {
+      findFirst: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    roomModerationAction: {
+      create: ReturnType<typeof vi.fn>;
+    };
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -692,6 +706,154 @@ describe("REST tier gate — listener rejection", () => {
         payload: { targetSessionId: "00000000-0000-0000-0000-000000000000" },
       });
       expectListenerReadOnly(response);
+      await app.close();
+    });
+
+    const moderatorSession = {
+      ...MEMBER_SESSION,
+      id: "00000000-0000-0000-0000-000000000010",
+      role: "moderator" as const,
+    };
+    const hostSession = {
+      ...MEMBER_SESSION,
+      id: "00000000-0000-0000-0000-000000000011",
+      role: "host" as const,
+    };
+    const otherModeratorSession = {
+      ...MEMBER_SESSION,
+      id: "00000000-0000-0000-0000-000000000012",
+      role: "moderator" as const,
+      normalizedNickname: "modtwo",
+      displayNickname: "ModTwo",
+      nicknameClaimId: "claim-mod-2",
+    };
+    const participantSession = {
+      ...MEMBER_SESSION,
+      id: "00000000-0000-0000-0000-000000000013",
+      role: "participant" as const,
+      normalizedNickname: "target",
+      displayNickname: "Target",
+      nicknameClaimId: "claim-target",
+    };
+
+    for (const actionType of ["mute", "ban"] as const) {
+      it(`rejects self-${actionType} attempts`, async () => {
+        const app = buildTestApp(moderatorSession);
+        const prisma = getMockPrisma(app);
+        prisma.roomSession.findFirst.mockResolvedValueOnce(moderatorSession);
+
+        const response = await app.inject({
+          method: "POST",
+          url: `/api/rooms/room-abc-123/moderation/${actionType}`,
+          payload: { targetSessionId: moderatorSession.id },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.body) as { error?: { code: string } };
+        expect(body.error?.code).toBe("FORBIDDEN");
+        expect(prisma.roomSession.update).not.toHaveBeenCalled();
+        expect(prisma.roomModerationAction.create).not.toHaveBeenCalled();
+
+        await app.close();
+      });
+
+      it(`rejects moderator ${actionType} against the host`, async () => {
+        const app = buildTestApp(moderatorSession);
+        const prisma = getMockPrisma(app);
+        prisma.roomSession.findFirst.mockResolvedValueOnce(hostSession);
+
+        const response = await app.inject({
+          method: "POST",
+          url: `/api/rooms/room-abc-123/moderation/${actionType}`,
+          payload: { targetSessionId: hostSession.id },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.body) as { error?: { code: string } };
+        expect(body.error?.code).toBe("FORBIDDEN");
+        expect(prisma.roomSession.update).not.toHaveBeenCalled();
+        expect(prisma.roomModerationAction.create).not.toHaveBeenCalled();
+
+        await app.close();
+      });
+
+      it(`rejects moderator ${actionType} against another moderator`, async () => {
+        const app = buildTestApp(moderatorSession);
+        const prisma = getMockPrisma(app);
+        prisma.roomSession.findFirst.mockResolvedValueOnce(otherModeratorSession);
+
+        const response = await app.inject({
+          method: "POST",
+          url: `/api/rooms/room-abc-123/moderation/${actionType}`,
+          payload: { targetSessionId: otherModeratorSession.id },
+        });
+
+        expect(response.statusCode).toBe(403);
+        const body = JSON.parse(response.body) as { error?: { code: string } };
+        expect(body.error?.code).toBe("FORBIDDEN");
+        expect(prisma.roomSession.update).not.toHaveBeenCalled();
+        expect(prisma.roomModerationAction.create).not.toHaveBeenCalled();
+
+        await app.close();
+      });
+    }
+
+    it("persists a ban by setting isBanned and leftAt, then records an audit row", async () => {
+      const app = buildTestApp(hostSession);
+      const prisma = getMockPrisma(app);
+      prisma.roomSession.findFirst.mockResolvedValueOnce(participantSession);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/ban",
+        payload: { targetSessionId: participantSession.id, reason: "spam" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.roomSession.update).toHaveBeenCalledWith({
+        where: { id: participantSession.id },
+        data: {
+          isBanned: true,
+          leftAt: anyDate(),
+        },
+      });
+      expect(prisma.roomModerationAction.create).toHaveBeenCalledWith({
+        data: {
+          roomId: "room-abc-123",
+          actorSessionId: hostSession.id,
+          targetSessionId: participantSession.id,
+          actionType: "ban",
+          reason: "spam",
+          metadata: {},
+        },
+      });
+
+      await app.close();
+    });
+
+    it("unban clears only the durable banned flag", async () => {
+      const app = buildTestApp(hostSession);
+      const prisma = getMockPrisma(app);
+      prisma.roomSession.findFirst.mockResolvedValueOnce({
+        ...participantSession,
+        isBanned: true,
+        leftAt: new Date(),
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/unban",
+        payload: { targetSessionId: participantSession.id },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.roomSession.update).toHaveBeenCalledWith({
+        where: { id: participantSession.id },
+        data: {
+          isBanned: false,
+        },
+      });
+
       await app.close();
     });
   });
