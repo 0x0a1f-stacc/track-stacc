@@ -209,6 +209,31 @@ async function checkPerRoomNicknameUniqueness(
     );
 }
 
+async function assertNicknameNotBannedInRoom(
+  app: FastifyInstance,
+  roomId: string,
+  normalizedNickname: string,
+  nicknameClaimId?: string,
+) {
+  const bannedSession = await app.prisma.roomSession.findFirst({
+    where: nicknameClaimId
+      ? {
+          roomId,
+          nicknameClaimId,
+          isBanned: true,
+        }
+      : {
+          roomId,
+          normalizedNickname,
+          isBanned: true,
+        },
+  });
+
+  if (bannedSession) {
+    throw new AppError("BANNED", "You cannot participate in this room.", 403);
+  }
+}
+
 /**
  * Resolves the role for a member room session.
  * 
@@ -277,14 +302,6 @@ export async function joinRoom(
     // Validate the existing listener session (side effect: throws on invalid state)
     await findAndValidateListenerSession(app, listenerSessionId, room.id);
 
-    // Check per-room nickname uniqueness, excluding the current session
-    await checkPerRoomNicknameUniqueness(
-      app,
-      room.id,
-      normalized.normalizedNickname,
-      listenerSessionId,
-    );
-
     // Look for an existing global nickname claim
     const existingClaim = await app.prisma.nicknameClaim.findFirst({
       where: {
@@ -310,6 +327,12 @@ export async function joinRoom(
         nicknamePassword,
         normalized.normalizedNickname,
       );
+      await assertNicknameNotBannedInRoom(
+        app,
+        room.id,
+        normalized.normalizedNickname,
+        existingClaim.id,
+      );
       claimId = existingClaim.id;
     } else {
       // Protect-and-join path: new nickname
@@ -320,6 +343,11 @@ export async function joinRoom(
           409,
         );
       }
+      await assertNicknameNotBannedInRoom(
+        app,
+        room.id,
+        normalized.normalizedNickname,
+      );
       const passwordHash = await hashPassword(nicknamePassword);
       try {
         const newClaim = await app.prisma.nicknameClaim.create({
@@ -347,6 +375,14 @@ export async function joinRoom(
       }
     }
 
+    // Check per-room nickname uniqueness, excluding the current session
+    await checkPerRoomNicknameUniqueness(
+      app,
+      room.id,
+      normalized.normalizedNickname,
+      listenerSessionId,
+    );
+
     // Resolves host role if the host_token cookie matches the room's hostSecretHash.
     // This transitions the user from read-only Listener to active Host.
     const role = await determineRole(hostToken, room);
@@ -371,13 +407,6 @@ export async function joinRoom(
   }
 
   // -- Non-upgrade path: no listenerSessionId --
-  // Check per-room nickname uniqueness
-  await checkPerRoomNicknameUniqueness(
-    app,
-    room.id,
-    normalized.normalizedNickname,
-  );
-
   const existingClaim = await app.prisma.nicknameClaim.findFirst({
     where: {
       normalizedNickname: normalized.normalizedNickname,
@@ -401,6 +430,12 @@ export async function joinRoom(
       nicknamePassword,
       normalized.normalizedNickname,
     );
+    await assertNicknameNotBannedInRoom(
+      app,
+      room.id,
+      normalized.normalizedNickname,
+      existingClaim.id,
+    );
     claimId = existingClaim.id;
   } else {
     // Protect-and-join: new protected nickname
@@ -410,6 +445,11 @@ export async function joinRoom(
         "A password is required to protect a new nickname.",
         409,
       );
+    await assertNicknameNotBannedInRoom(
+      app,
+      room.id,
+      normalized.normalizedNickname,
+    );
     const passwordHash = await hashPassword(nicknamePassword);
     try {
       const newClaim = await app.prisma.nicknameClaim.create({
@@ -436,6 +476,13 @@ export async function joinRoom(
       throw error;
     }
   }
+
+  // Check per-room nickname uniqueness
+  await checkPerRoomNicknameUniqueness(
+    app,
+    room.id,
+    normalized.normalizedNickname,
+  );
 
   // Resolves host role if the host_token cookie matches the room's hostSecretHash.
   // This transitions the user from read-only Listener to active Host.
