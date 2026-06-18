@@ -92,6 +92,12 @@ function buildTestApp(
   overrides?: {
     roomSessions?: Record<string, unknown>[];
     existingClaim?: Record<string, unknown> | null;
+    bannedSessions?: Array<{
+      roomId: string;
+      nicknameClaimId?: string | null;
+      normalizedNickname?: string | null;
+      isBanned: boolean;
+    }>;
     rateLimitExceeded?: boolean;
   },
   registerNicknames = true,
@@ -148,11 +154,34 @@ function buildTestApp(
     (args: {
       where: {
         roomId?: string;
+        nicknameClaimId?: string;
         normalizedNickname?: string;
+        isBanned?: boolean;
         leftAt?: null;
         id?: { not: string };
       };
     }) => {
+      if (args.where?.isBanned) {
+        const bannedSession = overrides?.bannedSessions?.find((session) => {
+          if (session.roomId !== args.where.roomId) return false;
+          if (!session.isBanned) return false;
+          if (
+            args.where.nicknameClaimId &&
+            session.nicknameClaimId === args.where.nicknameClaimId
+          ) {
+            return true;
+          }
+          if (
+            args.where.normalizedNickname &&
+            session.normalizedNickname === args.where.normalizedNickname
+          ) {
+            return true;
+          }
+          return false;
+        });
+        return Promise.resolve(bannedSession ?? null);
+      }
+
       // Check for per-room nickname uniqueness
       if (args.where?.normalizedNickname) {
         // Simulate that "alice" is already taken in this room
@@ -617,6 +646,38 @@ describe("POST /api/rooms/:roomId/join — upgrade path", () => {
 
     await app.close();
   });
+
+  it("returns BANNED when upgrading into a nickname claim that is banned in the same room", async () => {
+    const app = buildTestApp({
+      existingClaim: CLAIM_ALICE,
+      bannedSessions: [
+        {
+          roomId: "room-abc-123",
+          nicknameClaimId: CLAIM_ALICE.id,
+          normalizedNickname: "alice",
+          isBanned: true,
+        },
+      ],
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      payload: {
+        listenerSessionId: LISTENER_SESSION_ID,
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    const body = JSON.parse(response.body) as { error?: { code: string } };
+    expect(body.error?.code).toBe("BANNED");
+
+    const prisma = getMockPrisma(app);
+    expect(prisma.roomSession.update).not.toHaveBeenCalled();
+
+    await app.close();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -717,6 +778,66 @@ describe("POST /api/rooms/:roomId/join — non-upgrade path (backward compat)", 
     expect(session.accessTier).toBe("member");
     expect(session.displayNickname).toBe("Alice");
     expect(session.role).toBe("participant");
+
+    await app.close();
+  });
+
+  it("returns BANNED when the nickname claim has a banned session in the same room", async () => {
+    const app = buildTestApp({
+      existingClaim: CLAIM_ALICE,
+      bannedSessions: [
+        {
+          roomId: "room-abc-123",
+          nicknameClaimId: CLAIM_ALICE.id,
+          normalizedNickname: "alice",
+          isBanned: true,
+        },
+      ],
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      payload: {
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    const body = JSON.parse(response.body) as { error?: { code: string } };
+    expect(body.error?.code).toBe("BANNED");
+
+    const prisma = getMockPrisma(app);
+    expect(prisma.roomSession.create).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it("allows rejoining the same nickname in a different room", async () => {
+    const app = buildTestApp({
+      existingClaim: CLAIM_ALICE,
+      bannedSessions: [
+        {
+          roomId: "other-room",
+          nicknameClaimId: CLAIM_ALICE.id,
+          normalizedNickname: "alice",
+          isBanned: true,
+        },
+      ],
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/rooms/test-room/join",
+      payload: {
+        displayNickname: "Alice",
+        nicknamePassword: "correct-password",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body) as Record<string, unknown>;
+    const session = body.session as Record<string, unknown>;
+    expect(session.roomSessionId).toBe("new-member-session-789");
 
     await app.close();
   });
