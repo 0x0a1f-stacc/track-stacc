@@ -99,6 +99,7 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     sessions = await app.prisma.roomSession.findMany({
       where: {
         id: { in: activeSessionIds },
+        isBanned: false,
         leftAt: null,
       },
       orderBy: { joinedAt: "asc" },
@@ -109,6 +110,7 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     sessions = await app.prisma.roomSession.findMany({
       where: {
         roomId,
+        isBanned: false,
         lastSeenAt: { gte: activeLimit },
         leftAt: null,
       },
@@ -140,4 +142,3 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     lastSeenAt: session.lastSeenAt.toISOString(),
   }));
 }
-
