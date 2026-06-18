@@ -128,6 +128,7 @@ describe("Presence Lifecycle Manager", () => {
     expect(mockPrisma.roomSession.findMany).toHaveBeenCalledWith({
       where: {
         id: { in: ["active-session-1"] },
+        isBanned: false,
         leftAt: null,
       },
       orderBy: { joinedAt: "asc" },
@@ -168,6 +169,7 @@ describe("Presence Lifecycle Manager", () => {
     expect(mockPrisma.roomSession.findMany).toHaveBeenCalledWith({
       where: {
         roomId: "room-1",
+        isBanned: false,
         lastSeenAt: { gte: anyDate() },
         leftAt: null,
       },
@@ -176,5 +178,22 @@ describe("Presence Lifecycle Manager", () => {
     expect(participants.length).toBe(1);
     expect(participants[0]?.roomSessionId).toBe("active-session-2");
     expect(participants[0]?.accessTier).toBe(AccessTier.Listener);
+  });
+
+  it("filters banned sessions out of Redis-backed participant lookups", async () => {
+    mockRedis.zrange.mockResolvedValue(["banned-session-1"]);
+    mockPrisma.roomSession.findMany.mockResolvedValue([]);
+
+    const participants = await getParticipants(app, "room-1");
+
+    expect(mockPrisma.roomSession.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["banned-session-1"] },
+        isBanned: false,
+        leftAt: null,
+      },
+      orderBy: { joinedAt: "asc" },
+    });
+    expect(participants).toEqual([]);
   });
 });
