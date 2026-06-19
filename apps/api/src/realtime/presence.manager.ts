@@ -142,3 +142,20 @@ export async function getParticipants(app: FastifyInstance, roomId: string) {
     lastSeenAt: session.lastSeenAt.toISOString(),
   }));
 }
+
+/**
+ * Evicts a room session from the Redis presence ZSET immediately.
+ */
+export async function evictSessionPresence(
+  app: FastifyInstance,
+  roomId: string,
+  roomSessionId: string,
+): Promise<void> {
+  const key = presenceKey(roomId);
+  try {
+    await app.redis.zrem(key, roomSessionId);
+  } catch (err) {
+    app.log.warn({ err, roomId, roomSessionId }, "Failed to evict session presence from Redis");
+  }
+}
+
