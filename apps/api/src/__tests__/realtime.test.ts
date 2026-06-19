@@ -11,6 +11,7 @@ import { createConfigPlugin } from "../lib/config.js";
 import type { ApiConfig } from "../lib/config.js";
 import { setSecret, signWsToken, verifyWsToken } from "../lib/tokens.js";
 import { registerRealtime } from "../realtime/gateway.js";
+import { moderationRouter } from "../modules/moderation/moderation.router.js";
 
 // No mock needed — gateway handles missing Redis adapter gracefully
 
@@ -145,6 +146,12 @@ async function setupTest(overrides?: {
     incr: vi.fn().mockResolvedValue(1),
     pexpire: vi.fn().mockResolvedValue(1),
     ping: vi.fn().mockResolvedValue("PONG"),
+    zadd: vi.fn().mockResolvedValue(1),
+    zrem: vi.fn().mockResolvedValue(1),
+    zrange: vi.fn().mockResolvedValue([]),
+    zrangebyscore: vi.fn().mockResolvedValue([]),
+    zremrangebyscore: vi.fn().mockResolvedValue(0),
+    expire: vi.fn().mockResolvedValue(1),
   } as never);
 
   const session = mockSession(
@@ -173,6 +180,7 @@ async function setupTest(overrides?: {
   const mockPrisma = {
     roomSession: {
       findUnique: vi.fn().mockResolvedValue(session),
+      findFirst: vi.fn().mockResolvedValue(session),
       findMany: vi.fn().mockResolvedValue([session]),
       update: vi.fn().mockResolvedValue(session),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -213,13 +221,25 @@ async function setupTest(overrides?: {
         },
       ),
     },
+    roomModerationAction: {
+      create: vi.fn().mockResolvedValue({}),
+    },
     $disconnect: vi.fn(),
     $queryRaw: vi.fn().mockResolvedValue([{ "1": 1 }]),
   };
   app.decorate("prisma", mockPrisma as never);
+  app.decorate("io", null as any);
+
+  // Hook to bypass cookie auth lookup by setting session directly
+  app.addHook("preHandler", async (request) => {
+    request.session = session as never;
+  });
+
+  await app.register(moderationRouter);
 
   await app.ready();
   const io = await registerRealtime(app);
+  app.io = io;
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = (app.server.address() as AddressInfo).port;
 
@@ -932,14 +952,215 @@ describe("WebSocket gateway", () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      memberClient.close();
-      listener1Client.close();
-      listener2Client.close();
-      await teardownTest(io, app);
-
       expect(memberChats).toBe(1);
       expect(listener1Chats).toBe(1);
       expect(listener2Chats).toBe(1);
+    });
+  });
+
+  describe("moderation side effects", () => {
+    const TARGET_SESSION_ID = "da27e69f-ccd2-4a50-b72d-f34def26d17a";
+
+    function mockSessionWithDetails(id: string, accessTier: string, role: string, isMuted = false, isBanned = false) {
+      const isMember = accessTier === "member";
+      return {
+        id,
+        roomId: ROOM_ID,
+        accessTier,
+        role,
+        normalizedNickname: isMember ? "targetname" : null,
+        displayNickname: isMember ? "TargetName" : null,
+        nicknameClaimId: isMember ? `claim-${id}` : null,
+        sessionTokenHash: `hashed-${id}`,
+        isMuted,
+        isBanned,
+        joinedAt: new Date(),
+        lastSeenAt: new Date(),
+        leftAt: null,
+      };
+    }
+
+    it("muting and unmuting a participant broadcasts moderation.applied and presence.updated", async () => {
+      const { app, io, port, session: hostSession } = await setupTest({
+        role: "host",
+        accessTier: "member",
+      });
+
+      const targetSession = mockSessionWithDetails(TARGET_SESSION_ID, "member", "participant");
+
+      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === hostSession.id) return Promise.resolve(hostSession);
+        if (args.where.id === TARGET_SESSION_ID) return Promise.resolve(targetSession);
+        return Promise.resolve(null);
+      });
+      app.prisma.roomSession.findFirst = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === TARGET_SESSION_ID) return Promise.resolve(targetSession);
+        return Promise.resolve(null);
+      });
+      app.prisma.roomSession.findMany = vi.fn().mockResolvedValue([hostSession, targetSession]);
+
+      const hostToken = signWsToken({ roomId: ROOM_ID, sessionId: hostSession.id, accessTier: "member" });
+      const targetToken = signWsToken({ roomId: ROOM_ID, sessionId: TARGET_SESSION_ID, accessTier: "member" });
+
+      const { client: hostClient } = await connectClient(port, hostToken);
+      const { client: targetClient } = await connectClient(port, targetToken);
+
+      const hostEvents: any[] = [];
+      const targetEvents: any[] = [];
+
+      hostClient.on("moderation.applied", (payload) => hostEvents.push({ type: "moderation.applied", payload }));
+      hostClient.on("presence.updated", (payload) => hostEvents.push({ type: "presence.updated", payload }));
+
+      targetClient.on("moderation.applied", (payload) => targetEvents.push({ type: "moderation.applied", payload }));
+      targetClient.on("presence.updated", (payload) => targetEvents.push({ type: "presence.updated", payload }));
+
+      const mutedTarget = { ...targetSession, isMuted: true };
+      app.prisma.roomSession.update = vi.fn().mockResolvedValue(mutedTarget);
+      app.prisma.roomSession.findMany = vi.fn().mockResolvedValue([hostSession, mutedTarget]);
+
+      hostEvents.length = 0;
+      targetEvents.length = 0;
+
+      const muteRes = await app.inject({
+        method: "POST",
+        url: `/api/rooms/${ROOM_ID}/moderation/mute`,
+        payload: { targetSessionId: TARGET_SESSION_ID, reason: "disruptive" },
+      });
+
+      expect(muteRes.statusCode).toBe(200);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const hostMuteApplied = hostEvents.find(e => e.type === "moderation.applied");
+      const hostPresenceUpdated = hostEvents.find(
+        e => e.type === "presence.updated" && e.payload.participants.find((p: any) => p.roomSessionId === TARGET_SESSION_ID)?.isMuted === true
+      );
+      expect(hostMuteApplied).toBeDefined();
+      expect(hostMuteApplied.payload.payload.action).toBe("mute");
+      expect(hostMuteApplied.payload.payload.targetSessionId).toBe(TARGET_SESSION_ID);
+      expect(hostMuteApplied.payload.payload.reason).toBe("disruptive");
+
+      expect(hostPresenceUpdated).toBeDefined();
+      expect(hostPresenceUpdated.payload.participants.find((p: any) => p.roomSessionId === TARGET_SESSION_ID).isMuted).toBe(true);
+
+      expect(targetEvents.find(e => e.type === "moderation.applied")).toBeDefined();
+
+      const unmutedTarget = { ...targetSession, isMuted: false };
+      app.prisma.roomSession.update = vi.fn().mockResolvedValue(unmutedTarget);
+      app.prisma.roomSession.findMany = vi.fn().mockResolvedValue([hostSession, unmutedTarget]);
+
+      hostEvents.length = 0;
+      targetEvents.length = 0;
+
+      const unmuteRes = await app.inject({
+        method: "POST",
+        url: `/api/rooms/${ROOM_ID}/moderation/unmute`,
+        payload: { targetSessionId: TARGET_SESSION_ID },
+      });
+
+      expect(unmuteRes.statusCode).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const hostUnmuteApplied = hostEvents.find(e => e.type === "moderation.applied");
+      const hostUnmutePresence = hostEvents.find(
+        e => e.type === "presence.updated" && e.payload.participants.find((p: any) => p.roomSessionId === TARGET_SESSION_ID)?.isMuted === false
+      );
+      expect(hostUnmuteApplied).toBeDefined();
+      expect(hostUnmuteApplied.payload.payload.action).toBe("unmute");
+      expect(hostUnmutePresence).toBeDefined();
+      expect(hostUnmutePresence.payload.participants.find((p: any) => p.roomSessionId === TARGET_SESSION_ID).isMuted).toBe(false);
+
+      hostClient.close();
+      targetClient.close();
+      await teardownTest(io, app);
+    });
+
+    it("banning a participant immediately disconnects active sockets (including multi-tab) and evicts Redis presence", async () => {
+      const { app, io, port, session: hostSession } = await setupTest({
+        role: "host",
+        accessTier: "member",
+      });
+
+      const targetSession = mockSessionWithDetails(TARGET_SESSION_ID, "member", "participant");
+
+      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === hostSession.id) return Promise.resolve(hostSession);
+        if (args.where.id === TARGET_SESSION_ID) return Promise.resolve(targetSession);
+        return Promise.resolve(null);
+      });
+      app.prisma.roomSession.findFirst = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === TARGET_SESSION_ID) return Promise.resolve(targetSession);
+        return Promise.resolve(null);
+      });
+
+      const bannedTarget = { ...targetSession, isBanned: true, leftAt: new Date() };
+      app.prisma.roomSession.update = vi.fn().mockResolvedValue(bannedTarget);
+      app.prisma.roomSession.findMany = vi.fn().mockResolvedValue([hostSession]);
+
+      const hostToken = signWsToken({ roomId: ROOM_ID, sessionId: hostSession.id, accessTier: "member" });
+      const targetToken = signWsToken({ roomId: ROOM_ID, sessionId: TARGET_SESSION_ID, accessTier: "member" });
+
+      const { client: hostClient } = await connectClient(port, hostToken);
+      const { client: targetClient1 } = await connectClient(port, targetToken);
+      const { client: targetClient2 } = await connectClient(port, targetToken);
+
+      const hostEvents: any[] = [];
+      hostClient.on("moderation.applied", (payload) => hostEvents.push({ type: "moderation.applied", payload }));
+      hostClient.on("presence.updated", (payload) => hostEvents.push({ type: "presence.updated", payload }));
+
+      let disc1 = false;
+      let disc2 = false;
+      targetClient1.on("disconnect", () => { disc1 = true; });
+      targetClient2.on("disconnect", () => { disc2 = true; });
+
+      const banRes = await app.inject({
+        method: "POST",
+        url: `/api/rooms/${ROOM_ID}/moderation/ban`,
+        payload: { targetSessionId: TARGET_SESSION_ID, reason: "spamming" },
+      });
+
+      expect(banRes.statusCode).toBe(200);
+
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      expect(disc1).toBe(true);
+      expect(disc2).toBe(true);
+
+      expect(app.redis.zrem).toHaveBeenCalledWith(`room:${ROOM_ID}:presence`, TARGET_SESSION_ID);
+
+      const hostBanApplied = hostEvents.find(e => e.type === "moderation.applied");
+      const hostPresenceUpdated = hostEvents.find(e => e.type === "presence.updated");
+      expect(hostBanApplied).toBeDefined();
+      expect(hostBanApplied.payload.payload.action).toBe("ban");
+      expect(hostBanApplied.payload.payload.targetSessionId).toBe(TARGET_SESSION_ID);
+
+      expect(hostPresenceUpdated).toBeDefined();
+      const targetInParticipants = hostPresenceUpdated.payload.participants.find((p: any) => p.roomSessionId === TARGET_SESSION_ID);
+      expect(targetInParticipants).toBeUndefined();
+
+      hostClient.close();
+      await teardownTest(io, app);
+    });
+
+    it("banned sockets cannot reconnect", async () => {
+      const { app, io, port, session: hostSession } = await setupTest({
+        role: "host",
+        accessTier: "member",
+      });
+
+      const targetSession = mockSessionWithDetails(TARGET_SESSION_ID, "member", "participant", false, true);
+
+      app.prisma.roomSession.findUnique = vi.fn().mockImplementation((args: { where: { id: string } }) => {
+        if (args.where.id === hostSession.id) return Promise.resolve(hostSession);
+        if (args.where.id === TARGET_SESSION_ID) return Promise.resolve(targetSession);
+        return Promise.resolve(null);
+      });
+
+      const targetToken = signWsToken({ roomId: ROOM_ID, sessionId: TARGET_SESSION_ID, accessTier: "member" });
+
+      await expect(connectClient(port, targetToken)).rejects.toThrow();
+
+      await teardownTest(io, app);
     });
   });
 });
