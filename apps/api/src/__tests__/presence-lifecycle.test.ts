@@ -9,6 +9,7 @@ import {
   markSessionPresent,
   cleanupInactiveSessions,
   getParticipants,
+  evictSessionPresence,
 } from "../realtime/presence.manager.js";
 
 interface MockRedis {
@@ -17,6 +18,7 @@ interface MockRedis {
   zrangebyscore: ReturnType<typeof vi.fn>;
   zremrangebyscore: ReturnType<typeof vi.fn>;
   zrange: ReturnType<typeof vi.fn>;
+  zrem: ReturnType<typeof vi.fn>;
 }
 
 interface MockPrisma {
@@ -55,6 +57,7 @@ describe("Presence Lifecycle Manager", () => {
       zrangebyscore: vi.fn().mockResolvedValue([]),
       zremrangebyscore: vi.fn().mockResolvedValue(0),
       zrange: vi.fn().mockResolvedValue([]),
+      zrem: vi.fn().mockResolvedValue(1),
     };
 
     mockPrisma = {
@@ -66,6 +69,11 @@ describe("Presence Lifecycle Manager", () => {
 
     app.decorate("redis", mockRedis as unknown as typeof app.redis);
     app.decorate("prisma", mockPrisma as unknown as typeof app.prisma);
+  });
+
+  it("evictSessionPresence ZREMs session ID from Redis", async () => {
+    await evictSessionPresence(app, "room-1", "session-1");
+    expect(mockRedis.zrem).toHaveBeenCalledWith(presenceKey("room-1"), "session-1");
   });
 
   it("markSessionPresent ZADDs session ID to ZSET and sets 24h expire", async () => {
