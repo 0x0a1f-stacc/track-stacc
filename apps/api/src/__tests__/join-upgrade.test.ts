@@ -27,8 +27,6 @@ vi.mock("../lib/argon2.js", () => ({
     ),
 }));
 
-
-
 // ---------------------------------------------------------------------------
 // Shared test data
 // ---------------------------------------------------------------------------
@@ -670,8 +668,17 @@ describe("POST /api/rooms/:roomId/join — upgrade path", () => {
     });
 
     expect(response.statusCode).toBe(403);
-    const body = JSON.parse(response.body) as { error?: { code: string } };
+    const body = JSON.parse(response.body) as {
+      error?: {
+        code: string;
+        requestId: string;
+        retryable: boolean;
+        retryAfterSeconds: number | null;
+      };
+    };
     expect(body.error?.code).toBe("BANNED");
+    expect(body.error?.requestId).toBeTruthy();
+    expect(typeof body.error?.retryable).toBe("boolean");
 
     const prisma = getMockPrisma(app);
     expect(prisma.roomSession.update).not.toHaveBeenCalled();
@@ -804,8 +811,17 @@ describe("POST /api/rooms/:roomId/join — non-upgrade path (backward compat)", 
     });
 
     expect(response.statusCode).toBe(403);
-    const body = JSON.parse(response.body) as { error?: { code: string } };
+    const body = JSON.parse(response.body) as {
+      error?: {
+        code: string;
+        requestId: string;
+        retryable: boolean;
+        retryAfterSeconds: number | null;
+      };
+    };
     expect(body.error?.code).toBe("BANNED");
+    expect(body.error?.requestId).toBeTruthy();
+    expect(typeof body.error?.retryable).toBe("boolean");
 
     const prisma = getMockPrisma(app);
     expect(prisma.roomSession.create).not.toHaveBeenCalled();
@@ -940,7 +956,10 @@ describe("determineRole unit tests", () => {
     vi.mocked(verifyPassword).mockResolvedValueOnce(true);
     const role = await determineRole("correct-password", room);
     expect(role).toBe("host");
-    expect(verifyPassword).toHaveBeenCalledWith("hashed-host-secret", "correct-password");
+    expect(verifyPassword).toHaveBeenCalledWith(
+      "hashed-host-secret",
+      "correct-password",
+    );
   });
 
   it("resolves to 'participant' when hostToken is undefined", async () => {
@@ -952,7 +971,10 @@ describe("determineRole unit tests", () => {
     vi.mocked(verifyPassword).mockResolvedValueOnce(false);
     const role = await determineRole("wrong-password", room);
     expect(role).toBe("participant");
-    expect(verifyPassword).toHaveBeenCalledWith("hashed-host-secret", "wrong-password");
+    expect(verifyPassword).toHaveBeenCalledWith(
+      "hashed-host-secret",
+      "wrong-password",
+    );
   });
 
   it("resolves to 'participant' and fails safe if verifyPassword throws an error", async () => {
@@ -971,7 +993,7 @@ describe("join with host role integration", () => {
       .mockResolvedValueOnce(true);
 
     const app = buildTestApp({ existingClaim: CLAIM_ALICE });
-    
+
     const response = await app.inject({
       method: "POST",
       url: "/api/rooms/test-room/join",
