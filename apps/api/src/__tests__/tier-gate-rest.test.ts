@@ -14,6 +14,18 @@ import { queueRouter } from "../modules/queue/queue.router.js";
 import { roomsRouter } from "../modules/rooms/rooms.router.js";
 import { sessionsRouter } from "../modules/sessions/sessions.router.js";
 
+// Mock argon2 so the join endpoint's verifyPassword doesn't throw on test hashes
+vi.mock("../lib/argon2.js", () => ({
+  verifyPassword: vi
+    .fn()
+    .mockImplementation((_hash: string, password: string) =>
+      Promise.resolve(password === "password123456"),
+    ),
+  hashPassword: vi
+    .fn()
+    .mockResolvedValue("$argon2id$v=19$m=65536,t=3,p=1$salt$mockedhash"),
+}));
+
 // ---------------------------------------------------------------------------
 // Session fixtures
 // ---------------------------------------------------------------------------
@@ -177,6 +189,14 @@ function buildTestApp(
     duplicate: vi
       .fn()
       .mockReturnValue({ quit: vi.fn().mockResolvedValue(undefined) }),
+    zadd: vi.fn().mockResolvedValue(1),
+    zrem: vi.fn().mockResolvedValue(1),
+    zrange: vi.fn().mockResolvedValue([]),
+    zrangebyscore: vi.fn().mockResolvedValue([]),
+    zremrangebyscore: vi.fn().mockResolvedValue(0),
+    expire: vi.fn().mockResolvedValue(1),
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue("OK"),
   } as never;
   app.decorate("redis", mockRedis);
 
@@ -194,19 +214,25 @@ function buildTestApp(
     to: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     emit: vi.fn(),
-    fetchSockets: vi.fn().mockResolvedValue([mockListenerSocket, mockMemberSocket]),
+    fetchSockets: vi
+      .fn()
+      .mockResolvedValue([mockListenerSocket, mockMemberSocket]),
     _mockListenerSocket: mockListenerSocket,
     _mockMemberSocket: mockMemberSocket,
   } as unknown as Server;
   app.decorate("io", mockIo);
 
-  const currentRoom = overrides?.room ? { ...ROOM, ...overrides.room } : { ...ROOM };
+  const currentRoom = overrides?.room
+    ? { ...ROOM, ...overrides.room }
+    : { ...ROOM };
   const mockRoomFindFirst = vi.fn().mockResolvedValue(currentRoom);
   const mockRoomFindUnique = vi.fn().mockResolvedValue(currentRoom);
-  const mockRoomUpdate = vi.fn().mockImplementation(async (args: { data: Record<string, unknown> }) => {
-    Object.assign(currentRoom, args.data);
-    return currentRoom;
-  });
+  const mockRoomUpdate = vi
+    .fn()
+    .mockImplementation(async (args: { data: Record<string, unknown> }) => {
+      Object.assign(currentRoom, args.data);
+      return currentRoom;
+    });
 
   const mockSessionFindUnique = vi.fn().mockResolvedValue(sessionFixture);
   const mockSessionFindFirst = vi.fn().mockResolvedValue(null);
@@ -214,27 +240,33 @@ function buildTestApp(
     .fn()
     .mockResolvedValue(sessionFixture ?? LISTENER_SESSION);
   const mockSessionFindMany = vi.fn().mockResolvedValue([LISTENER_SESSION]);
+  const mockSessionUpdateMany = vi.fn().mockResolvedValue({ count: 0 });
 
   const mockQueueItemFindMany = vi.fn().mockResolvedValue([QUEUE_ITEM]);
   const mockQueueItemFindUnique = vi.fn().mockResolvedValue(QUEUE_ITEM);
   const mockQueueItemUpdate = vi.fn().mockResolvedValue(QUEUE_ITEM);
   const mockQueueItemCreate = vi.fn().mockResolvedValue(QUEUE_ITEM);
 
-  const currentMessages = overrides?.messages !== undefined ? overrides.messages : [CHAT_MESSAGE];
-  const mockChatMessageFindMany = vi.fn().mockImplementation(async (args?: { where?: { roomId?: string; deletedAt?: null } }) => {
-    const where = args?.where;
-    return currentMessages.filter((msg) => {
-      if (where) {
-        if (where.roomId !== undefined && msg.roomId !== where.roomId) {
-          return false;
-        }
-        if (where.deletedAt === null && msg.deletedAt !== null) {
-          return false;
-        }
-      }
-      return true;
-    });
-  });
+  const currentMessages =
+    overrides?.messages !== undefined ? overrides.messages : [CHAT_MESSAGE];
+  const mockChatMessageFindMany = vi
+    .fn()
+    .mockImplementation(
+      async (args?: { where?: { roomId?: string; deletedAt?: null } }) => {
+        const where = args?.where;
+        return currentMessages.filter((msg) => {
+          if (where) {
+            if (where.roomId !== undefined && msg.roomId !== where.roomId) {
+              return false;
+            }
+            if (where.deletedAt === null && msg.deletedAt !== null) {
+              return false;
+            }
+          }
+          return true;
+        });
+      },
+    );
   const mockChatMessageUpdate = vi.fn().mockResolvedValue(CHAT_MESSAGE);
 
   const mockSkipVoteUpsert = vi.fn().mockResolvedValue({});
@@ -243,6 +275,30 @@ function buildTestApp(
   const mockModerationActionCreate = vi.fn().mockResolvedValue({});
 
   const mockSettingsHistoryCreate = vi.fn().mockResolvedValue({});
+
+  const mockClaimFindFirst = vi.fn().mockResolvedValue(null);
+  const mockClaimCreate = vi.fn().mockResolvedValue({
+    id: "new-claim-999",
+    normalizedNickname: "nickname",
+    displayNickname: "Nickname",
+    passwordHash: "$argon2id$salt$hash",
+    status: "active" as const,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastUsedAt: null,
+  });
+  const mockSessionCreate = vi.fn().mockResolvedValue({
+    id: "new-session-uuid",
+    roomId: "room-abc-123",
+    nicknameClaimId: null,
+    normalizedNickname: null,
+    displayNickname: null,
+    accessTier: "member",
+    role: "participant",
+    sessionTokenHash: "new-hashed-token",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 
   app.decorate("prisma", {
     room: {
@@ -256,6 +312,8 @@ function buildTestApp(
       findFirst: mockSessionFindFirst,
       findMany: mockSessionFindMany,
       update: mockSessionUpdate,
+      updateMany: mockSessionUpdateMany,
+      create: mockSessionCreate,
     },
     queueItem: {
       findMany: mockQueueItemFindMany,
@@ -277,6 +335,10 @@ function buildTestApp(
     },
     roomSettingsHistory: {
       create: mockSettingsHistoryCreate,
+    },
+    nicknameClaim: {
+      findFirst: mockClaimFindFirst,
+      create: mockClaimCreate,
     },
   } as never);
 
@@ -462,14 +524,18 @@ describe("REST tier gate — listener rejection", () => {
 
     it("PATCH /api/rooms/:roomId/settings allows host to set listenerChatVisible to true", async () => {
       const hostSession = { ...MEMBER_SESSION, role: "host" as const };
-      const app = buildTestApp(hostSession, { room: { listenerChatVisible: false } });
+      const app = buildTestApp(hostSession, {
+        room: { listenerChatVisible: false },
+      });
       const response = await app.inject({
         method: "PATCH",
         url: "/api/rooms/room-abc-123/settings",
         payload: { settings: { listenerChatVisible: true } },
       });
       expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean } };
+      const body = JSON.parse(response.body) as {
+        room: { listenerChatVisible: boolean };
+      };
       expect(body.room.listenerChatVisible).toBe(true);
 
       const prisma = app.prisma as unknown as {
@@ -498,7 +564,9 @@ describe("REST tier gate — listener rejection", () => {
         to: ReturnType<typeof vi.fn>;
         emit: ReturnType<typeof vi.fn>;
       };
-      expect(io._mockListenerSocket.join).toHaveBeenCalledWith("room:room-abc-123:chat");
+      expect(io._mockListenerSocket.join).toHaveBeenCalledWith(
+        "room:room-abc-123:chat",
+      );
       expect(io._mockMemberSocket.join).not.toHaveBeenCalled();
 
       // Verify settings.changed broadcast to global channel
@@ -513,14 +581,18 @@ describe("REST tier gate — listener rejection", () => {
 
     it("PATCH /api/rooms/:roomId/settings allows host to set listenerChatVisible to false", async () => {
       const hostSession = { ...MEMBER_SESSION, role: "host" as const };
-      const app = buildTestApp(hostSession, { room: { listenerChatVisible: true } });
+      const app = buildTestApp(hostSession, {
+        room: { listenerChatVisible: true },
+      });
       const response = await app.inject({
         method: "PATCH",
         url: "/api/rooms/room-abc-123/settings",
         payload: { settings: { listenerChatVisible: false } },
       });
       expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean } };
+      const body = JSON.parse(response.body) as {
+        room: { listenerChatVisible: boolean };
+      };
       expect(body.room.listenerChatVisible).toBe(false);
 
       const prisma = app.prisma as unknown as {
@@ -549,7 +621,9 @@ describe("REST tier gate — listener rejection", () => {
         to: ReturnType<typeof vi.fn>;
         emit: ReturnType<typeof vi.fn>;
       };
-      expect(io._mockListenerSocket.leave).toHaveBeenCalledWith("room:room-abc-123:chat");
+      expect(io._mockListenerSocket.leave).toHaveBeenCalledWith(
+        "room:room-abc-123:chat",
+      );
       expect(io._mockMemberSocket.leave).not.toHaveBeenCalled();
 
       // Verify settings.changed broadcast to global channel
@@ -564,14 +638,18 @@ describe("REST tier gate — listener rejection", () => {
 
     it("PATCH /api/rooms/:roomId/settings omitting listenerChatVisible does not change the stored value", async () => {
       const hostSession = { ...MEMBER_SESSION, role: "host" as const };
-      const app = buildTestApp(hostSession, { room: { listenerChatVisible: true } });
+      const app = buildTestApp(hostSession, {
+        room: { listenerChatVisible: true },
+      });
       const response = await app.inject({
         method: "PATCH",
         url: "/api/rooms/room-abc-123/settings",
         payload: { settings: { queueLocked: true } },
       });
       expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body) as { room: { listenerChatVisible: boolean; queueLocked: boolean } };
+      const body = JSON.parse(response.body) as {
+        room: { listenerChatVisible: boolean; queueLocked: boolean };
+      };
       expect(body.room.listenerChatVisible).toBe(true);
       expect(body.room.queueLocked).toBe(true);
 
@@ -633,7 +711,9 @@ describe("REST tier gate — listener rejection", () => {
         cookies: { session_token: "listener-token" },
       });
       expect(res3.statusCode).toBe(200);
-      const body3 = JSON.parse(res3.body) as { messages: Array<{ id: string; body: string }> };
+      const body3 = JSON.parse(res3.body) as {
+        messages: Array<{ id: string; body: string }>;
+      };
       expect(body3.messages).toHaveLength(1);
       expect(body3.messages[0]?.id).toBe("msg-1");
       expect(body3.messages[0]?.body).toBe("Test Message");
@@ -780,7 +860,9 @@ describe("REST tier gate — listener rejection", () => {
       it(`rejects moderator ${actionType} against another moderator`, async () => {
         const app = buildTestApp(moderatorSession);
         const prisma = getMockPrisma(app);
-        prisma.roomSession.findFirst.mockResolvedValueOnce(otherModeratorSession);
+        prisma.roomSession.findFirst.mockResolvedValueOnce(
+          otherModeratorSession,
+        );
 
         const response = await app.inject({
           method: "POST",
@@ -853,6 +935,178 @@ describe("REST tier gate — listener rejection", () => {
           isBanned: false,
         },
       });
+
+      await app.close();
+    });
+
+    it("host can mute a participant", async () => {
+      const app = buildTestApp(hostSession);
+      const prisma = getMockPrisma(app);
+      prisma.roomSession.findFirst.mockResolvedValueOnce(participantSession);
+
+      const mutedTarget = { ...participantSession, isMuted: true };
+      prisma.roomSession.update.mockResolvedValue(mutedTarget);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/mute",
+        payload: {
+          targetSessionId: participantSession.id,
+          reason: "disruptive",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.roomSession.update).toHaveBeenCalledWith({
+        where: { id: participantSession.id },
+        data: { isMuted: true },
+      });
+      expect(prisma.roomModerationAction.create).toHaveBeenCalledWith({
+        data: {
+          roomId: "room-abc-123",
+          actorSessionId: hostSession.id,
+          targetSessionId: participantSession.id,
+          actionType: "mute",
+          reason: "disruptive",
+          metadata: {},
+        },
+      });
+
+      const body = JSON.parse(response.body) as {
+        session: { isMuted: boolean };
+      };
+      expect(body.session?.isMuted).toBe(true);
+
+      await app.close();
+    });
+
+    it("moderator can mute a participant", async () => {
+      const app = buildTestApp(moderatorSession);
+      const prisma = getMockPrisma(app);
+      prisma.roomSession.findFirst.mockResolvedValueOnce(participantSession);
+
+      const mutedTarget = { ...participantSession, isMuted: true };
+      prisma.roomSession.update.mockResolvedValue(mutedTarget);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/mute",
+        payload: {
+          targetSessionId: participantSession.id,
+          reason: "chatting too much",
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.roomSession.update).toHaveBeenCalledWith({
+        where: { id: participantSession.id },
+        data: { isMuted: true },
+      });
+      expect(prisma.roomModerationAction.create).toHaveBeenCalledWith({
+        data: {
+          roomId: "room-abc-123",
+          actorSessionId: moderatorSession.id,
+          targetSessionId: participantSession.id,
+          actionType: "mute",
+          reason: "chatting too much",
+          metadata: {},
+        },
+      });
+
+      await app.close();
+    });
+
+    it("moderator can ban a participant", async () => {
+      const app = buildTestApp(moderatorSession);
+      const prisma = getMockPrisma(app);
+      prisma.roomSession.findFirst.mockResolvedValueOnce(participantSession);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/moderation/ban",
+        payload: { targetSessionId: participantSession.id, reason: "spam" },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(prisma.roomSession.update).toHaveBeenCalledWith({
+        where: { id: participantSession.id },
+        data: {
+          isBanned: true,
+          leftAt: anyDate(),
+        },
+      });
+      expect(prisma.roomModerationAction.create).toHaveBeenCalledWith({
+        data: {
+          roomId: "room-abc-123",
+          actorSessionId: moderatorSession.id,
+          targetSessionId: participantSession.id,
+          actionType: "ban",
+          reason: "spam",
+          metadata: {},
+        },
+      });
+
+      await app.close();
+    });
+
+    it("banned session rejoin via POST /api/rooms/:roomId/join returns 403 BANNED with error envelope", async () => {
+      const bannedSession = {
+        ...participantSession,
+        isBanned: true,
+        leftAt: new Date(),
+      };
+      const app = buildTestApp(null, {
+        room: { listenerChatVisible: false },
+      });
+      const prisma = app.prisma as unknown as {
+        nicknameClaim: { findFirst: ReturnType<typeof vi.fn> };
+        roomSession: {
+          findFirst: ReturnType<typeof vi.fn>;
+          create: ReturnType<typeof vi.fn>;
+        };
+      };
+
+      // Set up existing nickname claim
+      prisma.nicknameClaim.findFirst = vi.fn().mockResolvedValue({
+        id: "claim-banned",
+        normalizedNickname: "banneduser",
+        displayNickname: "BannedUser",
+        passwordHash: "argon2hash",
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastUsedAt: null,
+      });
+
+      // First roomSession.findFirst is the ban check — returns the banned session
+      prisma.roomSession.findFirst = vi
+        .fn()
+        .mockResolvedValueOnce(bannedSession);
+      prisma.roomSession.create = vi.fn().mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/rooms/room-abc-123/join",
+        payload: {
+          displayNickname: "BannedUser",
+          nicknamePassword: "password123456",
+        },
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = JSON.parse(response.body) as {
+        error?: {
+          code: string;
+          requestId: string;
+          retryable: boolean;
+          retryAfterSeconds: number | null;
+        };
+      };
+      expect(body.error?.code).toBe("BANNED");
+      expect(body.error?.requestId).toBeTruthy();
+      expect(typeof body.error?.retryable).toBe("boolean");
+      // Verify no session was created for the banned user
+      expect(prisma.roomSession.create).not.toHaveBeenCalled();
 
       await app.close();
     });
@@ -996,7 +1250,10 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
   });
 
   it("rejects session from a different room with 403 FORBIDDEN", async () => {
-    const sessionForDifferentRoom = { ...MEMBER_SESSION, roomId: "different-room" };
+    const sessionForDifferentRoom = {
+      ...MEMBER_SESSION,
+      roomId: "different-room",
+    };
     const app = buildTestApp(sessionForDifferentRoom);
     const response = await app.inject({
       method: "GET",
@@ -1068,7 +1325,9 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
       url: "/api/rooms/room-abc-123/chat/messages",
     });
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body) as { messages: Array<{ id: string; body: string }> };
+    const body = JSON.parse(response.body) as {
+      messages: Array<{ id: string; body: string }>;
+    };
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]?.id).toBe("msg-valid");
     expect(body.messages[0]?.body).toBe("Visible message");
@@ -1084,7 +1343,9 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
       url: "/api/rooms/room-abc-123/chat/messages",
     });
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    const body = JSON.parse(response.body) as {
+      messages: Array<{ body: string }>;
+    };
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]?.body).toBe("Hello");
     await app.close();
@@ -1100,7 +1361,9 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
       url: "/api/rooms/room-abc-123/chat/messages",
     });
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    const body = JSON.parse(response.body) as {
+      messages: Array<{ body: string }>;
+    };
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]?.body).toBe("Hello");
     await app.close();
@@ -1116,7 +1379,9 @@ describe("GET /api/rooms/:roomId/chat/messages", () => {
       url: "/api/rooms/room-abc-123/chat/messages",
     });
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body) as { messages: Array<{ body: string }> };
+    const body = JSON.parse(response.body) as {
+      messages: Array<{ body: string }>;
+    };
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]?.body).toBe("Hello");
     await app.close();
@@ -1290,7 +1555,9 @@ describe("Cross-Room Resource Protection", () => {
         payload: { targetSessionId: "00000000-0000-0000-0000-000000000001" },
       });
       expect(response.statusCode).toBe(403);
-      const body = JSON.parse(response.body) as { error: { code: string; message: string } };
+      const body = JSON.parse(response.body) as {
+        error: { code: string; message: string };
+      };
       expect(body.error.code).toBe("FORBIDDEN");
       expect(body.error.message).toBe("Target session not found in this room.");
       await app.close();

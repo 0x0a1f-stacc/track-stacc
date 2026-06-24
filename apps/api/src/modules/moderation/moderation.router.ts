@@ -1,10 +1,12 @@
-import type { ModerationAppliedPayload } from "@trackstacc/types";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { AppError } from "../../lib/errors.js";
 import { broadcast, roomChannel } from "../../realtime/broadcast.js";
-import { evictSessionPresence, getParticipants } from "../../realtime/presence.manager.js";
+import {
+  evictSessionPresence,
+  getParticipants,
+} from "../../realtime/presence.manager.js";
 
 import { applyModeration, assertModerator } from "./moderation.service.js";
 
@@ -18,7 +20,11 @@ export async function moderationRouter(app: FastifyInstance) {
     app.post(`/api/rooms/:roomId/moderation/${actionType}`, async (request) => {
       const actorSession = request.session;
       if (!actorSession) {
-        throw new AppError("AUTH_REQUIRED", "Join the room before doing that.", 401);
+        throw new AppError(
+          "AUTH_REQUIRED",
+          "Join the room before doing that.",
+          401,
+        );
       }
       assertModerator(actorSession);
       const { roomId } = request.params as { roomId: string };
@@ -74,4 +80,3 @@ export async function moderationRouter(app: FastifyInstance) {
     });
   }
 }
-
