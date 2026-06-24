@@ -51,8 +51,8 @@
 - **Area ID:** `SEC-TIER` / role checks (§19.2)
 - **Threat Addressed:** Unauthorized moderator/host actions (#7); event forgery (#8)
 - **Components Protected:** Room, Queue, Chat, Moderation, Playback, External Command services
-- **Implementation Location:** role/permission check in each service write path; never trust client-asserted role (§19.2 "Unauthorized actions")
-- **Verification Method:** Unit: auth checks; Integration: permission-matrix tests (§37.1 NFR-030–035, §9.2 matrices)
+- **Implementation Location:** role/permission check in each service write path; never trust client-asserted role (§19.2 "Unauthorized actions"). Moderation hierarchy enforced in `moderation.service.ts` `assertModerationHierarchy()` — self-moderation blocked, moderator cannot moderate host or another moderator.
+- **Verification Method:** Unit: auth checks; Integration: permission-matrix tests (§37.1 NFR-030–035, §9.2 matrices). Moderation hierarchy verified in `apps/api/src/__tests__/tier-gate-rest.test.ts` (self-moderation, moderator×host, moderator×moderator rejection; positive host/moderator action against participant).
 - **Related Requirements:** FR-042, FR-075, FR-080–085, FR-151
 - **Related Acceptance:** `AC-CHAT-3`, `AC-STAFF-1`
 - **Related Risks:** Unauthorized actions (§19.1)
@@ -123,11 +123,11 @@
 - **Area ID:** `SEC-SESSION`
 - **Threat Addressed:** WebSocket event forgery (#8)
 - **Components Protected:** Socket.IO Gateway, all realtime handlers
-- **Implementation Location:** secure httpOnly SameSite cookies for browser sessions; short-lived signed WS tokens signed with `SESSION_SECRET`; rotate on privilege escalation; store token hashes if revocation needed (§19.4)
+- **Implementation Location:** secure httpOnly SameSite cookies for browser sessions; short-lived signed WS tokens signed with `SESSION_SECRET`; rotate on privilege escalation; store token hashes if revocation needed (§19.4). Gateway validates `session.isBanned` during connection auth (line 60 of `gateway.ts`): banned sessions are rejected with `WEBSOCKET_TOKEN_INVALID` regardless of token validity.
 - **Verification Method:** WebSocket: token validation + reconnect (§37.1 NFR-022); Unit: token signing
 - **Related Requirements:** FR-003, NFR-031, NFR-032
 - **Related Acceptance:** `AC-RC-2`
-- **Related Risks:** Event forgery (§19.1)
+- **Related Risks:** Event forgery (§19.1); banned-user reconnection (§19.1 #16)
 - **Errors:** `WEBSOCKET_TOKEN_INVALID`, `SESSION_INVALID`, `AUTH_REQUIRED`
 
 ### SEC-009 — Server-side YouTube API key isolation
@@ -158,12 +158,12 @@
 
 - **Area ID:** `MOD-NATIVE`
 - **Threat Addressed:** Chat/queue spam (#4, #5), public-room abuse (#9), unauthorized participation
-- **Components Protected:** Moderation Service → Chat, Queue
-- **Implementation Location:** mute/ban via session/device/IP-derived identifiers where lawful (FR-081); queue/chat locks; slow mode (Phase 2) (§20.2)
-- **Verification Method:** Integration: moderation actions (§37.1 FR-080–085)
+- **Components Protected:** Moderation Service → Chat, Queue, Socket.IO Gateway (banned-session connection rejection)
+- **Implementation Location:** mute/ban via session/device/IP-derived identifiers where lawful (FR-081); queue/chat locks; slow mode (Phase 2) (§20.2). Ban additionally evicts Redis presence (`evictSessionPresence`), immediately disconnects all active sockets for the banned session in `moderation.router.ts`, and blocks reconnection via `gateway.ts` (`session.isBanned` check during WS auth). Banned same-room rejoin via `POST /api/rooms/:roomId/join` is blocked by `assertNicknameNotBannedInRoom` in `nicknames.service.ts` (returns `BANNED` 403). Ban is room-scoped: the same nickname may join a different room.
+- **Verification Method:** Integration: moderation actions (§37.1 FR-080–085); WebSocket: banned-reconnect rejection (`realtime.test.ts`); REST: banned-rejoin rejection (`tier-gate-rest.test.ts`, `join-upgrade.test.ts`)
 - **Related Requirements:** FR-076, FR-080–088
 - **Related Acceptance:** `AC-CHAT-3`, `AC-CHAT-4`
-- **Related Risks:** No-registration abuse (§32)
+- **Related Risks:** No-registration abuse (§32); banned-user reconnection (§19.1 #16)
 - **Errors:** `MUTED`, `BANNED`, `CHAT_LOCKED`, `QUEUE_LOCKED`
 
 ### SEC-012 — Content Security Policy (native + embed)
@@ -339,7 +339,7 @@
 | External Command Service     | `SEC-014`–`SEC-018`, `SEC-020`, `SEC-021`, `SEC-023` (all under `SEC-EXTINTEG`) |
 | Outbound Bot Webhook Service | `SEC-022`, `SEC-024`                                                            |
 | YouTube Metadata Service     | `SEC-009`, `SEC-024`                                                            |
-| Socket.IO Gateway            | `SEC-008`, `SEC-013`                                                            |
+| Socket.IO Gateway            | `SEC-008`, `SEC-011`, `SEC-013`                                                 |
 | Frontend Client              | `SEC-007`, `SEC-012`                                                            |
 | Embeddable Room Client       | `SEC-012`, `SEC-013`, `SEC-019`, `SEC-022`                                      |
 

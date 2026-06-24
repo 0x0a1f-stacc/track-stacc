@@ -267,15 +267,15 @@
 
 ### `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`
 
-- **Purpose:** Native moderation suite (FR-080–085).
+- **Purpose:** Native moderation suite (FR-080–085). Mute/unmute updates `room_sessions.is_muted` and broadcasts realtime events. Ban additionally evicts the target's Redis presence entry, immediately disconnects all active Socket.IO connections for the target session, and prevents reconnection (WS token validation rejects banned sessions) and same-room rejoin via `POST /api/rooms/:roomId/join` (`BANNED`).
 - **Reads:** `room_sessions`, `room_moderation_actions`
-- **Writes:** `room_sessions` (`is_muted`/`is_banned`/role), `room_moderation_actions` (`DATA-MODACTIONS`, audit)
-- **Emits:** `WS-MOD` `moderation.applied`; system `chat.message`
-- **Security:** `HOST_REQUIRED` (assign/revoke, ban) / `MODERATOR_REQUIRED` (mute); server-side role check on every write (§19.2 #7); audit (NFR-067)
-- **Tier:** `mod`/`host` (per action)
+- **Writes:** `room_sessions` (`is_muted` on mute/unmute; `is_banned`/`left_at` on ban/unban), `room_moderation_actions` (`DATA-MODACTIONS`, audit)
+- **Emits:** `WS-MOD` `moderation.applied` (action metadata incl. action type, target session, room, actor, optional reason); `WS-PRESENCE` `presence.updated` (updated participant list with mute/ban state — banned targets omitted)
+- **Security:** `MODERATOR_REQUIRED` (mute, unmute) / `HOST_REQUIRED` (ban, unban); server-side role check on every write (§19.2 #7); moderation hierarchy enforced (no self-moderate, moderator cannot moderate host or another moderator); audit (NFR-067); ban side effects include immediate socket disconnect and Redis presence eviction; banned session blocked on WS auth and same-room `/join`
+- **Tier:** `mod` (mute/unmute) / `host` (ban/unban)
 - **Rate limit:** per-user mod-action control
 - **Acceptance:** moderation criteria (`MOD-NATIVE`); `AC-CHAT-3`/`AC-CHAT-4`
-- **Errors:** `MODERATOR_REQUIRED` (403), `HOST_REQUIRED` (403), `BANNED` (403), `MUTED` (403)
+- **Errors:** `MODERATOR_REQUIRED` (403), `HOST_REQUIRED` (403), `FORBIDDEN` (403, self-moderation or hierarchy violation — "You cannot moderate your own session." / "Moderators cannot moderate the host." / "Moderators cannot moderate other moderators."), `BANNED` (403), `MUTED` (403)
 
 ---
 

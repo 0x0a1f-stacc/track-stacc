@@ -87,13 +87,19 @@ Standalone protected-nickname endpoints (`POST /api/nicknames/check`, `/protect`
 
 ### Key file: REST tier gating and cross-room protection tests
 
-Comprehensive verification of native access-tier gating, session validations, and room-scoped resource binding is implemented in `apps/api/src/__tests__/tier-gate-rest.test.ts`. This test suite validates that:
+Comprehensive verification of native access-tier gating, session validations, room-scoped resource binding, moderation hierarchy rules, and banned rejoin prevention is implemented in `apps/api/src/__tests__/tier-gate-rest.test.ts`. This test suite validates that:
 
 - Listeners attempting mutations receive `LISTENER_READ_ONLY` (403) errors.
 - Unauthenticated requests receive `AUTH_REQUIRED` (401) errors.
 - Mutating routes (and sensitive reads like chat history fetch) require session room IDs matching the URL path (`session.roomId === roomId`), throwing `FORBIDDEN` (403) on mismatches.
 - Resource mutations (queue deletions, voting, suggestion moderation, and chat deletions) verify that the target entity belongs to the room (`roomId`), throwing `404 NOT_FOUND` (e.g. `QUEUE_ITEM_NOT_FOUND`, `CHAT_MESSAGE_NOT_FOUND`) on mismatches.
 - Chat history requests returning `200 OK` yield empty results (`messages: []`) for Listeners when `listenerChatVisible` is disabled, and actual history when enabled.
+
+### Key file: moderation event broadcast, hierarchy, and ban side effects
+
+Moderation actions (`mute`, `unmute`, `ban`, `unban`) are handled in `apps/api/src/modules/moderation/moderation.router.ts` and `apps/api/src/modules/moderation/moderation.service.ts`. Every action broadcasts `moderation.applied` and `presence.updated` to all room participants. Ban additionally evicts the target's Redis presence entry via `apps/api/src/realtime/presence.manager.ts` and disconnects all active Socket.IO connections for the banned session. Banned sessions are rejected during WebSocket auth (`apps/api/src/realtime/gateway.ts`) and blocked from same-room rejoin via `apps/api/src/modules/nicknames/nicknames.service.ts` (`assertNicknameNotBannedInRoom`). Moderation hierarchy (`assertModerationHierarchy`) prevents self-moderation and restricts moderators from acting on host or other moderators.
+
+Test files: `apps/api/src/__tests__/realtime.test.ts` (broadcast + disconnect + reconnect rejection), `apps/api/src/__tests__/tier-gate-rest.test.ts` (hierarchy rules + banned rejoin + cross-room protection), `apps/api/src/__tests__/join-upgrade.test.ts` (banned nickname rejoin).
 
 ---
 

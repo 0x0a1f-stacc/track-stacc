@@ -117,13 +117,13 @@
 ## FEAT-MOD — Native moderation
 
 - **Purpose:** Host/mod tools — mute, ban, remove items, skip, assign roles, lock queue/chat, audit (FR-080–088).
-- **Dependencies:** `FEAT-CHAT`, `FEAT-QUEUE`, `FEAT-PLAYBACK`; `MOD-NATIVE` (§20.2). Moderation Service (§13.7).
-- **Data Entities:** `DATA-MODACTIONS` (`room_moderation_actions`), `DATA-SESSIONS` (`is_muted`/`is_banned`), `DATA-CHAT`, `DATA-QUEUE`.
+- **Dependencies:** `FEAT-CHAT`, `FEAT-QUEUE`, `FEAT-PLAYBACK`; `FEAT-PRESENCE` (participant list convergence after moderation actions); `MOD-NATIVE` (§20.2). Moderation Service (§13.7).
+- **Data Entities:** `DATA-MODACTIONS` (`room_moderation_actions`), `DATA-SESSIONS` (`is_muted`/`is_banned`/`left_at`), `DATA-CHAT`, `DATA-QUEUE`.
 - **APIs:** `API-MOD` `POST /api/rooms/:roomId/moderation/{mute,unmute,ban,unban,assign-moderator,revoke-moderator}`.
-- **WebSockets:** `WS-MOD` `moderation.action` (C2S), `moderation.applied` (S2C); system `chat.message`.
-- **Security Controls:** `HOST_REQUIRED`/`MODERATOR_REQUIRED`; server-side role check on every write (§19.2 #7); audit logging (NFR-067).
+- **WebSockets:** `WS-MOD` `moderation.action` (C2S), `moderation.applied` (S2C) — broadcast to all room participants with action type, target session, room, actor, optional reason; `WS-PRESENCE` `presence.updated` — broadcast to all room participants after every action (muted targets keep `isMuted: true` in participant list; banned targets are omitted; observer sockets remain connected).
+- **Security Controls:** `HOST_REQUIRED` (ban/unban) / `MODERATOR_REQUIRED` (mute/unmute); server-side role check on every write (§19.2 #7); moderation hierarchy enforced (no self-moderation, moderator cannot moderate host or another moderator); audit logging (NFR-067). Ban additionally evicts target from Redis presence and disconnects all active Socket.IO connections for the banned session. Banned sessions are rejected during WebSocket connection validation (`session.isBanned`) and blocked from same-room rejoin via `POST /api/rooms/:roomId/join` (`BANNED`, 403).
 - **Acceptance Criteria:** `AC-CHAT-3` + moderation-action criteria (`MOD-NATIVE`).
-- **Failure Modes:** `MODERATOR_REQUIRED`/`HOST_REQUIRED` (403), `BANNED` (403), `MUTED` (403), `CHAT_MESSAGE_NOT_FOUND` (404), `QUEUE_ITEM_NOT_FOUND` (404).
+- **Failure Modes:** `MODERATOR_REQUIRED`/`HOST_REQUIRED` (403), `FORBIDDEN` (403, self-moderation or hierarchy violation), `BANNED` (403), `MUTED` (403), `CHAT_MESSAGE_NOT_FOUND` (404), `QUEUE_ITEM_NOT_FOUND` (404).
 - **Observability Signals:** §24.1 _moderation actions_ (#12); §24.2 logs include action type + reason.
 - **Decisions:** —
 

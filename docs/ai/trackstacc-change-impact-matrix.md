@@ -118,22 +118,24 @@
 
 ## CI-06 — Moderation (native) (`FEAT-MOD`, `MOD-NATIVE`)
 
-**Trigger examples:** changing mute/ban semantics, role assignment, or audit format.
+**Trigger examples:** changing mute/ban semantics, role assignment, audit format, or realtime broadcast behavior.
 
 **Review:**
 
 - ★ **Server-side role check on every write; audit required** (`SEC-002`, `SEC-010`, NFR-067).
+- ★ **Moderation hierarchy** — self-moderation blocked; moderator cannot moderate host or another moderator (`assertModerationHierarchy` in `moderation.service.ts`). Changing hierarchy rules must re-validate all role checks.
+- ★ **Ban side effects** — immediate socket disconnect by `targetSessionId` (`socket.disconnect(true)`), Redis presence eviction (`evictSessionPresence`), WebSocket connection validation rejects banned sessions (`session.isBanned` in `gateway.ts`), same-room rejoin via `POST /api/rooms/:roomId/join` blocked (`assertNicknameNotBannedInRoom` throws `BANNED`). Any change to ban behavior must re-verify disconnect, reconnect rejection, and rejoin prevention.
 - **Requirements:** FR-080–088, FR-075–076.
-- **Components:** Moderation Service (§13.7), Chat, Queue, Playback.
-- **Data:** `DATA-MODACTIONS`, `DATA-SESSIONS` (`is_muted`/`is_banned`/role), `DATA-CHAT`, `DATA-QUEUE`.
-- **APIs:** `POST /rooms/:id/moderation/*`, `DELETE /chat/messages/:id`, `DELETE /queue/items/:id`, `/playback/skip`.
-- **WebSockets:** `WS-MOD` `moderation.action`, `moderation.applied`.
-- **Security:** `SEC-002`, `SEC-010`, `SEC-011`.
-- **Errors:** `MODERATOR_REQUIRED`, `HOST_REQUIRED`, `MUTED`, `BANNED`, `CHAT_LOCKED`, `QUEUE_LOCKED`.
-- **Acceptance:** `AC-CHAT-3`, `AC-CHAT-4`.
-- **Observability:** moderation actions (§24.1 #12).
+- **Components:** Moderation Service (§13.7), Presence Manager (`evictSessionPresence`, `getParticipants`), Socket.IO Gateway (banned session WS auth), Identity Service (`assertNicknameNotBannedInRoom`), Chat, Queue, Playback.
+- **Data:** `DATA-MODACTIONS`, `DATA-SESSIONS` (`is_muted`/`is_banned`/`left_at`/role), Redis presence ZSET, `DATA-CHAT`, `DATA-QUEUE`.
+- **APIs:** `POST /rooms/:id/moderation/{mute,unmute,ban,unban}`, `DELETE /chat/messages/:id`, `DELETE /queue/items/:id`, `/playback/skip`, `POST /rooms/:id/join` (banned rejoin rejection).
+- **WebSockets:** `WS-MOD` `moderation.action`, `moderation.applied` (broadcast to all room participants); `WS-PRESENCE` `presence.updated` (broadcast after every action — muted targets carry `isMuted` flag, banned targets omitted).
+- **Security:** `SEC-002`, `SEC-008` (WS token validation rejects banned), `SEC-010`, `SEC-011`.
+- **Errors:** `MODERATOR_REQUIRED`, `HOST_REQUIRED`, `FORBIDDEN` (hierarchy), `BANNED`, `MUTED`, `CHAT_LOCKED`, `QUEUE_LOCKED`.
+- **Acceptance:** `AC-CHAT-3`, `AC-CHAT-4`, Issue #83 moderation test suite (`tier-gate-rest.test.ts`, `realtime.test.ts`).
+- **Observability:** moderation actions (§24.1 #12); socket disconnect events.
 - **Decisions:** —.
-- **Cross-impact:** CI-04 (chat delete/lock), CI-03 (item removal), CI-09 (external muting is a separate but parallel path).
+- **Cross-impact:** CI-04 (chat delete/lock), CI-03 (item removal), CI-01 (banned session rejoin blocked at join), CI-08 (banned user cannot rejoin same room), CI-09 (external muting is a separate but parallel path).
 
 ---
 

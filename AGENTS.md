@@ -114,6 +114,7 @@ Run `docs/dev/repo-map.md` is the canonical repository baseline and command refe
 - Invalid/missing/expired tokens are rejected with `WEBSOCKET_TOKEN_INVALID` (registered in `apps/api/src/lib/error-codes.ts`).
 - WS event request IDs use `generateEventRequestId()` from `apps/api/src/realtime/request-id.ts` (`ws_`-prefixed).
 - Listener snapshots respect `rooms.listener_chat_visible`: if false, `recentMessages` is `[]` for listener-tier sockets.
+- Moderation actions broadcast `moderation.applied` and `presence.updated` to all room participants. Ban additionally disconnects the target session's active WebSocket connections, evicts its Redis presence, and prevents reconnection or same-room rejoin (`BANNED` / 403).
 - Do not trust client role/access tier — the server re-derives the tier from the signed token on every connection.
 - C2S interactive tier enforcement (chat.send, queue.add, etc.) is separate from snapshot delivery; do not mix unrelated enforcement into snapshot PRs.
 
