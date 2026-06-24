@@ -31,8 +31,9 @@ Implemented and exercised locally:
 - Listener UI for read-only room shell implemented; WebSocket C2S and REST access-tier enforcement implemented server-side (Issue #41) — Listener-tier interactive writes return `403 LISTENER_READ_ONLY`
 - Realtime chat delivery respects room-scoped session validation and listener visibility settings in parity with REST chat history — `chat.message` events reach listener sockets only when `listenerChatVisible` is enabled, and listeners are dynamically synced when the setting toggles (Issue #82)
 - REST chat-history fetch respects room-scoped session validation and listener visibility settings, returning empty messages for listeners by default
+- Moderation actions (mute, unmute, ban, unban) broadcast realtime events (`moderation.applied`, `presence.updated`) to all room participants — mute/unmute updates participant mute state; ban immediately disconnects the target session's active WebSocket connections, evicts its Redis presence, and prevents reconnection or same-room rejoin (Issue #83)
 
-Backend support exists for moderation, playback coordination, and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
+Backend support exists for playback coordination and multiple queue mechanics. The frontend is still lighter than the backend surface area, so not every API capability is exposed in the UI yet.
 
 ## Tech Stack
 
